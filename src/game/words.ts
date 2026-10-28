@@ -81,12 +81,16 @@ export function pickWord(
   const fallback = ALL_WORDS.filter((word) => !conflicts(word, targetWords));
   if (fallback.length > 0) return randomOf(fallback, rng);
 
-  const suffixes = ['X', 'Z', 'K', 'Q'];
-  for (const suffix of suffixes) {
-    const candidate = `ANT${suffix}`;
-    if (!conflicts(candidate, targetWords)) return candidate;
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (const prefix of ['ANT', 'SWARM', 'HIVE']) {
+    for (const first of letters) {
+      for (const second of letters) {
+        const candidate = `${prefix}${first}${second}`;
+        if (!conflicts(candidate, targetWords)) return candidate;
+      }
+    }
   }
-  return `SWARM${Math.floor(rng() * 90 + 10)}`;
+  return 'ANT';
 }
 
 export const WAVE_NAMES = [

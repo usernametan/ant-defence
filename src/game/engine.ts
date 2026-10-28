@@ -197,8 +197,10 @@ export class GameEngine {
     document.addEventListener('visibilitychange', this.boundVisibility);
     canvas.addEventListener('pointerdown', this.boundPointerDown);
 
-    const debugWindow = window as unknown as { __antGame?: GameEngine };
-    debugWindow.__antGame = this;
+    if (import.meta.env.DEV) {
+      const debugWindow = window as unknown as { __antGame?: GameEngine };
+      debugWindow.__antGame = this;
+    }
 
     this.emit();
     this.lastFrame = performance.now();

@@ -33,8 +33,6 @@ export const DIFFICULTY = {
   speedPerWave: 0.055,
   maxSpeedMultiplier: 2.05,
   bossEvery: 5,
-  bossBaseHp: 11,
-  bossHpPerWave: 2,
   bossMinionEvery: 7.5,
   intermission: 3.6,
   waveBannerTime: 3.1,
