@@ -1,5 +1,5 @@
-import { COLOR, VIEW_HEIGHT, VIEW_WIDTH, WORLD } from './config';
-import type { Bullet, FloatingText, Particle } from './types';
+import { COLOR, POWERUP_DEFS, VIEW_HEIGHT, VIEW_WIDTH, WORLD } from './config';
+import type { Bullet, FloatingText, Particle, Pickup, PowerupType } from './types';
 
 export function drawDefenseLine(
   ctx: CanvasRenderingContext2D,
@@ -398,4 +398,214 @@ export function drawBreachFlash(
   edge.addColorStop(1, `rgba(255, 45, 45, ${alpha * 0.26})`);
   ctx.fillStyle = edge;
   ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+}
+
+export function drawWordText(
+  ctx: CanvasRenderingContext2D,
+  word: string,
+  typed: string,
+  startX: number,
+  textY: number,
+  font: string,
+): void {
+  ctx.font = font;
+  ctx.textAlign = 'left';
+  let cursor = startX;
+  for (let i = 0; i < word.length; i += 1) {
+    const char = word[i];
+    const isTyped = i < typed.length;
+    const isNext = i === typed.length;
+    ctx.fillStyle = isTyped
+      ? COLOR.green
+      : isNext
+        ? COLOR.goldBright
+        : COLOR.cream;
+    ctx.fillText(char, cursor, textY);
+    const charWidth = ctx.measureText(char).width;
+    if (isNext) {
+      ctx.strokeStyle = 'rgba(255, 220, 132, 0.86)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(cursor, textY + 11);
+      ctx.lineTo(cursor + charWidth + 1, textY + 11);
+      ctx.stroke();
+    }
+    cursor += charWidth;
+  }
+}
+
+const PICKUP_FONT = '600 15px "IBM Plex Mono", monospace';
+const PICKUP_BADGE_FONT = '600 9px "IBM Plex Mono", monospace';
+
+const PICKUP_STYLE: Record<PowerupType, { glow: string; solid: string; edge: string }> = {
+  med: {
+    glow: 'rgba(125, 240, 169, 0.42)',
+    solid: '#0f1a12',
+    edge: 'rgba(125, 240, 169, 0.75)',
+  },
+  amp: {
+    glow: 'rgba(143, 199, 255, 0.42)',
+    solid: '#0e1420',
+    edge: 'rgba(143, 199, 255, 0.75)',
+  },
+  gold: {
+    glow: 'rgba(242, 195, 100, 0.46)',
+    solid: '#1a150a',
+    edge: 'rgba(242, 195, 100, 0.8)',
+  },
+};
+
+function pickupAlpha(pickup: Pickup): number {
+  const fadeIn = Math.min(1, (pickup.maxLife - pickup.life) / 0.35);
+  const fadeOut = Math.min(1, pickup.life / 2);
+  return Math.max(0, fadeIn * fadeOut);
+}
+
+export function drawPickupBodies(
+  ctx: CanvasRenderingContext2D,
+  pickups: Pickup[],
+): void {
+  ctx.save();
+  for (const pickup of pickups) {
+    const alpha = pickupAlpha(pickup);
+    if (alpha <= 0) continue;
+    const bob = Math.sin(pickup.bobPhase) * 5;
+    const x = pickup.x;
+    const y = pickup.y + bob;
+    const style = PICKUP_STYLE[pickup.type];
+    const tilt = Math.sin(pickup.bobPhase * 0.7) * 0.1;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(x, y - 26, 4, x, y - 26, 48);
+    glow.addColorStop(0, style.glow);
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.ellipse(x, y - 26, 48, 34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.translate(x, y - 26);
+    ctx.rotate(tilt);
+    ctx.fillStyle = style.solid;
+    ctx.strokeStyle = style.edge;
+    ctx.lineWidth = 1.6;
+    roundRect(ctx, -15, -11, 30, 22, 5);
+    ctx.fill();
+    ctx.stroke();
+
+    if (pickup.type === 'med') {
+      ctx.fillStyle = style.edge;
+      ctx.fillRect(-1.6, -6.5, 3.2, 13);
+      ctx.fillRect(-6.5, -1.6, 13, 3.2);
+    } else if (pickup.type === 'amp') {
+      ctx.fillStyle = style.edge;
+      ctx.beginPath();
+      ctx.moveTo(3, -8);
+      ctx.lineTo(-4, 1);
+      ctx.lineTo(0, 1);
+      ctx.lineTo(-3, 8);
+      ctx.lineTo(5, -2);
+      ctx.lineTo(1, -2);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.fillStyle = style.edge;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = style.solid;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+export function drawPickupLabels(
+  ctx: CanvasRenderingContext2D,
+  pickups: Pickup[],
+  typed: string,
+  targetPickupId: number | null,
+): void {
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  for (const pickup of pickups) {
+    const alpha = pickupAlpha(pickup);
+    if (alpha <= 0) continue;
+    const bob = Math.sin(pickup.bobPhase) * 5;
+    const x = pickup.x;
+    const y = pickup.y + bob;
+    const style = PICKUP_STYLE[pickup.type];
+    const isTarget = pickup.id === targetPickupId;
+
+    ctx.font = PICKUP_FONT;
+    const metrics = ctx.measureText(pickup.word);
+    const padX = 12;
+    const width = metrics.width + padX * 2;
+    const height = 26;
+    const lx = Math.max(12, Math.min(VIEW_WIDTH - width - 12, x - width / 2));
+    const ly = y - 68 - height;
+
+    ctx.globalAlpha = alpha;
+
+    ctx.save();
+    if (isTarget) {
+      ctx.shadowColor = 'rgba(255, 196, 82, 0.85)';
+      ctx.shadowBlur = 18;
+    } else {
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+      ctx.shadowBlur = 8;
+    }
+    ctx.fillStyle = isTarget ? 'rgba(23, 17, 9, 0.94)' : 'rgba(8, 12, 17, 0.84)';
+    roundRect(ctx, lx, ly, width, height, 7);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = isTarget ? 'rgba(255, 211, 118, 0.95)' : style.edge;
+    ctx.lineWidth = isTarget ? 1.8 : 1;
+    roundRect(ctx, lx, ly, width, height, 7);
+    ctx.stroke();
+    ctx.restore();
+
+    drawWordText(
+      ctx,
+      pickup.word,
+      isTarget ? typed : '',
+      lx + padX,
+      ly + height / 2,
+      PICKUP_FONT,
+    );
+
+    ctx.font = PICKUP_BADGE_FONT;
+    ctx.fillStyle = style.edge;
+    ctx.fillText(POWERUP_DEFS[pickup.type].name, lx + padX, ly - 7);
+  }
+  ctx.restore();
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
 }

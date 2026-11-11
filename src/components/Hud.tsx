@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { LEECH, POWERUPS } from '../game/config';
 import type { GameEngine } from '../game/engine';
 import type { AbilityId, HudSnapshot } from '../game/types';
 import { formatScore, formatTime, pad2 } from '../utils/format';
@@ -102,8 +103,25 @@ export function Hud({ hud, engine }: HudProps) {
                 <span className="stat-value score-value">{formatScore(hud.score)}</span>
               </div>
             </div>
-            {hud.combo > 1 && (
-              <span className="combo-chip">STREAK {hud.combo}</span>
+            {(hud.combo > 1 ||
+              hud.scoreSurgeSeconds > 0 ||
+              hud.leechDraining) && (
+              <div className="status-chips">
+                {hud.combo > 1 && (
+                  <span className="combo-chip">STREAK {hud.combo}</span>
+                )}
+                {hud.scoreSurgeSeconds > 0 && (
+                  <span className="status-chip surge-chip">
+                    SCORE x{POWERUPS.surgeMultiplier}{' '}
+                    {Math.ceil(hud.scoreSurgeSeconds)}S
+                  </span>
+                )}
+                {hud.leechDraining && (
+                  <span className="status-chip leech-chip">
+                    LEECH -{LEECH.drainPerTick}/S
+                  </span>
+                )}
+              </div>
             )}
           </div>
           <button
@@ -142,6 +160,10 @@ export function Hud({ hud, engine }: HudProps) {
               <span>PAUSE</span>
             </div>
             <div className="hint-row">
+              <kbd>MED</kbd>
+              <span>SUPPLY DROPS — TYPE THE WORD</span>
+            </div>
+            <div className="hint-row">
               <kbd>1</kbd>
               <kbd>2</kbd>
               <kbd>3</kbd>
@@ -152,15 +174,17 @@ export function Hud({ hud, engine }: HudProps) {
           <section
             key={hud.mistakes}
             className={`typing-panel ${hud.targetSelected ? 'has-target' : ''} ${
-              hud.inputError ? 'is-error' : ''
-            }`}
+              hud.targetIsPickup ? 'is-pickup' : ''
+            } ${hud.inputError ? 'is-error' : ''}`}
           >
             <div className="typing-head">
               <span className="typing-mode">
                 {hud.targetSelected ? (
                   <>
                     <CrosshairIcon className="typing-crosshair" />
-                    TARGET LOCKED
+                    {hud.targetIsPickup
+                      ? 'SUPPLY DROP — TYPE TO CLAIM'
+                      : 'TARGET LOCKED'}
                   </>
                 ) : (
                   'TYPE TO FIRE'

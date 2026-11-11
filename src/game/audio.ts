@@ -27,7 +27,14 @@ export class AudioEngine {
       this.context = new Ctor();
       this.master = this.context.createGain();
       this.master.gain.value = this.muted ? 0 : 0.42;
-      this.master.connect(this.context.destination);
+      const compressor = this.context.createDynamicsCompressor();
+      compressor.threshold.value = -18;
+      compressor.knee.value = 24;
+      compressor.ratio.value = 6;
+      compressor.attack.value = 0.004;
+      compressor.release.value = 0.18;
+      this.master.connect(compressor);
+      compressor.connect(this.context.destination);
     }
     if (this.context.state === 'suspended') {
       void this.context.resume();
@@ -62,6 +69,17 @@ export class AudioEngine {
     return this.context;
   }
 
+  private route(node: AudioNode, ctx: AudioContext, pan?: number): void {
+    if (pan !== undefined && typeof ctx.createStereoPanner === 'function') {
+      const panner = ctx.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, pan));
+      node.connect(panner);
+      panner.connect(this.master!);
+      return;
+    }
+    node.connect(this.master!);
+  }
+
   private tone(
     ctx: AudioContext,
     opts: {
@@ -71,6 +89,7 @@ export class AudioEngine {
       type?: OscillatorType;
       gain?: number;
       delay?: number;
+      pan?: number;
     },
   ): void {
     const start = ctx.currentTime + (opts.delay ?? 0);
@@ -87,7 +106,7 @@ export class AudioEngine {
     amp.gain.exponentialRampToValueAtTime(peak, start + 0.008);
     amp.gain.exponentialRampToValueAtTime(0.0001, start + opts.duration);
     osc.connect(amp);
-    amp.connect(this.master!);
+    this.route(amp, ctx, opts.pan);
     osc.start(start);
     osc.stop(start + opts.duration + 0.02);
   }
@@ -100,6 +119,7 @@ export class AudioEngine {
       frequency?: number;
       delay?: number;
       q?: number;
+      pan?: number;
     },
   ): void {
     if (!this.noiseBuffer) {
@@ -124,7 +144,7 @@ export class AudioEngine {
     amp.gain.exponentialRampToValueAtTime(0.0001, start + opts.duration);
     source.connect(filter);
     filter.connect(amp);
-    amp.connect(this.master!);
+    this.route(amp, ctx, opts.pan);
     source.start(start);
     source.stop(start + opts.duration + 0.02);
   }
@@ -145,18 +165,85 @@ export class AudioEngine {
     }
   }
 
-  hit(): void {
+  hit(pan?: number): void {
     const ctx = this.ready();
     if (!ctx) return;
-    this.noise(ctx, { duration: 0.06, gain: 0.14, frequency: 900, q: 1.4 });
-    this.tone(ctx, { from: 180, to: 90, duration: 0.08, type: 'triangle', gain: 0.08 });
+    this.noise(ctx, { duration: 0.06, gain: 0.14, frequency: 900, q: 1.4, pan });
+    this.tone(ctx, { from: 180, to: 90, duration: 0.08, type: 'triangle', gain: 0.08, pan });
   }
 
-  kill(): void {
+  kill(scale = 1, pan?: number): void {
     const ctx = this.ready();
     if (!ctx) return;
-    this.tone(ctx, { from: 240, to: 60, duration: 0.16, type: 'triangle', gain: 0.1 });
-    this.noise(ctx, { duration: 0.16, gain: 0.1, frequency: 500, q: 0.7, delay: 0.02 });
+    const base = 240 / Math.max(0.6, scale);
+    this.tone(ctx, { from: base, to: 60, duration: 0.16, type: 'triangle', gain: 0.1, pan });
+    this.noise(ctx, { duration: 0.16, gain: 0.1, frequency: 500, q: 0.7, delay: 0.02, pan });
+  }
+
+  typingTick(progress: number): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(ctx, {
+      from: 320 + 300 * Math.max(0, Math.min(1, progress)),
+      to: 300,
+      duration: 0.035,
+      type: 'sine',
+      gain: 0.03,
+    });
+  }
+
+  comboStreak(level: number): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const base = 440 + Math.min(6, level / 5) * 60;
+    this.tone(ctx, { from: base, to: base, duration: 0.12, type: 'triangle', gain: 0.07 });
+    this.tone(ctx, {
+      from: base * 1.5,
+      to: base * 1.5,
+      duration: 0.16,
+      type: 'triangle',
+      gain: 0.05,
+      delay: 0.07,
+    });
+  }
+
+  pickupDrop(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(ctx, { from: 520, to: 660, duration: 0.14, type: 'sine', gain: 0.05 });
+    this.tone(ctx, { from: 660, to: 880, duration: 0.16, type: 'sine', gain: 0.04, delay: 0.09 });
+    this.tone(ctx, { from: 880, to: 1100, duration: 0.2, type: 'sine', gain: 0.03, delay: 0.17 });
+  }
+
+  pickupCollect(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(ctx, { from: 261.6, to: 261.6, duration: 0.16, type: 'triangle', gain: 0.09 });
+    this.tone(ctx, { from: 329.6, to: 329.6, duration: 0.18, type: 'triangle', gain: 0.075, delay: 0.06 });
+    this.tone(ctx, { from: 392, to: 392, duration: 0.3, type: 'triangle', gain: 0.07, delay: 0.12 });
+    this.tone(ctx, { from: 523.3, to: 523.3, duration: 0.34, type: 'sine', gain: 0.05, delay: 0.2 });
+  }
+
+  drainTick(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(ctx, { from: 220, to: 150, duration: 0.18, type: 'square', gain: 0.045 });
+    this.tone(ctx, { from: 110, to: 70, duration: 0.24, type: 'sine', gain: 0.07 });
+  }
+
+  split(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.noise(ctx, { duration: 0.12, gain: 0.16, frequency: 700, q: 1.1 });
+    this.tone(ctx, { from: 320, to: 90, duration: 0.18, type: 'square', gain: 0.06 });
+    this.tone(ctx, { from: 240, to: 60, duration: 0.22, type: 'triangle', gain: 0.08, delay: 0.05 });
+  }
+
+  heartbeat(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(ctx, { from: 58, to: 40, duration: 0.16, type: 'sine', gain: 0.12 });
+    this.tone(ctx, { from: 52, to: 36, duration: 0.14, type: 'sine', gain: 0.09, delay: 0.16 });
   }
 
   error(): void {

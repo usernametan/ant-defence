@@ -1,4 +1,5 @@
 import type { DifficultyId } from './difficulty';
+import type { LeaderboardEntry } from './leaderboard';
 import type { NewRecords, PlayerProgress } from './progress';
 
 export type GamePhase = 'menu' | 'playing' | 'paused' | 'gameover';
@@ -8,7 +9,17 @@ export interface WpmSample {
   wpm: number;
 }
 
-export type AntKind = 'normal' | 'fast' | 'armored' | 'giant' | 'queen';
+export type AntKind =
+  | 'normal'
+  | 'fast'
+  | 'armored'
+  | 'giant'
+  | 'queen'
+  | 'weaver'
+  | 'splitter'
+  | 'leech';
+
+export type PowerupType = 'med' | 'amp' | 'gold';
 
 export type AbilityId = 'focus' | 'aegis' | 'power';
 
@@ -37,9 +48,22 @@ export interface Ant {
   deathTimer: number;
   spawnTimer: number;
   legPhase: number;
+  swayPhase: number;
+  drainTimer: number;
   hitFlash: number;
   boss: boolean;
   minionTimer: number;
+}
+
+export interface Pickup {
+  id: number;
+  type: PowerupType;
+  word: string;
+  x: number;
+  y: number;
+  life: number;
+  maxLife: number;
+  bobPhase: number;
 }
 
 export interface Bullet {
@@ -108,6 +132,11 @@ export interface HudSnapshot {
   typed: string;
   targetWord: string;
   targetSelected: boolean;
+  targetIsPickup: boolean;
+  scoreSurgeSeconds: number;
+  leechDraining: boolean;
+  runRank: number | null;
+  leaderboard: LeaderboardEntry[];
   combo: number;
   bestCombo: number;
   correctWords: number;

@@ -3,8 +3,11 @@ import {
   ANT_TYPES,
   COLOR,
   DIFFICULTY,
+  LEECH,
   LANES,
   PLAYER,
+  POWERUPS,
+  POWERUP_DEFS,
   VIEW_HEIGHT,
   VIEW_WIDTH,
   WORLD,
@@ -21,6 +24,7 @@ import {
   antBodyCenter,
   drawAnt,
   drawAntLabels,
+  drawTargetReticle,
   makeAnt,
   updateAnt,
 } from './ants';
@@ -30,6 +34,8 @@ import {
   drawDefenseLine,
   drawFloatingTexts,
   drawParticles,
+  drawPickupBodies,
+  drawPickupLabels,
   drawVignette,
   spawnBreachBurst,
   spawnDeathBurst,
@@ -39,6 +45,12 @@ import {
 } from './effects';
 import { Player } from './player';
 import { Scenery } from './scenery';
+import {
+  addRun,
+  loadLeaderboard,
+  saveLeaderboard,
+  type LeaderboardEntry,
+} from './leaderboard';
 import {
   applyRun,
   loadProgress,
@@ -57,6 +69,8 @@ import type {
   GamePhase,
   HudSnapshot,
   Particle,
+  Pickup,
+  PowerupType,
   WpmSample,
 } from './types';
 import { pickWord, waveTitle } from './words';
@@ -164,6 +178,22 @@ export class GameEngine {
 
   private powerCharges = 0;
 
+  private pickups: Pickup[] = [];
+
+  private nextPickupId = 1;
+
+  private targetPickupId: number | null = null;
+
+  private scoreSurgeUntil = 0;
+
+  private heartbeatTimer = 0;
+
+  private leechDrained = 0;
+
+  private leaderboard: LeaderboardEntry[] = loadLeaderboard();
+
+  private runRank: number | null = null;
+
   private lastAimTarget: { x: number; y: number } | null = null;
 
   private lastAimUntil = 0;
@@ -267,6 +297,7 @@ export class GameEngine {
     this.phase = 'paused';
     this.typed = '';
     this.targetId = null;
+    this.targetPickupId = null;
     this.emit();
   }
 
@@ -363,6 +394,12 @@ export class GameEngine {
     this.slowUntil = 0;
     this.shieldUntil = 0;
     this.powerCharges = 0;
+    this.pickups = [];
+    this.targetPickupId = null;
+    this.scoreSurgeUntil = 0;
+    this.heartbeatTimer = 0;
+    this.leechDrained = 0;
+    this.runRank = null;
     this.lastAimTarget = null;
     this.lastAimUntil = 0;
     this.banner = null;
@@ -450,9 +487,18 @@ export class GameEngine {
     const targetAnt = this.ants.find(
       (ant) => ant.id === this.targetId && ant.alive,
     );
+    const targetPickup =
+      this.targetPickupId === null
+        ? null
+        : this.pickups.find((item) => item.id === this.targetPickupId) ?? null;
     let aimTarget: { x: number; y: number } | null = null;
     if (targetAnt) {
       aimTarget = antBodyCenter(targetAnt);
+    } else if (targetPickup) {
+      aimTarget = {
+        x: targetPickup.x,
+        y: targetPickup.y + Math.sin(targetPickup.bobPhase) * 5 - 26,
+      };
     } else if (this.lastAimTarget && this.elapsed < this.lastAimUntil) {
       aimTarget = this.lastAimTarget;
     }
@@ -473,15 +519,32 @@ export class GameEngine {
       }
       if (ant.alive && ant.x <= WORLD.lineX + 6) {
         this.breachAnt(ant);
+      } else if (
+        ant.alive &&
+        ant.kind === 'leech' &&
+        ant.x < LEECH.drainZoneX
+      ) {
+        this.updateLeechDrain(ant, dt);
       }
     }
 
     this.ants = this.ants.filter((ant) => ant.alive && ant.x > -120);
+    this.updatePickups(dt);
 
     this.updateBullets(dt);
     updateParticles(this.particles, dt);
     this.updateFloaters(dt);
     this.updateWave(dt, speedScale);
+
+    if (this.health <= 30) {
+      this.heartbeatTimer -= dt;
+      if (this.heartbeatTimer <= 0) {
+        this.heartbeatTimer = 1.4;
+        this.audio.heartbeat();
+      }
+    } else {
+      this.heartbeatTimer = 0;
+    }
 
     if (this.health <= 0) {
       this.endGame();
@@ -619,14 +682,37 @@ export class GameEngine {
       if (roll < 0.9) return 'armored';
       return 'giant';
     }
-    if (roll < 0.24) return 'normal';
-    if (roll < 0.48) return 'fast';
-    if (roll < 0.74) return 'armored';
-    return 'giant';
+    if (this.wave === 5) {
+      if (roll < 0.2) return 'normal';
+      if (roll < 0.4) return 'fast';
+      if (roll < 0.64) return 'armored';
+      if (roll < 0.88) return 'giant';
+      return 'weaver';
+    }
+    if (this.wave <= 7) {
+      if (roll < 0.19) return 'normal';
+      if (roll < 0.38) return 'fast';
+      if (roll < 0.6) return 'armored';
+      if (roll < 0.82) return 'giant';
+      if (roll < 0.92) return 'weaver';
+      return 'splitter';
+    }
+    if (roll < 0.17) return 'normal';
+    if (roll < 0.34) return 'fast';
+    if (roll < 0.55) return 'armored';
+    if (roll < 0.76) return 'giant';
+    if (roll < 0.87) return 'weaver';
+    if (roll < 0.96) return 'splitter';
+    return 'leech';
   }
 
   private spawnAnt(kind: AntKind): void {
     const lane = this.pickLane();
+    const x = WORLD.spawnX + Math.random() * 56 + (lane % 2) * 30;
+    this.spawnAntAt(kind, lane, x);
+  }
+
+  private spawnAntAt(kind: AntKind, lane: number, x: number): void {
     const laneInfo = LANES[lane];
     const config = ANT_TYPES[kind];
     const waveBonus = Math.min(3, Math.floor((this.wave - 1) / 4));
@@ -649,7 +735,6 @@ export class GameEngine {
         1 + (this.wave - 1) * DIFFICULTY.speedPerWave,
       ) * this.difficulty.antSpeedScale;
     const jitter = 0.92 + Math.random() * 0.16;
-    const x = WORLD.spawnX + Math.random() * 56 + (lane % 2) * 30;
     const ant = makeAnt(
       this.nextId,
       kind,
@@ -667,6 +752,13 @@ export class GameEngine {
     }
     this.ants.push(ant);
     spawnSpawnDust(this.particles, ant.x, ant.y);
+  }
+
+  private splitAnt(parent: Ant): void {
+    const baseX = clamp(parent.x, WORLD.lineX + 140, WORLD.spawnX);
+    const secondLane = parent.lane > 0 ? parent.lane - 1 : parent.lane + 1;
+    this.spawnAntAt('fast', parent.lane, baseX + 26);
+    this.spawnAntAt('fast', secondLane, baseX - 26);
   }
 
   private spawnMinion(): void {
@@ -702,6 +794,10 @@ export class GameEngine {
     return bestLane;
   }
 
+  private xToPan(x: number): number {
+    return clamp((x / VIEW_WIDTH) * 2 - 1, -1, 1);
+  }
+
   private hitAnt(ant: Ant, damage: number, powered: boolean): void {
     if (!ant.alive) return;
     const point = antBodyCenter(ant);
@@ -711,7 +807,7 @@ export class GameEngine {
     if (ant.hp <= 0) {
       this.killAnt(ant);
     } else {
-      this.audio.hit();
+      this.audio.hit(this.xToPan(point.x));
       this.floater(point.x, point.y - 20, `${Math.max(0, ant.hp)} HIT`, '#ffd7a3', 15);
       this.shake = Math.max(this.shake, powered ? 6 : 2.5);
       if (ant.boss) this.rotateBossWord(ant);
@@ -757,11 +853,25 @@ export class GameEngine {
     this.lastKillAt = this.elapsed;
     this.bestCombo = Math.max(this.bestCombo, this.combo);
     const multiplier = 1 + Math.min(2.2, (this.combo - 1) * 0.14);
-    const gained = Math.round(ANT_TYPES[ant.kind].score * multiplier);
+    const surgeActive = this.elapsed < this.scoreSurgeUntil;
+    const gained = Math.round(
+      ANT_TYPES[ant.kind].score *
+        multiplier *
+        (surgeActive ? POWERUPS.surgeMultiplier : 1),
+    );
     this.score += gained;
-    this.floater(point.x, point.y - 36, `+${gained}`, COLOR.goldBright, ant.boss ? 30 : 20);
+    this.floater(
+      point.x,
+      point.y - 36,
+      surgeActive ? `+${gained} x2` : `+${gained}`,
+      COLOR.goldBright,
+      ant.boss ? 30 : 20,
+    );
     if (this.combo >= 3) {
       this.floater(point.x, point.y - 66, `COMBO ${this.combo}`, '#ffe0a3', 15);
+    }
+    if (this.combo >= 5 && this.combo % 5 === 0) {
+      this.audio.comboStreak(this.combo);
     }
 
     if (this.targetId === ant.id) {
@@ -769,8 +879,15 @@ export class GameEngine {
       this.typed = '';
     }
 
-    this.audio.kill();
+    this.audio.kill(ANT_TYPES[ant.kind].scale, this.xToPan(point.x));
     this.shake = Math.max(this.shake, ant.boss ? 20 : 4);
+
+    if (ant.kind === 'splitter') {
+      this.splitAnt(ant);
+      this.audio.split();
+      this.floater(point.x, point.y - 66, 'SPLIT', '#ffd7a3', 16);
+    }
+    this.maybeDropPickup(point);
 
     if (ant.boss) {
       this.score += 1000;
@@ -821,29 +938,140 @@ export class GameEngine {
   private typeCharacter(char: string): void {
     if (this.phase !== 'playing') return;
     const next = `${this.typed}${char}`;
-    const candidates = this.ants.filter(
+    const antCandidates = this.ants.filter(
       (ant) => this.isTargetable(ant) && ant.word.startsWith(next),
     );
-    if (candidates.length === 0) {
-      this.mistakes += 1;
-      this.inputError = 0.22;
-      this.audio.error();
+    if (antCandidates.length > 0) {
+      this.correctKeys += 1;
+      this.typed = next;
+      this.targetPickupId = null;
+      const target = antCandidates.reduce((best, ant) =>
+        ant.x < best.x ? ant : best,
+      );
+      this.targetId = target.id;
+      const point = antBodyCenter(target);
+      this.lastAimTarget = point;
+      this.lastAimUntil = this.elapsed + PLAYER.aimHoldTime;
+      this.audio.typingTick(this.typed.length / target.word.length);
+      if (this.typed === target.word) {
+        this.fireAt(target);
+      }
       this.emit();
       return;
     }
 
-    this.correctKeys += 1;
-    this.typed = next;
-    const target = candidates.reduce((best, ant) =>
-      ant.x < best.x ? ant : best,
-    );
-    this.targetId = target.id;
-    const point = antBodyCenter(target);
-    this.lastAimTarget = point;
-    this.lastAimUntil = this.elapsed + PLAYER.aimHoldTime;
+    const pickup = this.pickups.find((item) => item.word.startsWith(next));
+    if (pickup) {
+      this.correctKeys += 1;
+      this.typed = next;
+      this.targetId = null;
+      this.targetPickupId = pickup.id;
+      const aim = { x: pickup.x, y: pickup.y - 26 };
+      this.lastAimTarget = aim;
+      this.lastAimUntil = this.elapsed + PLAYER.aimHoldTime;
+      this.audio.typingTick(this.typed.length / pickup.word.length);
+      if (this.typed === pickup.word) {
+        this.collectPickup(pickup);
+      }
+      this.emit();
+      return;
+    }
 
-    if (this.typed === target.word) {
-      this.fireAt(target);
+    this.mistakes += 1;
+    this.inputError = 0.22;
+    this.audio.error();
+    this.emit();
+  }
+
+  private collectPickup(pickup: Pickup): void {
+    this.pickups = this.pickups.filter((item) => item.id !== pickup.id);
+    this.typed = '';
+    this.targetPickupId = null;
+    if (pickup.type === 'med') {
+      this.health = Math.min(this.maxHealth, this.health + POWERUPS.medHeal);
+      this.floater(
+        pickup.x,
+        pickup.y - 60,
+        `+${POWERUPS.medHeal} HP`,
+        COLOR.green,
+        20,
+      );
+    } else if (pickup.type === 'amp') {
+      this.powerCharges = Math.min(
+        POWERUPS.maxPowerCharges,
+        this.powerCharges + POWERUPS.ampCharges,
+      );
+      this.floater(pickup.x, pickup.y - 60, 'POWER ROUNDS', COLOR.gold, 20);
+    } else {
+      this.scoreSurgeUntil = this.elapsed + POWERUPS.surgeDuration;
+      this.floater(pickup.x, pickup.y - 60, 'SCORE SURGE', COLOR.goldBright, 20);
+    }
+    this.audio.pickupCollect();
+    this.emit();
+  }
+
+  private maybeDropPickup(point: { x: number; y: number }): void {
+    if (this.wave < POWERUPS.minWave) return;
+    if (this.pickups.length >= POWERUPS.maxOnField) return;
+    if (Math.random() >= POWERUPS.dropChance) return;
+    const roll = Math.random();
+    let type: PowerupType;
+    if (this.health >= this.maxHealth) {
+      type = roll < 0.5 ? 'amp' : 'gold';
+    } else {
+      type = roll < 0.4 ? 'med' : roll < 0.7 ? 'amp' : 'gold';
+    }
+    const x = clamp(point.x, WORLD.lineX + 140, WORLD.spawnX - 80);
+    const y = clamp(point.y + 42, WORLD.lineTop + 20, WORLD.lineBottom - 10);
+    this.pickups.push({
+      id: this.nextPickupId,
+      type,
+      word: POWERUP_DEFS[type].word,
+      x,
+      y,
+      life: POWERUPS.lifetime,
+      maxLife: POWERUPS.lifetime,
+      bobPhase: Math.random() * Math.PI * 2,
+    });
+    this.nextPickupId += 1;
+    this.audio.pickupDrop();
+    this.floater(x, y - 84, 'SUPPLY DROP', COLOR.green, 15);
+  }
+
+  private updatePickups(dt: number): void {
+    for (let i = this.pickups.length - 1; i >= 0; i -= 1) {
+      const pickup = this.pickups[i];
+      pickup.life -= dt;
+      pickup.bobPhase += dt * 3.2;
+      if (pickup.life <= 0) {
+        this.pickups.splice(i, 1);
+        if (this.targetPickupId === pickup.id) {
+          this.targetPickupId = null;
+          this.typed = '';
+        }
+      }
+    }
+  }
+
+  private updateLeechDrain(ant: Ant, dt: number): void {
+    const remaining = LEECH.maxDrainPerRun - this.leechDrained;
+    if (remaining <= 0) return;
+    ant.drainTimer -= dt;
+    if (ant.drainTimer > 0) return;
+    ant.drainTimer = LEECH.drainTickInterval;
+    const drain = Math.min(LEECH.drainPerTick, remaining);
+    this.leechDrained += drain;
+    this.score = Math.max(0, this.score - drain);
+    this.floater(ant.x + 8, ant.y - 58, `-${drain}`, '#ff7d74', 15);
+    this.audio.drainTick();
+    if (this.leechDrained >= LEECH.maxDrainPerRun) {
+      this.floater(
+        WORLD.lineX + 60,
+        ant.y - 96,
+        'LEECHES SATIATED',
+        '#ffd7a3',
+        18,
+      );
     }
     this.emit();
   }
@@ -918,6 +1146,7 @@ export class GameEngine {
     this.phase = 'gameover';
     this.typed = '';
     this.targetId = null;
+    this.targetPickupId = null;
     this.player.update(0, null, false);
     const lastSample = this.wpmHistory[this.wpmHistory.length - 1];
     if (this.elapsed - lastSample.t > 0.2) {
@@ -942,6 +1171,20 @@ export class GameEngine {
     this.progress = applied.progress;
     this.newRecords = applied.newRecords;
     saveProgress(this.progress);
+    const added = addRun(this.leaderboard, {
+      score: this.score,
+      wave: this.wave,
+      wpm: this.currentWpm(),
+      accuracy: this.currentAccuracy(),
+      antsEliminated: this.eliminated,
+      bestCombo: this.bestCombo,
+      time: this.elapsed,
+      difficulty: this.difficultyId,
+      date: Date.now(),
+    });
+    this.leaderboard = added.entries;
+    this.runRank = added.rank;
+    saveLeaderboard(this.leaderboard);
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -993,15 +1236,29 @@ export class GameEngine {
         this.typed = this.typed.slice(0, -1);
         if (this.typed.length === 0) {
           this.targetId = null;
+          this.targetPickupId = null;
         } else {
           const candidates = this.ants.filter(
             (ant) => this.isTargetable(ant) && ant.word.startsWith(this.typed),
           );
-          this.targetId =
-            candidates.length > 0
-              ? candidates.reduce((best, ant) => (ant.x < best.x ? ant : best)).id
-              : null;
-          if (this.targetId === null) this.typed = '';
+          if (candidates.length > 0) {
+            this.targetId =
+              candidates.reduce((best, ant) => (ant.x < best.x ? ant : best))
+                .id;
+            this.targetPickupId = null;
+          } else {
+            const pickup = this.pickups.find((item) =>
+              item.word.startsWith(this.typed),
+            );
+            if (pickup) {
+              this.targetPickupId = pickup.id;
+              this.targetId = null;
+            } else {
+              this.targetId = null;
+              this.targetPickupId = null;
+              this.typed = '';
+            }
+          }
         }
         this.emit();
       }
@@ -1059,6 +1316,7 @@ export class GameEngine {
       this.phase !== 'menu' && this.elapsed < this.shieldUntil;
     drawDefenseLine(ctx, this.visualTime, this.breachFlash, shieldActive);
     this.player.draw(ctx, shieldActive);
+    drawPickupBodies(ctx, this.pickups);
 
     const sortedAnts = this.ants
       .filter((ant) => ant.alive)
@@ -1066,6 +1324,18 @@ export class GameEngine {
       .sort((a, b) => a.y - b.y);
     for (const ant of sortedAnts) {
       drawAnt(ctx, ant, this.visualTime, ant.id === this.targetId);
+    }
+
+    for (const pickup of this.pickups) {
+      if (pickup.id === this.targetPickupId) {
+        drawTargetReticle(
+          ctx,
+          pickup.x,
+          pickup.y + Math.sin(pickup.bobPhase) * 5 - 26,
+          0.62,
+          this.visualTime,
+        );
+      }
     }
 
     for (const bullet of this.bullets) {
@@ -1077,6 +1347,12 @@ export class GameEngine {
       sortedAnts,
       this.phase === 'playing' || this.phase === 'paused' ? this.typed : '',
       this.targetId,
+    );
+    drawPickupLabels(
+      ctx,
+      this.pickups,
+      this.phase === 'playing' || this.phase === 'paused' ? this.typed : '',
+      this.targetPickupId,
     );
     drawFloatingTexts(ctx, this.floaters);
 
@@ -1100,8 +1376,17 @@ export class GameEngine {
     const target = this.ants.find(
       (ant) => ant.id === this.targetId && ant.alive,
     );
+    const targetPickup =
+      this.targetPickupId === null
+        ? null
+        : this.pickups.find((item) => item.id === this.targetPickupId) ?? null;
     const accuracy = this.currentAccuracy();
     const wpm = this.currentWpm();
+    const leechDraining =
+      this.leechDrained < LEECH.maxDrainPerRun &&
+      this.ants.some(
+        (ant) => ant.alive && ant.kind === 'leech' && ant.x < LEECH.drainZoneX,
+      );
 
     const abilities = ABILITY_IDS.map((id): AbilitySnapshot => {
       const config = ABILITIES[id];
@@ -1134,8 +1419,13 @@ export class GameEngine {
       eliminated: this.eliminated,
       score: this.score,
       typed: this.typed,
-      targetWord: target?.word ?? '',
-      targetSelected: Boolean(target),
+      targetWord: target?.word ?? targetPickup?.word ?? '',
+      targetSelected: Boolean(target) || Boolean(targetPickup),
+      targetIsPickup: targetPickup !== null,
+      scoreSurgeSeconds: Math.max(0, this.scoreSurgeUntil - this.elapsed),
+      leechDraining,
+      runRank: this.runRank,
+      leaderboard: this.leaderboard.map((entry) => ({ ...entry })),
       combo: this.combo,
       bestCombo: this.bestCombo,
       correctWords: this.correctWords,

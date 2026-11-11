@@ -12,3 +12,11 @@ export function formatTime(seconds: number): string {
 export function pad2(value: number): string {
   return String(Math.max(0, Math.floor(value))).padStart(2, '0');
 }
+
+export function formatDate(epochMs: number): string {
+  const date = new Date(epochMs);
+  const month = pad2(date.getMonth() + 1);
+  const day = pad2(date.getDate());
+  const year = String(date.getFullYear() % 100).padStart(2, '0');
+  return `${month}/${day}/${year}`;
+}

@@ -1,4 +1,4 @@
-import type { AntKind, AntTypeConfig } from './types';
+import type { AntKind, AntTypeConfig, PowerupType } from './types';
 
 export const VIEW_WIDTH = 1600;
 export const VIEW_HEIGHT = 900;
@@ -84,6 +84,58 @@ export const ANT_TYPES: Record<AntKind, AntTypeConfig> = {
     wordRange: [7, 9],
     label: 'QUEEN',
   },
+  weaver: {
+    hp: 1,
+    speed: 58,
+    scale: 0.95,
+    damage: 8,
+    score: 185,
+    wordRange: [4, 5],
+    label: 'WEAVER',
+  },
+  splitter: {
+    hp: 1,
+    speed: 46,
+    scale: 1.15,
+    damage: 8,
+    score: 90,
+    wordRange: [4, 6],
+    label: 'SPLITTER',
+  },
+  leech: {
+    hp: 2,
+    speed: 34,
+    scale: 1.05,
+    damage: 6,
+    score: 265,
+    wordRange: [5, 6],
+    label: 'LEECH',
+  },
+};
+
+export const LEECH = {
+  drainZoneX: 900,
+  drainPerTick: 25,
+  drainTickInterval: 1,
+  maxDrainPerRun: 1000,
+} as const;
+
+export const POWERUPS = {
+  minWave: 3,
+  dropChance: 0.07,
+  lifetime: 9,
+  maxOnField: 2,
+  medHeal: 15,
+  ampCharges: 3,
+  maxPowerCharges: 6,
+  surgeDuration: 10,
+  surgeMultiplier: 2,
+} as const;
+
+export const POWERUP_DEFS: Record<PowerupType, { word: string; name: string }> = {
+  med: { word: 'MED', name: 'MEDKIT' },
+  amp: { word: 'AMP', name: 'OVERCHARGE' },
+  gold: { word: 'GOLD', name: 'GOLD SURGE' },
 };
 
 export const ABILITIES = {

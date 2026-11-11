@@ -1,4 +1,5 @@
-import { ANT_TYPES, COLOR, LANES, VIEW_WIDTH } from './config';
+import { ANT_TYPES, COLOR, LEECH, LANES, VIEW_WIDTH } from './config';
+import { drawWordText } from './effects';
 import type { Ant, AntKind } from './types';
 
 const LABEL_FONT = '600 20px "Barlow Condensed", "Trebuchet MS", sans-serif';
@@ -51,6 +52,8 @@ export function makeAnt(
     deathTimer: 0,
     spawnTimer: 0.45,
     legPhase: Math.random() * Math.PI * 2,
+    swayPhase: Math.random() * Math.PI * 2,
+    drainTimer: kind === 'leech' ? LEECH.drainTickInterval : 0,
     hitFlash: 0,
     boss: kind === 'queen',
     minionTimer: 0,
@@ -61,6 +64,11 @@ export function updateAnt(ant: Ant, dt: number, speedScale: number): void {
   ant.spawnTimer = Math.max(0, ant.spawnTimer - dt);
   ant.hitFlash = Math.max(0, ant.hitFlash - dt);
   ant.legPhase += dt * (2.6 + ant.speed * 0.08);
+  if (ant.kind === 'weaver') {
+    ant.swayPhase += dt * 8.2;
+    const ease = 1 - ant.spawnTimer / 0.45;
+    ant.y = LANES[ant.lane].y + Math.sin(ant.swayPhase) * 26 * ease;
+  }
   ant.x -= ant.speed * speedScale * dt;
 }
 
@@ -75,6 +83,12 @@ function bodyColor(ant: Ant): string {
       return '#170f0a';
     case 'queen':
       return '#1b0c0d';
+    case 'weaver':
+      return '#131810';
+    case 'splitter':
+      return '#1a1210';
+    case 'leech':
+      return '#1d0d0c';
     default:
       return '#17100b';
   }
@@ -91,6 +105,12 @@ function rimColor(ant: Ant): string {
       return 'rgba(255, 120, 78, 0.34)';
     case 'queen':
       return 'rgba(255, 92, 104, 0.58)';
+    case 'weaver':
+      return 'rgba(125, 240, 169, 0.42)';
+    case 'splitter':
+      return 'rgba(244, 224, 205, 0.38)';
+    case 'leech':
+      return 'rgba(255, 82, 80, 0.45)';
     default:
       return 'rgba(247, 184, 120, 0.3)';
   }
@@ -243,6 +263,54 @@ export function drawAnt(
     }
   }
 
+  if (ant.kind === 'weaver') {
+    ctx.strokeStyle = '#233321';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-27, -35);
+    ctx.bezierCurveTo(-45, -55, -55, -70, -66, -84);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-25, -33);
+    ctx.bezierCurveTo(-43, -44, -56, -58, -68, -74);
+    ctx.stroke();
+  }
+
+  if (ant.kind === 'splitter') {
+    const pulse = 0.5 + Math.sin(time * 6 + ant.legPhase) * 0.5;
+    ctx.fillStyle = body;
+    ctx.strokeStyle = 'rgba(244, 224, 205, 0.3)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(14, -28, 11, 9, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 220, 190, ${0.22 + pulse * 0.32})`;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(34, -40);
+    ctx.quadraticCurveTo(30, -27, 34, -14);
+    ctx.stroke();
+  }
+
+  if (ant.kind === 'leech') {
+    const pulse = 0.5 + Math.sin(time * 4.6 + ant.legPhase) * 0.5;
+    const aura = ctx.createRadialGradient(24, -30, 6, 24, -30, 58);
+    aura.addColorStop(0, `rgba(255, 82, 80, ${0.09 + pulse * 0.09})`);
+    aura.addColorStop(1, 'rgba(255, 60, 60, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.ellipse(24, -30, 58, 40, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = body;
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = 1.55;
+    ctx.beginPath();
+    ctx.ellipse(26, -24, 20, 13, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
   ctx.fillStyle = body;
   ctx.strokeStyle = rim;
   ctx.lineWidth = 1.55;
@@ -294,7 +362,14 @@ export function drawAnt(
   ctx.lineTo(-37, -21);
   ctx.stroke();
 
-  const eyeColor = ant.kind === 'queen' ? '#ff6b73' : '#ff6b47';
+  const eyeColor =
+    ant.kind === 'queen'
+      ? '#ff6b73'
+      : ant.kind === 'weaver'
+        ? '#8ef2b6'
+        : ant.kind === 'leech'
+          ? '#ff5a55'
+          : '#ff6b47';
   ctx.fillStyle = eyeColor;
   ctx.shadowColor = eyeColor;
   ctx.shadowBlur = 8;
@@ -328,18 +403,18 @@ export function drawAnt(
   ctx.restore();
 
   if (targeted) {
-    drawTargetReticle(ctx, ant, time);
+    drawTargetReticle(ctx, ant.x, ant.y - 34 * ant.scale, ant.scale, time);
   }
 }
 
-function drawTargetReticle(
+export function drawTargetReticle(
   ctx: CanvasRenderingContext2D,
-  ant: Ant,
+  cx: number,
+  cy: number,
+  scale: number,
   time: number,
 ): void {
-  const cx = ant.x;
-  const cy = ant.y - 34 * ant.scale;
-  const radius = 48 * ant.scale + 10;
+  const radius = 48 * scale + 10;
   const pulse = 0.6 + Math.sin(time * 6) * 0.2;
   ctx.save();
   ctx.translate(cx, cy);
@@ -398,6 +473,19 @@ function overlaps(
     a.y + a.height < b.y ||
     b.y + b.height < a.y
   );
+}
+
+function kindBadgeColor(kind: AntKind): string | null {
+  switch (kind) {
+    case 'weaver':
+      return 'rgba(150, 240, 186, 0.92)';
+    case 'splitter':
+      return 'rgba(240, 224, 205, 0.92)';
+    case 'leech':
+      return 'rgba(255, 140, 130, 0.95)';
+    default:
+      return null;
+  }
 }
 
 export function drawAntLabels(
@@ -501,28 +589,7 @@ export function drawAntLabels(
     ctx.restore();
 
     const textY = y + height / 2 + (ant.maxHp > 1 ? -3 : 0);
-    let cursor = x + padX;
-    for (let i = 0; i < ant.word.length; i += 1) {
-      const char = ant.word[i];
-      const isTyped = isTarget && i < typed.length;
-      const isNext = isTarget && i === typed.length;
-      ctx.fillStyle = isTyped
-        ? COLOR.green
-        : isNext
-          ? COLOR.goldBright
-          : COLOR.cream;
-      ctx.font = font;
-      ctx.fillText(char, cursor, textY);
-      cursor += ctx.measureText(char).width;
-      if (isNext) {
-        ctx.strokeStyle = 'rgba(255, 220, 132, 0.86)';
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(cursor - ctx.measureText(char).width, textY + 11);
-        ctx.lineTo(cursor + 1, textY + 11);
-        ctx.stroke();
-      }
-    }
+    drawWordText(ctx, ant.word, isTarget ? typed : '', x + padX, textY, font);
 
     if (ant.maxHp > 1) {
       const barWidth = width - padX * 2;
@@ -543,6 +610,15 @@ export function drawAntLabels(
       ctx.textAlign = 'left';
       ctx.fillText('QUEEN', x + padX, y - 7);
       ctx.textAlign = 'left';
+    } else {
+      const badgeColor = kindBadgeColor(ant.kind);
+      if (badgeColor !== null) {
+        ctx.font = '600 9px "IBM Plex Mono", monospace';
+        ctx.fillStyle = badgeColor;
+        ctx.textAlign = 'left';
+        ctx.fillText(ANT_TYPES[ant.kind].label, x + padX, y - 7);
+        ctx.textAlign = 'left';
+      }
     }
   }
 

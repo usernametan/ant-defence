@@ -11,11 +11,12 @@ import { WpmGraph } from './WpmGraph';
 type OverlayProps = {
   hud: HudSnapshot;
   engine: GameEngine;
+  onOpenRecords?: () => void;
 };
 
-export function Overlays({ hud, engine }: OverlayProps) {
+export function Overlays({ hud, engine, onOpenRecords }: OverlayProps) {
   if (hud.phase === 'menu') {
-    return <StartOverlay hud={hud} engine={engine} />;
+    return <StartOverlay hud={hud} engine={engine} onOpenRecords={onOpenRecords} />;
   }
   if (hud.phase === 'paused') {
     return <PauseOverlay hud={hud} engine={engine} />;
@@ -26,7 +27,7 @@ export function Overlays({ hud, engine }: OverlayProps) {
   return null;
 }
 
-function StartOverlay({ hud, engine }: OverlayProps) {
+function StartOverlay({ hud, engine, onOpenRecords }: OverlayProps) {
   return (
     <div className="overlay overlay-start">
       <button
@@ -129,6 +130,14 @@ function StartOverlay({ hud, engine }: OverlayProps) {
           <kbd>ENTER</kbd>
         </button>
 
+        <button
+          type="button"
+          className="ghost-button records-button"
+          onClick={onOpenRecords}
+        >
+          RECORD BOOK <kbd>L</kbd>
+        </button>
+
         <div className="start-footer">
           <span><kbd>A–Z</kbd> TYPE</span>
           <span><kbd>BKSP</kbd> ERASE</span>
@@ -205,6 +214,11 @@ function GameOverOverlay({ hud, engine }: OverlayProps) {
           <span>FINAL SCORE</span>
           <strong>{formatScore(stats.score)}</strong>
           {hud.newRecords.score && <em className="record-flag">NEW BEST</em>}
+          {hud.runRank !== null && (
+            <em className="record-flag rank-flag">
+              RECORD BOOK #{hud.runRank}
+            </em>
+          )}
         </div>
 
         <div className="results-grid">

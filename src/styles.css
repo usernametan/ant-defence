@@ -462,6 +462,42 @@ kbd {
   animation: comboPop 0.22s ease-out;
 }
 
+.status-chips {
+  position: absolute;
+  top: -1.15cqw;
+  right: 0.4cqw;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.28cqw;
+}
+
+.status-chips .combo-chip {
+  position: static;
+}
+
+.status-chip {
+  padding: 0.1cqw 0.5cqw;
+  border: 1px solid;
+  border-radius: 0.12cqw;
+  font-family: var(--mono);
+  font-size: clamp(6px, 0.5cqw, 9px);
+  letter-spacing: 0.14em;
+  animation: comboPop 0.22s ease-out;
+}
+
+.surge-chip {
+  border-color: rgba(242, 195, 100, 0.5);
+  background: rgba(38, 25, 9, 0.86);
+  color: var(--gold-bright);
+}
+
+.leech-chip {
+  border-color: rgba(255, 129, 120, 0.5);
+  background: rgba(38, 12, 10, 0.88);
+  color: #ff8d85;
+}
+
 .icon-button {
   display: grid;
   place-items: center;
@@ -650,6 +686,22 @@ kbd {
     0 1.2cqw 4cqw rgba(0, 0, 0, 0.52),
     0 0 2.6cqw rgba(242, 195, 100, 0.13),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.typing-panel.is-pickup {
+  border-color: rgba(125, 240, 169, 0.5);
+  box-shadow:
+    0 1.2cqw 4cqw rgba(0, 0, 0, 0.52),
+    0 0 2.6cqw rgba(125, 240, 169, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.is-pickup .typing-mode {
+  color: var(--green);
+}
+
+.is-pickup .typing-crosshair {
+  color: var(--green);
 }
 
 .typing-panel.is-error {
@@ -1305,6 +1357,10 @@ kbd {
   min-width: 19cqw;
 }
 
+.records-button {
+  margin-top: 0.9cqw;
+}
+
 .start-footer {
   display: flex;
   align-items: center;
@@ -1329,7 +1385,8 @@ kbd {
 }
 
 .overlay-pause,
-.overlay-gameover {
+.overlay-gameover,
+.overlay-records {
   background:
     radial-gradient(ellipse at 50% 45%, rgba(6, 10, 15, 0.34), rgba(2, 4, 7, 0.78) 72%),
     linear-gradient(180deg, rgba(2, 4, 7, 0.55), rgba(2, 4, 7, 0.7));
@@ -1717,6 +1774,114 @@ kbd {
   margin-top: 0.3cqw;
 }
 
+.leaderboard-modal {
+  width: 66cqw;
+}
+
+.leaderboard-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3cqw;
+  margin: 0 0 1.2cqw;
+  padding: 0;
+  list-style: none;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 2.4cqw 10cqw 1fr 1fr 1fr 1fr auto 5cqw;
+  align-items: center;
+  gap: 0.5cqw;
+  padding: 0.42cqw 0.7cqw;
+  border: 1px solid rgba(242, 195, 100, 0.1);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.leaderboard-row.is-first {
+  border-color: rgba(242, 195, 100, 0.4);
+  background: linear-gradient(
+    90deg,
+    rgba(242, 195, 100, 0.1),
+    rgba(242, 195, 100, 0.02)
+  );
+}
+
+.leaderboard-rank {
+  color: rgba(243, 234, 216, 0.4);
+  font-family: var(--mono);
+  font-size: clamp(7px, 0.58cqw, 11px);
+  letter-spacing: 0.1em;
+}
+
+.leaderboard-row.is-first .leaderboard-rank {
+  color: var(--gold-bright);
+}
+
+.leaderboard-score {
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: clamp(10px, 0.85cqw, 16px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.leaderboard-row.is-first .leaderboard-score {
+  color: var(--gold-bright);
+}
+
+.leaderboard-cell {
+  color: rgba(243, 234, 216, 0.55);
+  font-family: var(--mono);
+  font-size: clamp(7px, 0.58cqw, 11px);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.leaderboard-difficulty {
+  justify-self: end;
+  padding: 0.08cqw 0.3cqw;
+  border: 1px solid rgba(143, 199, 255, 0.35);
+  border-radius: 0.1cqw;
+  color: rgba(143, 199, 255, 0.9);
+  font-family: var(--mono);
+  font-size: clamp(5px, 0.4cqw, 8px);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.lb-relaxed {
+  border-color: rgba(125, 240, 169, 0.35);
+  color: rgba(125, 240, 169, 0.9);
+}
+
+.lb-hard {
+  border-color: rgba(255, 129, 120, 0.4);
+  color: rgba(255, 140, 130, 0.92);
+}
+
+.leaderboard-date {
+  justify-self: end;
+  color: rgba(243, 234, 216, 0.32);
+  font-family: var(--mono);
+  font-size: clamp(6px, 0.46cqw, 9px);
+  letter-spacing: 0.1em;
+}
+
+.leaderboard-empty {
+  margin: 1.4cqw 0;
+  color: rgba(243, 234, 216, 0.42);
+  font-family: var(--mono);
+  font-size: clamp(8px, 0.66cqw, 13px);
+  letter-spacing: 0.16em;
+}
+
+.record-flag.rank-flag {
+  border-color: rgba(242, 195, 100, 0.5);
+  background: rgba(242, 195, 100, 0.09);
+  color: var(--gold-bright);
+}
+
 /* ------------------------------------------------------------------ */
 /* Animations                                                          */
 /* ------------------------------------------------------------------ */
@@ -1912,6 +2077,19 @@ kbd {
   .gameover-modal,
   .modal {
     width: 80cqw;
+  }
+
+  .leaderboard-modal {
+    width: 80cqw;
+  }
+
+  .leaderboard-row {
+    grid-template-columns: 2cqw 9cqw 1fr 1fr 1fr auto;
+  }
+
+  .leaderboard-row .leaderboard-cell:nth-of-type(4),
+  .leaderboard-row .leaderboard-cell:nth-of-type(5) {
+    display: none;
   }
 
   .results-grid {
