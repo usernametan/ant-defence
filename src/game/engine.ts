@@ -32,6 +32,13 @@ import {
 } from './effects';
 import { Player } from './player';
 import { Scenery } from './scenery';
+import {
+  applyRun,
+  loadProgress,
+  saveProgress,
+  type PlayerProgress,
+  type RunSummary,
+} from './progress';
 import type {
   AbilityId,
   AbilitySnapshot,
@@ -161,6 +168,16 @@ export class GameEngine {
 
   private banner: BannerSnapshot | null = null;
 
+  private progress: PlayerProgress = loadProgress();
+
+  private runRecorded = false;
+
+  private newRecords = {
+    score: false,
+    wpm: false,
+    accuracy: false,
+  };
+
   private destroyed = false;
 
   private boundKeyDown: (event: KeyboardEvent) => void;
@@ -220,6 +237,9 @@ export class GameEngine {
 
   startGame(): void {
     this.audio.ensure();
+    if (this.phase === 'playing' || this.phase === 'paused') {
+      this.recordCurrentRun();
+    }
     this.resetRun();
     this.phase = 'playing';
     this.audio.wave();
@@ -247,6 +267,9 @@ export class GameEngine {
   }
 
   toMenu(): void {
+    if (this.phase === 'playing' || this.phase === 'paused') {
+      this.recordCurrentRun();
+    }
     this.phase = 'menu';
     this.resetRun();
     this.emit();
@@ -315,6 +338,8 @@ export class GameEngine {
     this.lastAimTarget = null;
     this.lastAimUntil = 0;
     this.banner = null;
+    this.runRecorded = false;
+    this.newRecords = { score: false, wpm: false, accuracy: false };
     this.startWave();
   }
 
@@ -400,9 +425,12 @@ export class GameEngine {
     for (const ant of this.ants) {
       if (!ant.alive) continue;
       updateAnt(ant, dt, speedScale);
-      if (ant.boss && ant.alive && this.elapsed >= ant.nextMinionAt) {
-        ant.nextMinionAt = this.elapsed + DIFFICULTY.bossMinionEvery;
-        this.spawnMinion();
+      if (ant.boss && ant.alive) {
+        ant.minionTimer -= dt * speedScale;
+        if (ant.minionTimer <= 0) {
+          ant.minionTimer = DIFFICULTY.bossMinionEvery;
+          this.spawnMinion();
+        }
       }
       if (ant.alive && ant.x <= WORLD.lineX + 6) {
         this.breachAnt(ant);
@@ -414,7 +442,7 @@ export class GameEngine {
     this.updateBullets(dt);
     updateParticles(this.particles, dt);
     this.updateFloaters(dt);
-    this.updateWave(dt);
+    this.updateWave(dt, speedScale);
 
     if (this.health <= 0) {
       this.endGame();
@@ -471,7 +499,7 @@ export class GameEngine {
     }
   }
 
-  private updateWave(dt: number): void {
+  private updateWave(dt: number, speedScale: number): void {
     if (this.waveState.intermission > 0) {
       this.waveState.intermission -= dt;
       if (this.waveState.intermission <= 0) {
@@ -489,7 +517,7 @@ export class GameEngine {
     );
 
     if (this.waveState.spawned < this.waveState.quota) {
-      this.waveState.spawnTimer -= dt;
+      this.waveState.spawnTimer -= dt * speedScale;
       if (this.waveState.spawnTimer <= 0) {
         if (this.ants.length < maxActive) {
           if (bossWave && !this.waveState.bossSpawned) {
@@ -588,13 +616,18 @@ export class GameEngine {
     );
     this.nextId += 1;
     if (ant.boss) {
-      ant.nextMinionAt = this.elapsed + DIFFICULTY.bossMinionEvery;
+      ant.minionTimer = DIFFICULTY.bossMinionEvery;
     }
     this.ants.push(ant);
     spawnSpawnDust(this.particles, ant.x, ant.y);
   }
 
   private spawnMinion(): void {
+    // Design decision: queen-summoned minions are reinforcements on top of the
+    // wave quota, not part of it. Counting them toward `spawned` would let the
+    // queen's summons consume the wave's remaining spawn budget and shorten
+    // royal assaults, while the wave-clear check (quota reached and arena
+    // empty) already guarantees every minion is eliminated before the wave ends.
     const maxActive = Math.min(
       WORLD.maxActiveAnts,
       DIFFICULTY.maxActiveAtStart +
@@ -655,7 +688,7 @@ export class GameEngine {
       Math.min(10, config.wordRange[0] + waveBonus),
       Math.min(10, config.wordRange[1] + waveBonus),
       activeWords,
-      '',
+      this.typed,
       Math.random,
     );
     if (this.targetId === ant.id) {
@@ -843,8 +876,25 @@ export class GameEngine {
     this.typed = '';
     this.targetId = null;
     this.player.update(0, null, false);
+    this.recordCurrentRun();
     this.audio.gameover();
     this.emit();
+  }
+
+  private recordCurrentRun(): void {
+    if (this.runRecorded) return;
+    this.runRecorded = true;
+    const run: RunSummary = {
+      score: this.score,
+      wpm: this.currentWpm(),
+      accuracy: this.currentAccuracy(),
+      antsEliminated: this.eliminated,
+      keysTyped: this.correctKeys + this.mistakes,
+    };
+    const applied = applyRun(this.progress, run);
+    this.progress = applied.progress;
+    this.newRecords = applied.newRecords;
+    saveProgress(this.progress);
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -989,16 +1039,22 @@ export class GameEngine {
     drawBreachFlash(ctx, this.breachFlash);
   }
 
+  private currentAccuracy(): number {
+    const totalKeys = this.correctKeys + this.mistakes;
+    return totalKeys === 0 ? 100 : (this.correctKeys / totalKeys) * 100;
+  }
+
+  private currentWpm(): number {
+    const minutes = this.elapsed / 60;
+    return minutes > 0.03 ? Math.round(this.correctKeys / 5 / minutes) : 0;
+  }
+
   private buildSnapshot(): HudSnapshot {
     const target = this.ants.find(
       (ant) => ant.id === this.targetId && ant.alive,
     );
-    const totalKeys = this.correctKeys + this.mistakes;
-    const accuracy =
-      totalKeys === 0 ? 100 : (this.correctKeys / totalKeys) * 100;
-    const minutes = this.elapsed / 60;
-    const wpm =
-      minutes > 0.03 ? Math.round(this.correctKeys / 5 / minutes) : 0;
+    const accuracy = this.currentAccuracy();
+    const wpm = this.currentWpm();
 
     const abilities = ABILITY_IDS.map((id): AbilitySnapshot => {
       const config = ABILITIES[id];
@@ -1045,6 +1101,8 @@ export class GameEngine {
       slowSeconds: Math.max(0, this.slowUntil - this.elapsed),
       powerCharges: this.powerCharges,
       banner,
+      records: { ...this.progress },
+      newRecords: { ...this.newRecords },
       inputError: this.inputError > 0,
       breached: this.breachFlash > 0.16,
       waveProgress:

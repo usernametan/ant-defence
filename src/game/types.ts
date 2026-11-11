@@ -1,3 +1,5 @@
+import type { NewRecords, PlayerProgress } from './progress';
+
 export type GamePhase = 'menu' | 'playing' | 'paused' | 'gameover';
 
 export type AntKind = 'normal' | 'fast' | 'armored' | 'giant' | 'queen';
@@ -31,7 +33,7 @@ export interface Ant {
   legPhase: number;
   hitFlash: number;
   boss: boolean;
-  nextMinionAt: number;
+  minionTimer: number;
 }
 
 export interface Bullet {
@@ -112,6 +114,8 @@ export interface HudSnapshot {
   slowSeconds: number;
   powerCharges: number;
   banner: BannerSnapshot | null;
+  records: PlayerProgress;
+  newRecords: NewRecords;
   inputError: boolean;
   breached: boolean;
   waveProgress: number;

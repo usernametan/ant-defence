@@ -50,6 +50,30 @@ function StartOverlay({ hud, engine }: OverlayProps) {
           word you can type.
         </p>
 
+        {hud.records.gamesPlayed > 0 && (
+          <div className="start-records">
+            <span className="start-records-label">SERVICE RECORD</span>
+            <div className="start-records-row">
+              <div className="record-cell">
+                <span>BEST SCORE</span>
+                <strong>{formatScore(hud.records.bestScore)}</strong>
+              </div>
+              <div className="record-cell">
+                <span>BEST WPM</span>
+                <strong>{hud.records.bestWpm}</strong>
+              </div>
+              <div className="record-cell">
+                <span>BEST ACCURACY</span>
+                <strong>{hud.records.bestAccuracy.toFixed(1)}%</strong>
+              </div>
+            </div>
+            <p className="start-records-note">
+              {hud.records.gamesPlayed} GAMES PLAYED —{' '}
+              {formatScore(hud.records.totalAntsEliminated)} ANTS ELIMINATED
+            </p>
+          </div>
+        )}
+
         <div className="instruction-row">
           <article className="instruction">
             <span className="instruction-index">01</span>
@@ -155,6 +179,7 @@ function GameOverOverlay({ hud, engine }: OverlayProps) {
         <div className="final-score">
           <span>FINAL SCORE</span>
           <strong>{formatScore(stats.score)}</strong>
+          {hud.newRecords.score && <em className="record-flag">NEW BEST</em>}
         </div>
 
         <div className="results-grid">
@@ -169,6 +194,9 @@ function GameOverOverlay({ hud, engine }: OverlayProps) {
           <div className="result-card">
             <span>ACCURACY</span>
             <strong>{stats.accuracy.toFixed(1)}%</strong>
+            {hud.newRecords.accuracy && (
+              <em className="record-flag">NEW BEST</em>
+            )}
           </div>
           <div className="result-card">
             <span>BEST STREAK</span>
@@ -177,6 +205,7 @@ function GameOverOverlay({ hud, engine }: OverlayProps) {
           <div className="result-card">
             <span>WPM</span>
             <strong>{stats.wpm}</strong>
+            {hud.newRecords.wpm && <em className="record-flag">NEW BEST</em>}
           </div>
           <div className="result-card">
             <span>TIME</span>
@@ -189,6 +218,32 @@ function GameOverOverlay({ hud, engine }: OverlayProps) {
           <div className="result-card">
             <span>MISFIRES</span>
             <strong>{stats.mistakes}</strong>
+          </div>
+        </div>
+
+        <div className="bests-strip">
+          <span className="bests-label">PERSONAL BESTS</span>
+          <div className="bests-cells">
+            <div className="best-cell">
+              <span>SCORE</span>
+              <strong>{formatScore(hud.records.bestScore)}</strong>
+            </div>
+            <div className="best-cell">
+              <span>WPM</span>
+              <strong>{hud.records.bestWpm}</strong>
+            </div>
+            <div className="best-cell">
+              <span>ACCURACY</span>
+              <strong>{hud.records.bestAccuracy.toFixed(1)}%</strong>
+            </div>
+            <div className="best-cell">
+              <span>GAMES</span>
+              <strong>{hud.records.gamesPlayed}</strong>
+            </div>
+            <div className="best-cell">
+              <span>ANTS</span>
+              <strong>{formatScore(hud.records.totalAntsEliminated)}</strong>
+            </div>
           </div>
         </div>
 

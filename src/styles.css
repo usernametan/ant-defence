@@ -1019,6 +1019,64 @@ kbd {
   text-shadow: 0 0.2cqw 0.6cqw rgba(0, 0, 0, 0.6);
 }
 
+.start-records {
+  width: 47cqw;
+  margin: 1.35cqw auto 0;
+  padding: 0.75cqw 1.2cqw 0.85cqw;
+  border: 1px solid rgba(242, 195, 100, 0.14);
+  border-radius: 0.24cqw;
+  background: linear-gradient(155deg, rgba(9, 14, 20, 0.66), rgba(6, 10, 14, 0.38));
+  text-align: center;
+  backdrop-filter: blur(7px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.start-records-label {
+  color: rgba(242, 195, 100, 0.62);
+  font-family: var(--mono);
+  font-size: clamp(6px, 0.5cqw, 9px);
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+}
+
+.start-records-row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.6cqw 3.4cqw;
+  margin-top: 0.6cqw;
+}
+
+.record-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12cqw;
+}
+
+.record-cell span {
+  color: rgba(243, 234, 216, 0.38);
+  font-family: var(--mono);
+  font-size: clamp(6px, 0.5cqw, 9px);
+  letter-spacing: 0.18em;
+}
+
+.record-cell strong {
+  color: var(--gold-bright);
+  font-family: var(--mono);
+  font-size: clamp(13px, 1.1cqw, 20px);
+  font-weight: 500;
+}
+
+.start-records-note {
+  margin: 0.7cqw 0 0;
+  padding-top: 0.6cqw;
+  border-top: 1px solid rgba(242, 195, 100, 0.1);
+  color: rgba(243, 234, 216, 0.4);
+  font-family: var(--mono);
+  font-size: clamp(6px, 0.52cqw, 10px);
+  letter-spacing: 0.12em;
+}
+
 .instruction-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1365,6 +1423,7 @@ kbd {
 }
 
 .result-card {
+  position: relative;
   padding: 0.55cqw 0.5cqw;
   border: 1px solid rgba(242, 195, 100, 0.12);
   background: rgba(255, 255, 255, 0.018);
@@ -1382,6 +1441,73 @@ kbd {
   display: block;
   margin-top: 0.14cqw;
   color: var(--cream);
+  font-family: var(--mono);
+  font-size: clamp(11px, 0.92cqw, 17px);
+  font-weight: 500;
+}
+
+.record-flag {
+  position: absolute;
+  top: 0.32cqw;
+  right: 0.38cqw;
+  padding: 0.08cqw 0.3cqw;
+  border: 1px solid rgba(125, 240, 169, 0.5);
+  border-radius: 0.1cqw;
+  background: rgba(125, 240, 169, 0.09);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: clamp(5px, 0.4cqw, 8px);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.final-score .record-flag {
+  position: static;
+  margin-top: 0.55cqw;
+}
+
+.bests-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55cqw;
+  margin: 0 0 1.4cqw;
+  padding: 0.75cqw 0 0.2cqw;
+  border-top: 1px solid rgba(242, 195, 100, 0.12);
+}
+
+.bests-label {
+  color: rgba(242, 195, 100, 0.55);
+  font-family: var(--mono);
+  font-size: clamp(6px, 0.5cqw, 9px);
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+}
+
+.bests-cells {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5cqw 3cqw;
+}
+
+.best-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12cqw;
+}
+
+.best-cell span {
+  color: rgba(243, 234, 216, 0.36);
+  font-family: var(--mono);
+  font-size: clamp(6px, 0.46cqw, 8px);
+  letter-spacing: 0.16em;
+}
+
+.best-cell strong {
+  color: var(--gold-bright);
   font-family: var(--mono);
   font-size: clamp(11px, 0.92cqw, 17px);
   font-weight: 500;
@@ -1541,6 +1667,10 @@ kbd {
     margin-bottom: 2cqw;
   }
 
+  .start-records {
+    width: 58cqw;
+  }
+
   .ability {
     width: 7.4cqw;
   }
@@ -1561,6 +1691,14 @@ kbd {
 @media (max-width: 640px) {
   .start-footer {
     display: none;
+  }
+
+  .start-records-row {
+    gap: 0.5cqw 2cqw;
+  }
+
+  .bests-cells {
+    gap: 0.4cqw 1.8cqw;
   }
 
   .gameover-modal,

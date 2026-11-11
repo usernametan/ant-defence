@@ -53,7 +53,7 @@ export function makeAnt(
     legPhase: Math.random() * Math.PI * 2,
     hitFlash: 0,
     boss: kind === 'queen',
-    nextMinionAt: 0,
+    minionTimer: 0,
   };
 }
 
