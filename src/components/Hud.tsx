@@ -8,6 +8,7 @@ import {
   BoltIcon,
   CrosshairIcon,
   FocusIcon,
+  PauseIcon,
   ShieldIcon,
   SoundIcon,
   StickmanPortrait,
@@ -124,6 +125,17 @@ export function Hud({ hud, engine }: HudProps) {
               </div>
             )}
           </div>
+          {hud.phase === 'playing' && (
+            <button
+              type="button"
+              className="icon-button pause-button"
+              aria-label="Pause game"
+              onClick={() => engine.togglePause()}
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              <PauseIcon className="pause-icon" />
+            </button>
+          )}
           <button
             type="button"
             className="icon-button mute-button"

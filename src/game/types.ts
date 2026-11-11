@@ -144,6 +144,7 @@ export interface HudSnapshot {
   accuracy: number;
   wpm: number;
   muted: boolean;
+  reducedMotion: boolean;
   abilities: AbilitySnapshot[];
   shieldSeconds: number;
   slowSeconds: number;

@@ -45,6 +45,7 @@ import {
 } from './effects';
 import { Player } from './player';
 import { Scenery } from './scenery';
+import { loadReducedMotion, saveReducedMotion } from './settings';
 import {
   addRun,
   loadLeaderboard,
@@ -194,6 +195,8 @@ export class GameEngine {
 
   private runRank: number | null = null;
 
+  private reducedMotion = loadReducedMotion();
+
   private lastAimTarget: { x: number; y: number } | null = null;
 
   private lastAimUntil = 0;
@@ -283,9 +286,6 @@ export class GameEngine {
 
   startGame(): void {
     this.audio.ensure();
-    if (this.phase === 'playing' || this.phase === 'paused') {
-      this.recordCurrentRun();
-    }
     this.resetRun();
     this.phase = 'playing';
     this.audio.wave();
@@ -314,9 +314,6 @@ export class GameEngine {
   }
 
   toMenu(): void {
-    if (this.phase === 'playing' || this.phase === 'paused') {
-      this.recordCurrentRun();
-    }
     this.phase = 'menu';
     this.resetRun();
     this.emit();
@@ -325,6 +322,17 @@ export class GameEngine {
   toggleMute(): void {
     this.audio.toggle();
     this.emit();
+  }
+
+  setReducedMotion(value: boolean): void {
+    if (this.reducedMotion === value) return;
+    this.reducedMotion = value;
+    saveReducedMotion(value);
+    this.emit();
+  }
+
+  toggleReducedMotion(): void {
+    this.setReducedMotion(!this.reducedMotion);
   }
 
   setDifficulty(id: DifficultyId): void {
@@ -453,7 +461,7 @@ export class GameEngine {
     this.lastFrame = now;
     dt = clamp(dt, 0, 0.05);
     this.visualTime += dt;
-    this.scenery.update(dt);
+    this.scenery.update(this.reducedMotion ? 0 : dt);
 
     if (this.phase === 'playing') {
       this.updateGame(dt);
@@ -1297,15 +1305,14 @@ export class GameEngine {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
 
-    const shakeX =
-      this.shake > 0
-        ? Math.sin(this.visualTime * 91) * this.shake * 0.32 +
-          Math.sin(this.visualTime * 53) * this.shake * 0.16
-        : 0;
-    const shakeY =
-      this.shake > 0
-        ? Math.cos(this.visualTime * 77) * this.shake * 0.22
-        : 0;
+    const shakeActive = this.shake > 0 && !this.reducedMotion;
+    const shakeX = shakeActive
+      ? Math.sin(this.visualTime * 91) * this.shake * 0.32 +
+        Math.sin(this.visualTime * 53) * this.shake * 0.16
+      : 0;
+    const shakeY = shakeActive
+      ? Math.cos(this.visualTime * 77) * this.shake * 0.22
+      : 0;
 
     this.scenery.drawBack(ctx, shakeX, shakeY);
 
@@ -1359,7 +1366,7 @@ export class GameEngine {
     ctx.restore();
 
     drawVignette(ctx);
-    drawBreachFlash(ctx, this.breachFlash);
+    drawBreachFlash(ctx, this.reducedMotion ? 0 : this.breachFlash);
   }
 
   private currentAccuracy(): number {
@@ -1433,6 +1440,7 @@ export class GameEngine {
       accuracy,
       wpm,
       muted: this.audio.muted,
+      reducedMotion: this.reducedMotion,
       abilities,
       shieldSeconds: Math.max(0, this.shieldUntil - this.elapsed),
       slowSeconds: Math.max(0, this.slowUntil - this.elapsed),

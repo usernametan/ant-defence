@@ -41,7 +41,10 @@ export default function App() {
   }, []);
 
   return (
-    <div className="game-shell">
+    <div
+      className="game-shell"
+      data-motion={hud?.reducedMotion ? 'reduced' : 'full'}
+    >
       <div className="game-frame">
         <canvas ref={canvasRef} className="game-canvas" aria-label="Ant Defense game arena" />
         {engine && hud && (

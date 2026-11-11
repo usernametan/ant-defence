@@ -146,6 +146,21 @@ export function SoundIcon({ muted, className }: IconProps & { muted: boolean }) 
   );
 }
 
+export function PauseIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 28 28"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect x="8" y="6" width="4" height="16" rx="1" fill="currentColor" />
+      <rect x="16" y="6" width="4" height="16" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function CrownIcon({ className }: IconProps) {
   return (
     <svg

@@ -193,6 +193,13 @@ function PauseOverlay({ hud, engine }: OverlayProps) {
           <SoundIcon muted={hud.muted} className="inline-audio-icon" />
           AUDIO {hud.muted ? 'OFF' : 'ON'} <kbd>M</kbd>
         </button>
+        <button
+          type="button"
+          className="inline-motion-toggle"
+          onClick={() => engine.toggleReducedMotion()}
+        >
+          EFFECTS {hud.reducedMotion ? 'REDUCED' : 'FULL'}
+        </button>
       </div>
     </div>
   );
