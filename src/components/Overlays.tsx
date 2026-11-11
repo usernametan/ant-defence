@@ -1,7 +1,12 @@
 import type { GameEngine } from '../game/engine';
 import type { HudSnapshot } from '../game/types';
+import {
+  DIFFICULTY_IDS,
+  DIFFICULTY_PRESETS,
+} from '../game/difficulty';
 import { formatScore, formatTime } from '../utils/format';
 import { AntIcon, CrosshairIcon, SoundIcon } from './Icons';
+import { WpmGraph } from './WpmGraph';
 
 type OverlayProps = {
   hud: HudSnapshot;
@@ -93,6 +98,26 @@ function StartOverlay({ hud, engine }: OverlayProps) {
             <h2>HOLD</h2>
             <p>Let one cross the red line and the colony takes your blood.</p>
           </article>
+        </div>
+
+        <div className="difficulty-select">
+          <span className="difficulty-label">THREAT LEVEL</span>
+          <div className="difficulty-options">
+            {DIFFICULTY_IDS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                className={`difficulty-option ${
+                  hud.difficulty === id ? 'is-selected' : ''
+                }`}
+                onClick={() => engine.setDifficulty(id)}
+                onMouseDown={(event) => event.preventDefault()}
+              >
+                <strong>{DIFFICULTY_PRESETS[id].label}</strong>
+                <span>{DIFFICULTY_PRESETS[id].description}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <button
@@ -220,6 +245,8 @@ function GameOverOverlay({ hud, engine }: OverlayProps) {
             <strong>{stats.mistakes}</strong>
           </div>
         </div>
+
+        <WpmGraph samples={stats.wpmHistory} />
 
         <div className="bests-strip">
           <span className="bests-label">PERSONAL BESTS</span>

@@ -1,6 +1,12 @@
+import type { DifficultyId } from './difficulty';
 import type { NewRecords, PlayerProgress } from './progress';
 
 export type GamePhase = 'menu' | 'playing' | 'paused' | 'gameover';
+
+export interface WpmSample {
+  t: number;
+  wpm: number;
+}
 
 export type AntKind = 'normal' | 'fast' | 'armored' | 'giant' | 'queen';
 
@@ -116,6 +122,7 @@ export interface HudSnapshot {
   banner: BannerSnapshot | null;
   records: PlayerProgress;
   newRecords: NewRecords;
+  difficulty: DifficultyId;
   inputError: boolean;
   breached: boolean;
   waveProgress: number;
@@ -129,5 +136,6 @@ export interface HudSnapshot {
     mistakes: number;
     time: number;
     wpm: number;
+    wpmHistory: WpmSample[];
   };
 }

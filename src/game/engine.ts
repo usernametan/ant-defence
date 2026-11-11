@@ -11,6 +11,13 @@ import {
 } from './config';
 import { AudioEngine } from './audio';
 import {
+  DIFFICULTY_PRESETS,
+  loadDifficulty,
+  saveDifficulty,
+  type DifficultyId,
+  type DifficultyPreset,
+} from './difficulty';
+import {
   antBodyCenter,
   drawAnt,
   drawAntLabels,
@@ -50,6 +57,7 @@ import type {
   GamePhase,
   HudSnapshot,
   Particle,
+  WpmSample,
 } from './types';
 import { pickWord, waveTitle } from './words';
 
@@ -64,6 +72,8 @@ type WaveState = {
 };
 
 const ABILITY_IDS: AbilityId[] = ['focus', 'aegis', 'power'];
+
+const WPM_SAMPLE_INTERVAL = 2.5;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -178,6 +188,12 @@ export class GameEngine {
     accuracy: false,
   };
 
+  private difficultyId: DifficultyId = loadDifficulty();
+
+  private wpmHistory: WpmSample[] = [{ t: 0, wpm: 0 }];
+
+  private wpmSampleTimer = 0;
+
   private destroyed = false;
 
   private boundKeyDown: (event: KeyboardEvent) => void;
@@ -280,6 +296,18 @@ export class GameEngine {
     this.emit();
   }
 
+  setDifficulty(id: DifficultyId): void {
+    if (this.phase !== 'menu') return;
+    if (this.difficultyId === id) return;
+    this.difficultyId = id;
+    saveDifficulty(id);
+    this.emit();
+  }
+
+  private get difficulty(): DifficultyPreset {
+    return DIFFICULTY_PRESETS[this.difficultyId];
+  }
+
   activateAbility(id: AbilityId): void {
     if (this.phase !== 'playing') return;
     if (this.readyAt[id] > this.elapsed) {
@@ -340,6 +368,8 @@ export class GameEngine {
     this.banner = null;
     this.runRecorded = false;
     this.newRecords = { score: false, wpm: false, accuracy: false };
+    this.wpmHistory = [{ t: 0, wpm: 0 }];
+    this.wpmSampleTimer = 0;
     this.startWave();
   }
 
@@ -351,9 +381,13 @@ export class GameEngine {
           DIFFICULTY.maxQuota,
           DIFFICULTY.baseQuota + this.wave * DIFFICULTY.quotaPerWave,
         );
+    const scaledQuota = Math.max(
+      4,
+      Math.round(quota * this.difficulty.quotaScale),
+    );
     this.waveState = {
       spawned: 0,
-      quota,
+      quota: scaledQuota,
       spawnTimer: bossWave ? 1.6 : 1.1,
       intermission: 0,
       bossSpawned: false,
@@ -407,6 +441,11 @@ export class GameEngine {
     this.inputError = Math.max(0, this.inputError - dt);
     this.breachFlash = Math.max(0, this.breachFlash - dt * 2.15);
     this.shake = Math.max(0, this.shake - dt * 46);
+    this.wpmSampleTimer += dt;
+    if (this.wpmSampleTimer >= WPM_SAMPLE_INTERVAL) {
+      this.wpmSampleTimer -= WPM_SAMPLE_INTERVAL;
+      this.wpmHistory.push({ t: this.elapsed, wpm: this.currentWpm() });
+    }
 
     const targetAnt = this.ants.find(
       (ant) => ant.id === this.targetId && ant.alive,
@@ -510,11 +549,7 @@ export class GameEngine {
     }
 
     const bossWave = this.wave % DIFFICULTY.bossEvery === 0;
-    const maxActive = Math.min(
-      WORLD.maxActiveAnts,
-      DIFFICULTY.maxActiveAtStart +
-        Math.floor(this.wave * DIFFICULTY.maxActivePerWave),
-    );
+    const maxActive = this.currentMaxActive();
 
     if (this.waveState.spawned < this.waveState.quota) {
       this.waveState.spawnTimer -= dt * speedScale;
@@ -533,10 +568,10 @@ export class GameEngine {
         const base =
           DIFFICULTY.baseSpawnInterval -
           this.wave * DIFFICULTY.spawnIntervalPerWave;
-        const interval = Math.max(
-          DIFFICULTY.minSpawnInterval,
-          base * (0.84 + Math.random() * 0.34) + (bossWave ? 0.55 : 0),
-        );
+        const scaled =
+          (base * (0.84 + Math.random() * 0.34) + (bossWave ? 0.55 : 0)) *
+          this.difficulty.spawnIntervalScale;
+        const interval = Math.max(DIFFICULTY.minSpawnInterval, scaled);
         this.waveState.spawnTimer = interval;
       }
     } else if (this.ants.length === 0) {
@@ -551,6 +586,16 @@ export class GameEngine {
       this.waveState.intermission = DIFFICULTY.intermission;
       this.emit();
     }
+  }
+
+  private currentMaxActive(): number {
+    return clamp(
+      DIFFICULTY.maxActiveAtStart +
+        Math.floor(this.wave * DIFFICULTY.maxActivePerWave) +
+        this.difficulty.maxActiveBias,
+      1,
+      WORLD.maxActiveAnts,
+    );
   }
 
   private chooseKind(bossWave: boolean): AntKind {
@@ -584,23 +629,25 @@ export class GameEngine {
     const lane = this.pickLane();
     const laneInfo = LANES[lane];
     const config = ANT_TYPES[kind];
-    const waveBonus = Math.min(2, Math.floor((this.wave - 1) / 4));
-    const minLength = Math.min(10, config.wordRange[0] + waveBonus);
-    const maxLength = Math.min(10, config.wordRange[1] + waveBonus);
+    const waveBonus = Math.min(3, Math.floor((this.wave - 1) / 4));
+    const minLength = Math.min(12, config.wordRange[0] + waveBonus);
+    const maxLength = Math.min(12, config.wordRange[1] + waveBonus);
     const activeWords = this.ants
       .filter((ant) => ant.alive)
       .map((ant) => ant.word);
     const word = pickWord(
+      this.wave,
       minLength,
       maxLength,
       activeWords,
       this.typed,
       Math.random,
     );
-    const speedMultiplier = Math.min(
-      DIFFICULTY.maxSpeedMultiplier,
-      1 + (this.wave - 1) * DIFFICULTY.speedPerWave,
-    );
+    const speedMultiplier =
+      Math.min(
+        DIFFICULTY.maxSpeedMultiplier,
+        1 + (this.wave - 1) * DIFFICULTY.speedPerWave,
+      ) * this.difficulty.antSpeedScale;
     const jitter = 0.92 + Math.random() * 0.16;
     const x = WORLD.spawnX + Math.random() * 56 + (lane % 2) * 30;
     const ant = makeAnt(
@@ -628,12 +675,7 @@ export class GameEngine {
     // queen's summons consume the wave's remaining spawn budget and shorten
     // royal assaults, while the wave-clear check (quota reached and arena
     // empty) already guarantees every minion is eliminated before the wave ends.
-    const maxActive = Math.min(
-      WORLD.maxActiveAnts,
-      DIFFICULTY.maxActiveAtStart +
-        Math.floor(this.wave * DIFFICULTY.maxActivePerWave),
-    );
-    if (this.ants.length >= maxActive) return;
+    if (this.ants.length >= this.currentMaxActive()) return;
     this.spawnAnt(Math.random() < 0.6 ? 'fast' : 'normal');
   }
 
@@ -679,14 +721,15 @@ export class GameEngine {
 
   private rotateBossWord(ant: Ant): void {
     const config = ANT_TYPES[ant.kind];
-    const waveBonus = Math.min(2, Math.floor((this.wave - 1) / 4));
+    const waveBonus = Math.min(3, Math.floor((this.wave - 1) / 4));
     const activeWords = this.ants
       .filter((other) => other.alive && other.id !== ant.id)
       .map((other) => other.word);
     activeWords.push(ant.word);
     ant.word = pickWord(
-      Math.min(10, config.wordRange[0] + waveBonus),
-      Math.min(10, config.wordRange[1] + waveBonus),
+      this.wave,
+      Math.min(12, config.wordRange[0] + waveBonus),
+      Math.min(12, config.wordRange[1] + waveBonus),
       activeWords,
       this.typed,
       Math.random,
@@ -876,6 +919,10 @@ export class GameEngine {
     this.typed = '';
     this.targetId = null;
     this.player.update(0, null, false);
+    const lastSample = this.wpmHistory[this.wpmHistory.length - 1];
+    if (this.elapsed - lastSample.t > 0.2) {
+      this.wpmHistory.push({ t: this.elapsed, wpm: this.currentWpm() });
+    }
     this.recordCurrentRun();
     this.audio.gameover();
     this.emit();
@@ -1103,6 +1150,7 @@ export class GameEngine {
       banner,
       records: { ...this.progress },
       newRecords: { ...this.newRecords },
+      difficulty: this.difficultyId,
       inputError: this.inputError > 0,
       breached: this.breachFlash > 0.16,
       waveProgress:
@@ -1119,6 +1167,7 @@ export class GameEngine {
         mistakes: this.mistakes,
         time: this.elapsed,
         wpm,
+        wpmHistory: this.wpmHistory,
       },
     };
   }

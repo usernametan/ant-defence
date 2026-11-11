@@ -167,7 +167,20 @@ export function Hud({ hud, engine }: HudProps) {
                 )}
               </span>
               <span className="typing-meta">
-                ACC {Math.round(hud.accuracy)}% <i /> {hud.wpm} WPM
+                <span className="live-stat">
+                  <strong className="live-stat-value">
+                    {Math.round(hud.accuracy)}
+                    <i>%</i>
+                  </strong>
+                  <span className="live-stat-label">ACCURACY</span>
+                </span>
+                <span className="live-stat">
+                  <strong className="live-stat-value">
+                    {hud.wpm}
+                    <i>WPM</i>
+                  </strong>
+                  <span className="live-stat-label">SPEED</span>
+                </span>
               </span>
             </div>
 

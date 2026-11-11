@@ -1,45 +1,94 @@
-const WORD_POOLS: Record<number, string[]> = {
-  3: [
-    'ANT', 'BUG', 'JAB', 'RUN', 'LEG', 'EGG', 'NIP', 'DIG', 'MUD', 'WEB',
-    'SAP', 'FIT', 'JAW', 'HEX', 'PIT', 'TAR',
-  ],
-  4: [
-    'BITE', 'FANG', 'JUMP', 'SNAP', 'GRIP', 'HIVE', 'DUST', 'RUSH', 'PEST',
-    'DRIP', 'MOSS', 'PATH', 'RAGE', 'SILK', 'WING', 'CLAW', 'DART', 'EDGE',
-    'FOAM', 'IRON', 'LURE', 'PLUG', 'REEF', 'SOIL', 'TRAP',
-  ],
-  5: [
-    'SWARM', 'STING', 'CREEP', 'CRAWL', 'CHASE', 'PINCH', 'QUEEN', 'TRAIL',
-    'MOUND', 'BROOD', 'DRONE', 'SCOUT', 'STOMP', 'BURST', 'VENOM', 'CLIMB',
-    'GNASH', 'HURRY', 'SIEGE', 'SHELL', 'SPINE', 'STALK', 'TALON', 'WRATH',
-  ],
-  6: [
-    'POISON', 'COLONY', 'ATTACK', 'BURROW', 'LEGION', 'SCOURGE', 'INFEST',
-    'TUNNEL', 'BITING', 'CHITIN', 'DEFEND', 'HUNTER', 'DAGGER', 'STRIKE',
-    'AMBUSH', 'CARVEN', 'FERVID', 'GNAWED', 'HORNET', 'MANTIS', 'NESTED',
-    'RAVAGE', 'SHELTER', 'STINGER', 'WARLOCK',
-  ],
-  7: [
-    'SOLDIER', 'FORAGER', 'CRIMSON', 'SWARMED', 'DEFIANT', 'PIERCER',
-    'SCUTTLE', 'CAVERNS', 'TUNNELS', 'WARRIOR', 'VENOMED', 'BRUTISH',
-    'CHARGER', 'CRAWLER', 'DIGGERS', 'FLAYING', 'GNASHER', 'HUNTERS',
-    'MANDATE', 'NESTING', 'SAPPERS', 'SCOURER', 'SKITTER', 'STALKER',
-  ],
-  8: [
-    'MANDIBLE', 'CARAPACE', 'SCOUTING', 'DEFENDER', 'SWARMING', 'INVASION',
-    'SENTINEL', 'COLONIES', 'STINGERS', 'AMBUSHED', 'OUTFLANK', 'PREDATOR',
-    'RAVAGERS', 'SHELTERS', 'SKIRMISH', 'STALKERS', 'TUNNELLED', 'VANGUARD',
-  ],
-  9: [
-    'BATTALION', 'OVERWHELM', 'BARRICADE', 'PHEROMONE', 'INFESTING',
-    'RELENTLESS', 'FORAGERS', 'SENTINELS', 'SKIRMISHER', 'DEVASTATE',
-  ],
-  10: [
-    'PHEROMONES', 'FORTRESSES', 'EXTERMINATOR', 'OVERWHELMING', 'RELENTLESSLY',
-  ],
-};
+interface WordLevel {
+  minWave: number;
+  pools: Record<number, string[]>;
+}
 
-const ALL_WORDS = Object.values(WORD_POOLS).flat();
+const WORD_LEVELS: WordLevel[] = [
+  {
+    minWave: 1,
+    pools: {
+      3: ['ANT', 'BUG', 'RUN', 'LEG', 'EGG', 'DIG', 'MUD', 'WEB', 'FIT', 'JAW'],
+      4: [
+        'BITE', 'FANG', 'JUMP', 'SNAP', 'GRIP', 'HIVE', 'DUST', 'RUSH',
+        'PATH', 'RAGE', 'WING', 'CLAW', 'EDGE', 'IRON', 'SOIL', 'TRAP',
+      ],
+      5: [
+        'SWARM', 'STING', 'CREEP', 'CRAWL', 'CHASE', 'DRONE', 'SCOUT',
+        'BURST', 'CLIMB', 'HURRY', 'SHELL', 'TRAIL',
+      ],
+      6: ['ATTACK', 'DEFEND', 'HUNTER', 'STRIKE', 'AMBUSH'],
+      7: ['SHELTER'],
+    },
+  },
+  {
+    minWave: 4,
+    pools: {
+      3: ['JAB', 'NIP', 'SAP', 'HEX', 'PIT', 'TAR'],
+      4: [
+        'PEST', 'DRIP', 'MOSS', 'SILK', 'DART', 'FOAM', 'LURE', 'PLUG',
+        'REEF',
+      ],
+      5: [
+        'PINCH', 'QUEEN', 'MOUND', 'BROOD', 'STOMP', 'VENOM', 'SIEGE',
+        'WRATH',
+      ],
+      6: [
+        'POISON', 'COLONY', 'BURROW', 'TUNNEL', 'LEGION', 'DAGGER',
+        'HORNET', 'MANTIS', 'RAVAGE',
+      ],
+      7: [
+        'SOLDIER', 'FORAGER', 'WARRIOR', 'CHARGER', 'SWARMED', 'DEFIANT',
+        'CRAWLER', 'HUNTERS', 'NESTING', 'STALKER', 'STINGER',
+      ],
+      8: [
+        'DEFENDER', 'SENTINEL', 'INVASION', 'PREDATOR', 'VANGUARD',
+        'SCOUTING', 'COLONIES', 'SWARMING', 'AMBUSHED',
+      ],
+      9: ['BATTALION'],
+    },
+  },
+  {
+    minWave: 7,
+    pools: {
+      5: ['GNASH', 'SPINE', 'STALK', 'TALON'],
+      6: ['INFEST', 'BITING'],
+      7: [
+        'CRIMSON', 'PIERCER', 'SCUTTLE', 'CAVERNS', 'TUNNELS', 'VENOMED',
+        'BRUTISH', 'DIGGERS', 'MANDATE', 'SCOURGE',
+      ],
+      8: [
+        'MANDIBLE', 'CARAPACE', 'STINGERS', 'RAVAGERS', 'SHELTERS',
+        'STALKERS', 'SKIRMISH', 'FORAGERS',
+      ],
+      9: ['SENTINELS', 'DEVASTATE'],
+    },
+  },
+  {
+    minWave: 10,
+    pools: {
+      6: ['CHITIN', 'CARVEN', 'FERVID', 'GNAWED', 'NESTED'],
+      7: ['FLAYING', 'SAPPERS', 'SCOURER', 'WARLOCK'],
+      8: ['OUTFLANK'],
+      9: ['OVERWHELM', 'INFESTING', 'TUNNELLED'],
+    },
+  },
+  {
+    minWave: 13,
+    pools: {
+      7: ['GNASHER', 'SKITTER'],
+      9: ['BARRICADE', 'PHEROMONE'],
+      10: [
+        'PHEROMONES', 'FORTRESSES', 'RELENTLESS', 'INCURSIONS',
+        'STRONGHOLD', 'SKITTERING', 'DEVASTATOR', 'SKIRMISHER',
+      ],
+      12: ['EXTERMINATOR', 'OVERWHELMING', 'RELENTLESSLY'],
+    },
+  },
+];
+
+const ALL_WORDS = WORD_LEVELS.flatMap((level) =>
+  Object.values(level.pools).flat(),
+);
 
 export interface WordSelection {
   word: string;
@@ -59,7 +108,12 @@ function randomOf<T>(items: T[], rng: () => number): T {
   return items[Math.floor(rng() * items.length)];
 }
 
+function unlockedLevels(wave: number): WordLevel[] {
+  return WORD_LEVELS.filter((level) => wave >= level.minWave);
+}
+
 export function pickWord(
+  wave: number,
   minLength: number,
   maxLength: number,
   activeWords: string[],
@@ -71,12 +125,24 @@ export function pickWord(
   );
   const lengths: number[] = [];
   for (let length = minLength; length <= maxLength; length += 1) {
-    if (WORD_POOLS[length]) lengths.push(length);
+    if (length >= 3 && length <= 12) lengths.push(length);
   }
 
-  const preferred = lengths.flatMap((length) => WORD_POOLS[length] ?? []);
-  const available = preferred.filter((word) => !conflicts(word, targetWords));
-  if (available.length > 0) return randomOf(available, rng);
+  const unlocked = unlockedLevels(wave);
+  for (let index = unlocked.length - 1; index >= 0; index -= 1) {
+    const preferred = lengths.flatMap(
+      (length) => unlocked[index].pools[length] ?? [],
+    );
+    const available = preferred.filter(
+      (word) => !conflicts(word, targetWords),
+    );
+    if (available.length > 0) return randomOf(available, rng);
+  }
+
+  const relaxed = unlocked
+    .flatMap((level) => Object.values(level.pools).flat())
+    .filter((word) => !conflicts(word, targetWords));
+  if (relaxed.length > 0) return randomOf(relaxed, rng);
 
   const fallback = ALL_WORDS.filter((word) => !conflicts(word, targetWords));
   if (fallback.length > 0) return randomOf(fallback, rng);
