@@ -294,7 +294,7 @@ export function selectPhaseLabel(snapshot: UiSnapshot): string {
     case "menu":
       return "Awaiting expedition";
     case "playing":
-      return "Test arena online";
+      return "Greenreach expedition active";
     case "paused":
       return "Expedition paused";
   }

@@ -4,14 +4,23 @@ import type { GameConfig, Vec2 } from "../core/types";
 import type { Creature, CreatureRenderState } from "../entities/Creature";
 import type { PlayerRenderState } from "../entities/Player";
 import type { TargetDummy } from "../entities/TargetDummy";
-import type { ArenaObstacle, TestArena } from "../world/TestArena";
+import type { LoadedWorld } from "../world/MapDef";
 import type { Camera } from "./Camera";
 import { drawCreature } from "./drawCreature";
 import { drawDebugOverlay, drawWorldDebug } from "./drawDebug";
 import { drawPlayer } from "./drawPlayer";
 import { drawProjectiles } from "./drawProjectiles";
 import { drawTargetDummy } from "./drawTargetDummy";
+import {
+  drawWorldGroundProp,
+  drawWorldPropBase,
+  drawWorldPropOverhead,
+  isWorldPropVisible,
+  worldPropSortY,
+} from "./drawWorld";
 import type { ImpactEffects } from "./effects";
+import { MinimapRenderer } from "./MinimapRenderer";
+import { TileRenderer } from "./TileRenderer";
 
 export interface CombatRenderState {
   weaponName: string;
@@ -31,7 +40,7 @@ export interface CombatRenderState {
 export interface RenderState {
   timeSeconds: number;
   debug: boolean;
-  arena: TestArena;
+  world: LoadedWorld;
   player: PlayerRenderState;
   aim: Vec2 | null;
   projectiles: ProjectileSystem;
@@ -42,13 +51,18 @@ export interface RenderState {
   combat: CombatRenderState;
 }
 
-const GRID_COLOR = "rgba(117, 245, 203, 0.07)";
-const MAJOR_GRID_COLOR = "rgba(117, 245, 203, 0.16)";
+interface SceneItem {
+  y: number;
+  draw: () => void;
+}
+
 const WORLD_EDGE_COLOR = "rgba(247, 191, 91, 0.48)";
 
 export class Renderer {
   private readonly context: CanvasRenderingContext2D;
   private readonly resizeObserver: ResizeObserver | null;
+  private readonly tileRenderer = new TileRenderer();
+  private readonly minimapRenderer = new MinimapRenderer();
   private scaleX = 1;
   private scaleY = 1;
 
@@ -96,34 +110,34 @@ export class Renderer {
   render(state: RenderState): void {
     const context = this.context;
     const { viewportWidth, viewportHeight } = this.config;
+    const { world } = state;
 
     context.setTransform(this.scaleX, 0, 0, this.scaleY, 0, 0);
     context.clearRect(0, 0, viewportWidth, viewportHeight);
-
     this.drawBackdrop(state.timeSeconds);
 
     context.save();
     context.translate(-this.camera.left, -this.camera.top);
-    this.drawArena(state.arena, state.timeSeconds);
+    this.drawWorld(state);
 
-    for (const target of state.targets) {
-      drawTargetDummy(context, target);
-    }
+    context.strokeStyle = WORLD_EDGE_COLOR;
+    context.lineWidth = 3;
+    context.strokeRect(1.5, 1.5, world.width - 3, world.height - 3);
 
-    for (const creature of state.creatureStates) {
-      drawCreature(context, creature, state.timeSeconds);
-    }
-
-    drawPlayer(context, state.player, state.timeSeconds);
-    drawProjectiles(context, state.projectiles);
-    this.drawAimGuide(state.player, state.aim, state.timeSeconds);
-    state.effects.draw(context);
+    context.fillStyle = "rgba(226, 255, 245, 0.22)";
+    context.font = "500 11px 'IBM Plex Mono', monospace";
+    context.textAlign = "left";
+    context.fillText(
+      `${world.name.toUpperCase()} // ${world.solidProps.length} SOLIDS`,
+      52,
+      world.height - 42,
+    );
 
     if (state.debug) {
       drawWorldDebug(context, {
         camera: this.camera,
         config: this.config,
-        arena: state.arena,
+        world,
         player: state.player,
         aim: state.aim,
         targets: state.targets,
@@ -138,7 +152,7 @@ export class Renderer {
       drawDebugOverlay(context, {
         camera: this.camera,
         config: this.config,
-        arena: state.arena,
+        world,
         player: state.player,
         aim: state.aim,
         combat: state.combat,
@@ -146,243 +160,133 @@ export class Renderer {
     }
 
     this.drawVignette();
+
+    if (!state.debug) {
+      this.minimapRenderer.draw(
+        context,
+        world,
+        this.camera,
+        state.player,
+        state.creatures,
+        state.targets,
+        viewportWidth,
+      );
+    }
   }
 
   destroy(): void {
     this.resizeObserver?.disconnect();
   }
 
-  private drawBackdrop(timeSeconds: number): void {
+  private drawWorld(state: RenderState): void {
     const context = this.context;
-    const { viewportWidth, viewportHeight } = this.config;
-    const gradient = context.createLinearGradient(0, 0, 0, viewportHeight);
-    gradient.addColorStop(0, "#061210");
-    gradient.addColorStop(0.46, "#09211c");
-    gradient.addColorStop(1, "#0b2a23");
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, viewportWidth, viewportHeight);
+    const { world, timeSeconds } = state;
 
-    const pulse = 0.5 + Math.sin(timeSeconds * 0.35) * 0.08;
-    const glow = context.createRadialGradient(
-      viewportWidth * 0.68,
-      viewportHeight * 0.36,
-      12,
-      viewportWidth * 0.68,
-      viewportHeight * 0.36,
-      viewportWidth * 0.72,
-    );
-    glow.addColorStop(0, `rgba(44, 172, 139, ${0.2 * pulse})`);
-    glow.addColorStop(0.48, "rgba(21, 86, 73, 0.08)");
-    glow.addColorStop(1, "rgba(3, 10, 9, 0)");
-    context.fillStyle = glow;
-    context.fillRect(0, 0, viewportWidth, viewportHeight);
-  }
+    this.tileRenderer.draw(context, world, {
+      left: this.camera.left,
+      top: this.camera.top,
+      right: this.camera.right,
+      bottom: this.camera.bottom,
+    });
 
-  private drawArena(arena: TestArena, timeSeconds: number): void {
-    const context = this.context;
-    const camera = this.camera;
-
-    context.fillStyle = "#0a241e";
-    context.fillRect(0, 0, arena.width, arena.height);
-
-    const viewLeft = clamp(camera.left, 0, arena.width);
-    const viewTop = clamp(camera.top, 0, arena.height);
-    const viewRight = clamp(camera.right, 0, arena.width);
-    const viewBottom = clamp(camera.bottom, 0, arena.height);
-
-    this.drawGrid(
-      viewLeft,
-      viewTop,
-      viewRight,
-      viewBottom,
-      arena.tileSize,
-    );
-    this.drawGroundContours(arena, timeSeconds);
-    this.drawSpawnPad(arena);
-    this.drawObstacles(arena.obstacles);
-
-    context.strokeStyle = WORLD_EDGE_COLOR;
-    context.lineWidth = 3;
-    context.strokeRect(1.5, 1.5, arena.width - 3, arena.height - 3);
-
-    context.fillStyle = "rgba(226, 255, 245, 0.26)";
-    context.font = "500 11px 'IBM Plex Mono', monospace";
-    context.textAlign = "left";
-    context.fillText(
-      `${arena.name.toUpperCase()} // ${arena.obstacles.length} SOLIDS`,
-      52,
-      arena.height - 42,
-    );
-  }
-
-  private drawGrid(
-    left: number,
-    top: number,
-    right: number,
-    bottom: number,
-    tileSize: number,
-  ): void {
-    const context = this.context;
-    const startX = Math.floor(left / tileSize) * tileSize;
-    const startY = Math.floor(top / tileSize) * tileSize;
-
-    for (let x = startX; x <= right; x += tileSize) {
-      const major = Math.round(x / tileSize) % 4 === 0;
-      context.strokeStyle = major ? MAJOR_GRID_COLOR : GRID_COLOR;
-      context.lineWidth = major ? 1.25 : 1;
-      context.beginPath();
-      context.moveTo(x, top);
-      context.lineTo(x, bottom);
-      context.stroke();
+    for (const prop of world.props) {
+      if (
+        prop.layer === "ground" &&
+        isWorldPropVisible(prop, this.camera, 20)
+      ) {
+        drawWorldGroundProp(context, prop);
+      }
     }
 
-    for (let y = startY; y <= bottom; y += tileSize) {
-      const major = Math.round(y / tileSize) % 4 === 0;
-      context.strokeStyle = major ? MAJOR_GRID_COLOR : GRID_COLOR;
-      context.lineWidth = major ? 1.25 : 1;
-      context.beginPath();
-      context.moveTo(left, y);
-      context.lineTo(right, y);
-      context.stroke();
-    }
-  }
+    this.drawSpawnPad(world.spawn, timeSeconds);
+    this.drawScene(state);
 
-  private drawGroundContours(arena: TestArena, timeSeconds: number): void {
-    const context = this.context;
-    const centerX = arena.width / 2;
-    const centerY = arena.height / 2;
-    const drift = Math.sin(timeSeconds * 0.12) * 8;
-
-    context.save();
-    context.strokeStyle = "rgba(117, 245, 203, 0.075)";
-    context.lineWidth = 1;
-
-    for (let radius = 240; radius <= 720; radius += 120) {
-      context.beginPath();
-      context.ellipse(
-        centerX + drift,
-        centerY,
-        radius * 1.2,
-        radius * 0.56,
-        -0.16,
-        0,
-        Math.PI * 2,
-      );
-      context.stroke();
-    }
-
-    context.restore();
-  }
-
-  private drawSpawnPad(arena: TestArena): void {
-    const context = this.context;
-    const { x, y } = arena.spawn;
-    const time = performance.now() / 1000;
-    const pulse = 0.5 + Math.sin(time * 2.2) * 0.5;
-
-    context.save();
-    context.strokeStyle = `rgba(247, 191, 91, ${0.3 + pulse * 0.25})`;
-    context.lineWidth = 1.5;
-    context.setLineDash([7, 6]);
-    context.beginPath();
-    context.arc(x, y, 52, 0, Math.PI * 2);
-    context.stroke();
-    context.setLineDash([]);
-
-    context.strokeStyle = "rgba(247, 191, 91, 0.24)";
-    context.beginPath();
-    context.moveTo(x - 68, y);
-    context.lineTo(x + 68, y);
-    context.moveTo(x, y - 68);
-    context.lineTo(x, y + 68);
-    context.stroke();
-
-    context.fillStyle = "rgba(247, 191, 91, 0.58)";
-    context.font = "500 10px 'IBM Plex Mono', monospace";
-    context.textAlign = "center";
-    context.fillText("INSERTION", x, y + 72);
-    context.restore();
-  }
-
-  private drawObstacles(obstacles: readonly ArenaObstacle[]): void {
-    const context = this.context;
-
-    for (const obstacle of obstacles) {
-      context.fillStyle = "rgba(0, 0, 0, 0.34)";
-      context.fillRect(
-        obstacle.x + 9,
-        obstacle.y + 11,
-        obstacle.width,
-        obstacle.height,
-      );
-    }
-
-    for (const obstacle of obstacles) {
-      const palette = this.getObstaclePalette(obstacle.kind);
-      context.fillStyle = palette.fill;
-      context.fillRect(
-        obstacle.x,
-        obstacle.y,
-        obstacle.width,
-        obstacle.height,
-      );
-
-      context.fillStyle = palette.top;
-      context.fillRect(
-        obstacle.x,
-        obstacle.y,
-        obstacle.width,
-        Math.min(8, obstacle.height),
-      );
-
-      context.strokeStyle = palette.edge;
-      context.lineWidth = 1.5;
-      context.strokeRect(
-        obstacle.x + 0.75,
-        obstacle.y + 0.75,
-        obstacle.width - 1.5,
-        obstacle.height - 1.5,
-      );
-
-      if (obstacle.kind === "wall") {
-        context.strokeStyle = "rgba(226, 255, 245, 0.07)";
-        context.lineWidth = 1;
-
-        for (let offset = 22; offset < obstacle.width; offset += 28) {
-          context.beginPath();
-          context.moveTo(obstacle.x + offset, obstacle.y + 8);
-          context.lineTo(obstacle.x + offset, obstacle.y + obstacle.height);
-          context.stroke();
-        }
+    for (const prop of world.props) {
+      if (
+        prop.layer === "object" &&
+        prop.kind === "tree" &&
+        isWorldPropVisible(prop, this.camera)
+      ) {
+        drawWorldPropOverhead(context, prop, timeSeconds);
       }
     }
   }
 
-  private getObstaclePalette(kind: ArenaObstacle["kind"]): {
-    fill: string;
-    top: string;
-    edge: string;
-  } {
-    switch (kind) {
-      case "crate":
-        return {
-          fill: "#5a4729",
-          top: "rgba(255, 228, 174, 0.22)",
-          edge: "rgba(247, 191, 91, 0.48)",
-        };
-      case "rock":
-        return {
-          fill: "#263a34",
-          top: "rgba(139, 202, 183, 0.16)",
-          edge: "rgba(139, 202, 183, 0.36)",
-        };
-      case "wall":
-        return {
-          fill: "#123b33",
-          top: "rgba(117, 245, 203, 0.13)",
-          edge: "rgba(117, 245, 203, 0.34)",
-        };
+  private drawScene(state: RenderState): void {
+    const context = this.context;
+    const { world } = state;
+    const items: SceneItem[] = [];
+
+    for (const prop of world.props) {
+      if (
+        prop.layer !== "object" ||
+        !isWorldPropVisible(prop, this.camera)
+      ) {
+        continue;
+      }
+
+      items.push({
+        y: worldPropSortY(prop),
+        draw: () => drawWorldPropBase(context, prop),
+      });
     }
+
+    for (const target of state.targets) {
+      items.push({
+        y: target.y,
+        draw: () => drawTargetDummy(context, target),
+      });
+    }
+
+    for (const creature of state.creatureStates) {
+      items.push({
+        y: creature.y,
+        draw: () => drawCreature(context, creature, state.timeSeconds),
+      });
+    }
+
+    items.push({
+      y: state.player.y,
+      draw: () => drawPlayer(context, state.player, state.timeSeconds),
+    });
+
+    items.sort((first, second) => first.y - second.y);
+
+    for (const item of items) {
+      item.draw();
+    }
+
+    drawProjectiles(context, state.projectiles);
+    this.drawAimGuide(state.player, state.aim, state.timeSeconds);
+    state.effects.draw(context);
+  }
+
+  private drawSpawnPad(spawn: Vec2, timeSeconds: number): void {
+    const context = this.context;
+    const pulse = 0.5 + Math.sin(timeSeconds * 2.2) * 0.5;
+
+    context.save();
+    context.strokeStyle = `rgba(247, 191, 91, ${0.22 + pulse * 0.2})`;
+    context.lineWidth = 1.5;
+    context.setLineDash([7, 7]);
+    context.beginPath();
+    context.arc(spawn.x, spawn.y, 48, 0, Math.PI * 2);
+    context.stroke();
+    context.setLineDash([]);
+
+    context.strokeStyle = "rgba(247, 191, 91, 0.18)";
+    context.beginPath();
+    context.moveTo(spawn.x - 62, spawn.y);
+    context.lineTo(spawn.x + 62, spawn.y);
+    context.moveTo(spawn.x, spawn.y - 62);
+    context.lineTo(spawn.x, spawn.y + 62);
+    context.stroke();
+
+    context.fillStyle = "rgba(247, 191, 91, 0.52)";
+    context.font = "500 10px 'IBM Plex Mono', monospace";
+    context.textAlign = "center";
+    context.fillText("WAYSTATION", spawn.x, spawn.y + 68);
+    context.restore();
   }
 
   private drawAimGuide(
@@ -435,6 +339,32 @@ export class Renderer {
     context.arc(0, 0, 1.6, 0, Math.PI * 2);
     context.fill();
     context.restore();
+  }
+
+  private drawBackdrop(timeSeconds: number): void {
+    const context = this.context;
+    const { viewportWidth, viewportHeight } = this.config;
+    const gradient = context.createLinearGradient(0, 0, 0, viewportHeight);
+    gradient.addColorStop(0, "#061210");
+    gradient.addColorStop(0.46, "#09211c");
+    gradient.addColorStop(1, "#0b2a23");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, viewportWidth, viewportHeight);
+
+    const pulse = 0.5 + Math.sin(timeSeconds * 0.35) * 0.08;
+    const glow = context.createRadialGradient(
+      viewportWidth * 0.68,
+      viewportHeight * 0.36,
+      12,
+      viewportWidth * 0.68,
+      viewportHeight * 0.36,
+      viewportWidth * 0.72,
+    );
+    glow.addColorStop(0, `rgba(44, 172, 139, ${0.2 * pulse})`);
+    glow.addColorStop(0.48, "rgba(21, 86, 73, 0.08)");
+    glow.addColorStop(1, "rgba(3, 10, 9, 0)");
+    context.fillStyle = glow;
+    context.fillRect(0, 0, viewportWidth, viewportHeight);
   }
 
   private drawVignette(): void {

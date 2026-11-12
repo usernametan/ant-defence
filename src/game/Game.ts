@@ -32,7 +32,9 @@ import { Renderer } from "./render/Renderer";
 import { SpawnDirector } from "./systems/SpawnDirector";
 import { SnapshotStore } from "./ui/UiSnapshot";
 import { SpatialHash } from "./world/SpatialHash";
-import { createTestArena, type TestArena } from "./world/TestArena";
+import { createGreenreachMap } from "./content/maps/greenreach";
+import { loadMap } from "./world/MapLoader";
+import type { LoadedWorld } from "./world/MapDef";
 
 type GameEvents = {
   "game:phase-changed": {
@@ -82,7 +84,7 @@ export class Game {
   private readonly renderer: Renderer;
   private readonly input: InputRouter;
   private readonly loop: FixedStepLoop;
-  private readonly arena: TestArena;
+  private readonly world: LoadedWorld;
   private readonly player: Player;
   private readonly combat: CombatSystem;
   private readonly projectiles: ProjectileSystem;
@@ -109,21 +111,20 @@ export class Game {
       ...options.config,
     };
     this.scheduler = options.scheduler ?? browserFrameScheduler;
+    this.world = loadMap(createGreenreachMap());
+    this.config.worldWidth = this.world.width;
+    this.config.worldHeight = this.world.height;
+    this.config.tileSize = this.world.tileSize;
     this.camera = new Camera(this.config);
     this.renderer = new Renderer(canvas, this.config, this.camera);
     this.snapshots =
       options.snapshotStore ??
       new SnapshotStore(undefined, this.config.snapshotIntervalMs);
-    this.arena = createTestArena(
-      this.config.worldWidth,
-      this.config.worldHeight,
-      this.config.tileSize,
-    );
-    this.player = new Player(this.arena.spawn);
+    this.player = new Player(this.world.spawn);
     this.combat = new CombatSystem();
     this.projectiles = new ProjectileSystem();
-    this.spawnDirector = new SpawnDirector();
-    this.targets = createTrainingDummies();
+    this.spawnDirector = new SpawnDirector(this.world.creatureSpawns);
+    this.targets = createTrainingDummies(this.world.targets);
     this.camera.moveTo(this.player.x, this.player.y);
     this.input = new InputRouter(window, canvas, {
       onAction: this.handleAction,
@@ -219,11 +220,11 @@ export class Game {
   }
 
   private resetRun(): void {
-    this.player.reset(this.arena.spawn);
+    this.player.reset(this.world.spawn);
     this.camera.moveTo(this.player.x, this.player.y);
     this.combat.reset();
     this.projectiles.clear();
-    this.spawnDirector.reset(this.arena);
+    this.spawnDirector.reset(this.world);
     this.effects.clear();
     this.playerRespawnRemaining = 0;
 
@@ -312,12 +313,12 @@ export class Game {
         stepSeconds,
         this.input.getMovementIntent(),
         this.input.isSprinting(),
-        this.arena,
+        this.world,
         aim,
       );
 
       if (this.playerRespawnRemaining <= 0) {
-        this.player.reset(this.arena.spawn);
+        this.player.reset(this.world.spawn);
         this.camera.moveTo(this.player.x, this.player.y);
         this.effects.spawnImpact(
           this.player.x,
@@ -332,7 +333,7 @@ export class Game {
         stepSeconds,
         this.input.getMovementIntent(),
         this.input.isSprinting(),
-        this.arena,
+        this.world,
         aim,
       );
     }
@@ -380,7 +381,7 @@ export class Game {
 
     const impacts = this.projectiles.update(
       stepSeconds,
-      this.arena,
+      this.world,
       this.collectDamageTargets(),
     );
 
@@ -443,7 +444,7 @@ export class Game {
       }
     }
 
-    this.spawnDirector.update(stepSeconds, this.arena);
+    this.spawnDirector.update(stepSeconds, this.world);
     this.effects.update(stepSeconds);
   };
 
@@ -467,7 +468,7 @@ export class Game {
         .query(creature.x, creature.y, 140)
         .filter((ally) => ally !== creature);
       const attack = creature.update(deltaSeconds, {
-        world: this.arena,
+        world: this.world,
         target: this.player.alive ? this.player : null,
         allies,
         time: this.elapsed,
@@ -627,7 +628,7 @@ export class Game {
     this.renderer.render({
       timeSeconds: this.visualTime,
       debug: this.debug,
-      arena: this.arena,
+      world: this.world,
       player: this.player.getRenderState(interpolation),
       aim,
       projectiles: this.projectiles,
@@ -714,8 +715,8 @@ export class Game {
         version: GAME_IDENTITY.version,
         region: GAME_IDENTITY.firstRegion,
         world: {
-          width: this.config.worldWidth,
-          height: this.config.worldHeight,
+          width: this.world.width,
+          height: this.world.height,
         },
         camera: {
           x: this.camera.x,

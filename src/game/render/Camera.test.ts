@@ -133,6 +133,24 @@ describe('Camera', () => {
     expect(oneTwenty.x).toBeCloseTo(sixty.x, 5);
   });
 
+  it('keeps pointer aim offsets stable as the camera pans', () => {
+    const camera = createCamera();
+    const pointer = { x: 340, y: 210 };
+    camera.moveTo(800, 500);
+
+    const firstAim = camera.screenToWorld(pointer);
+    expect(camera.worldToScreen(firstAim)).toEqual(pointer);
+    expect(firstAim.x - pointer.x).toBe(camera.left);
+    expect(firstAim.y - pointer.y).toBe(camera.top);
+
+    camera.moveTo(1000, 600);
+
+    const secondAim = camera.screenToWorld(pointer);
+    expect(secondAim.x - firstAim.x).toBeCloseTo(200);
+    expect(secondAim.y - firstAim.y).toBeCloseTo(100);
+    expect(camera.worldToScreen(secondAim)).toEqual(pointer);
+  });
+
   it('returns the visible world rectangle', () => {
     const camera = createCamera();
     camera.moveTo(800, 500);

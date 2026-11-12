@@ -136,7 +136,7 @@ describe('UI selectors', () => {
     };
 
     expect(selectIsPlaying(snapshot)).toBe(true);
-    expect(selectPhaseLabel(snapshot)).toBe('Test arena online');
+    expect(selectPhaseLabel(snapshot)).toBe('Greenreach expedition active');
     expect(selectPlayerReadout(snapshot)).toBe('512 / 640');
     expect(selectStaminaPercent(snapshot)).toBe(42);
     expect(selectDodgeReady(snapshot)).toBe(false);

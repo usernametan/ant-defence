@@ -30,7 +30,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   viewportHeight: 540,
   worldWidth: 2048,
   worldHeight: 1280,
-  tileSize: 64,
+  tileSize: 32,
   fixedStep: 1 / 60,
   maxCatchUpSteps: 5,
   maxFrameDelta: 0.25,

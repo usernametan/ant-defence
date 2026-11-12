@@ -45,7 +45,7 @@ export function GameHost() {
         <canvas
           ref={canvasRef}
           className="game-canvas"
-          aria-label="Monster Frontier combat test arena"
+          aria-label="Monster Frontier Greenreach world"
         />
         {snapshot.phase === 'menu' && (
           <MenuScreen snapshot={snapshot} game={game} />
@@ -88,17 +88,17 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             onClick={() => game?.enterPreview()}
             disabled={!game}
           >
-            Enter Test Arena
+            Enter Greenreach
             <kbd>Enter</kbd>
           </button>
           <p className="mf-action-note">
-            Stage 4 unleashes the first frontier creatures. Three archetypes
-            hunt, flank, and spit from range while the spawn director keeps the
-            test ground dangerous.
+            Stage 5 opens the wilds beyond the waystation. Cross the ruined
+            range, follow old roads through the ford, and learn where the
+            frontier still belongs to monsters.
           </p>
         </div>
 
-        <ul className="mf-checks" aria-label="Creature foundation systems">
+        <ul className="mf-checks" aria-label="World and map systems">
           {PROTOTYPE_CHECKS.map((check) => (
             <li key={check.label} className="mf-check">
               <span className="mf-check-signal" aria-hidden="true" />
@@ -111,13 +111,13 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
         </ul>
       </div>
 
-      <aside className="mf-briefing" aria-label="Creature foundation briefing">
+      <aside className="mf-briefing" aria-label="Greenreach expedition briefing">
         <p className="mf-briefing-label">Contact expected</p>
         <p className="mf-briefing-region">{snapshot.region}</p>
         <p className="mf-briefing-copy">
-          The range is no longer quiet. Crawlers rush the line, Stalkers circle
-          for an opening, and Spitters hold distance with acid volleys. Keep
-          moving and watch the telegraphs.
+          Waystation Echo is the last safe landmark in Greenreach. Broken
+          roads run east through the watchpost ruins and across the ford, while
+          the woods and rocky approach stay creature-held.
         </p>
         <dl className="mf-specs">
           <div>
@@ -133,12 +133,12 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <dd>3 Arcade lines</dd>
           </div>
           <div>
-            <dt>Creatures</dt>
-            <dd>3 archetypes</dd>
+            <dt>Region</dt>
+            <dd>Greenreach</dd>
           </div>
           <div>
-            <dt>Director</dt>
-            <dd>Budgeted spawns</dd>
+            <dt>Landmarks</dt>
+            <dd>6 mapped</dd>
           </div>
           <div>
             <dt>World</dt>
@@ -325,8 +325,8 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
         <p className="mf-kicker">Signal held</p>
         <h2>Expedition paused</h2>
         <p>
-          The {snapshot.region} creature trial is suspended. Resume when you
-          are ready to re-enter the range.
+          The {snapshot.region} expedition is suspended. Resume when you are
+          ready to continue exploring the wilds.
         </p>
         <div className="mf-pause-actions">
           <button
@@ -346,7 +346,7 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
           </button>
         </div>
         <p className="mf-pause-footnote">
-          Stage 4 / Creature Foundation · build {snapshot.version}
+          Stage 5 / World & Map Systems · build {snapshot.version}
         </p>
       </div>
     </div>
