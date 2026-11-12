@@ -124,26 +124,57 @@ describe('Player health', () => {
     direction: { x: 1, y: 0 },
   };
 
-  it('applies damage, flashes, and dies at zero health', () => {
+  it('mitigates damage with armor and dies at zero health', () => {
     const player = new Player({ x: 500, y: 500 });
+    const firstHit = player.takeDamage(25, CONTEXT);
 
-    expect(player.takeDamage(25, CONTEXT)).toEqual({
-      applied: 25,
-      killed: false,
-      remainingHealth: 75,
-    });
+    expect(firstHit.killed).toBe(false);
+    expect(firstHit.applied).toBeCloseTo(11.25);
+    expect(firstHit.armorAbsorbed).toBeCloseTo(13.75);
+    expect(firstHit.remainingHealth).toBeCloseTo(88.75);
+    expect(firstHit.remainingArmor).toBeCloseTo(66.25);
     expect(player.hitFlash).toBe(1);
 
-    expect(player.takeDamage(999, CONTEXT)).toEqual({
-      applied: 75,
-      killed: true,
-      remainingHealth: 0,
-    });
+    const fatalHit = player.takeDamage(999, CONTEXT);
+
+    expect(fatalHit.killed).toBe(true);
+    expect(fatalHit.applied).toBeCloseTo(88.75);
+    expect(fatalHit.armorAbsorbed).toBeCloseTo(66.25);
+    expect(fatalHit.remainingHealth).toBe(0);
+    expect(fatalHit.remainingArmor).toBe(0);
     expect(player.alive).toBe(false);
     expect(player.takeDamage(10, CONTEXT).applied).toBe(0);
   });
 
-  it('ignores damage while dodging and restores health on reset', () => {
+  it('passes damage beyond depleted armor into health', () => {
+    const player = new Player(
+      { x: 500, y: 500 },
+      { ...DEFAULT_PLAYER_CONFIG, maxArmor: 10, armorAbsorbRatio: 1 },
+    );
+    const hit = player.takeDamage(25, CONTEXT);
+
+    expect(hit.armorAbsorbed).toBe(10);
+    expect(hit.applied).toBe(15);
+    expect(hit.remainingArmor).toBe(0);
+    expect(player.health).toBe(85);
+  });
+
+  it('restores health and armor without exceeding their caps', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    player.takeDamage(40, CONTEXT);
+    const lostHealth = player.maxHealth - player.health;
+    const lostArmor = player.maxArmor - player.armor;
+
+    expect(player.restoreHealth(999)).toBeCloseTo(lostHealth);
+    expect(player.restoreArmor(999)).toBeCloseTo(lostArmor);
+    expect(player.restoreHealth(5)).toBe(0);
+    expect(player.restoreArmor(5)).toBe(0);
+    expect(player.health).toBe(player.maxHealth);
+    expect(player.armor).toBe(player.maxArmor);
+  });
+
+  it('ignores damage while dodging and restores resources on reset', () => {
     const player = new Player({ x: 500, y: 500 });
 
     expect(player.requestDodge({ x: 1, y: 0 })).toBe(true);
@@ -152,13 +183,38 @@ describe('Player health', () => {
 
     simulate(player, 0.3, { x: 0, y: 0 });
 
-    expect(player.takeDamage(20, CONTEXT).applied).toBe(20);
+    expect(player.takeDamage(20, CONTEXT).applied).toBeGreaterThan(0);
+    expect(player.health).toBeLessThan(player.maxHealth);
 
     player.reset({ x: 500, y: 500 });
 
     expect(player.health).toBe(player.maxHealth);
+    expect(player.armor).toBe(player.maxArmor);
     expect(player.alive).toBe(true);
     expect(player.hitFlash).toBe(0);
+  });
+
+  it('restores resources and grants brief invulnerability on respawn', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    player.takeDamage(999, CONTEXT);
+    expect(player.alive).toBe(false);
+
+    player.respawn({ x: 320, y: 640 });
+
+    expect(player.alive).toBe(true);
+    expect(player.health).toBe(player.maxHealth);
+    expect(player.armor).toBe(player.maxArmor);
+    expect(player.isInvulnerable).toBe(true);
+    expect(player.takeDamage(20, CONTEXT).applied).toBe(0);
+
+    simulate(player, DEFAULT_PLAYER_CONFIG.respawnInvulnerability + 0.1, {
+      x: 0,
+      y: 0,
+    });
+
+    expect(player.isInvulnerable).toBe(false);
+    expect(player.takeDamage(20, CONTEXT).applied).toBeGreaterThan(0);
   });
 });
 

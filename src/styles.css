@@ -3449,6 +3449,15 @@ kbd {
   box-shadow: 0 0 1cqw rgba(255, 113, 92, 0.42);
 }
 
+.mf-armor-row strong {
+  color: #9fd3ff;
+}
+
+.mf-armor-fill {
+  background: linear-gradient(90deg, #335f82, #7fc7ff);
+  box-shadow: 0 0 1cqw rgba(127, 199, 255, 0.42);
+}
+
 .mf-health-row.is-downed .mf-meter-fill {
   background: rgba(255, 113, 92, 0.22);
   box-shadow: none;
@@ -3457,6 +3466,101 @@ kbd {
 .mf-health-row.is-downed strong,
 .mf-downed-label {
   color: #ff8b73;
+}
+
+.mf-survival-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 9.8cqw;
+  display: flex;
+  align-items: center;
+  gap: 0.7cqw;
+  padding: 0.65cqw 1.1cqw;
+  border: 1px solid rgba(117, 245, 203, 0.4);
+  background: rgba(3, 16, 13, 0.88);
+  box-shadow: 0 1cqw 2.4cqw rgba(0, 0, 0, 0.32);
+  color: var(--mf-jade);
+  font-family: var(--mono);
+  font-size: clamp(7px, 0.7cqw, 11px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  backdrop-filter: blur(5px);
+}
+
+.mf-survival-notice strong {
+  font-weight: 500;
+}
+
+.mf-survival-notice small {
+  color: var(--mf-faint);
+  font-size: 0.85em;
+}
+
+.mf-survival-notice-pulse {
+  width: 0.45cqw;
+  height: 0.45cqw;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0.9cqw currentColor;
+}
+
+.mf-survival-notice.is-armor {
+  border-color: rgba(127, 199, 255, 0.48);
+  color: #9fd3ff;
+}
+
+.mf-survival-notice.is-damage {
+  border-color: rgba(255, 113, 92, 0.52);
+  color: #ff8b73;
+}
+
+.mf-survival-notice.is-death {
+  border-color: rgba(255, 113, 92, 0.64);
+  background: rgba(32, 8, 6, 0.9);
+  color: #ffb1a3;
+}
+
+.mf-survival-notice.is-respawn {
+  border-color: rgba(247, 191, 91, 0.5);
+  color: var(--mf-amber-bright);
+}
+
+.mf-death-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7cqw;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(35, 7, 5, 0.12), rgba(22, 4, 3, 0.62));
+  color: #ffb1a3;
+  font-family: var(--mono);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.mf-death-kicker {
+  color: rgba(255, 177, 163, 0.66);
+  font-size: clamp(7px, 0.76cqw, 12px);
+  letter-spacing: 0.28em;
+}
+
+.mf-death-overlay strong {
+  color: #fff0ec;
+  font-family: 'Barlow Condensed', 'Trebuchet MS', sans-serif;
+  font-size: clamp(25px, 3.2cqw, 52px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 2.4cqw rgba(255, 113, 92, 0.46);
+}
+
+.mf-death-detail {
+  color: rgba(226, 255, 245, 0.58);
+  font-size: clamp(6px, 0.66cqw, 10px);
+  letter-spacing: 0.14em;
 }
 
 .mf-weapon-slots {

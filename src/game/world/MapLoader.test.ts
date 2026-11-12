@@ -21,6 +21,14 @@ describe('Greenreach Wilds', () => {
     expect(world.pointsOfInterest).toHaveLength(6);
     expect(world.creatureSpawns).toHaveLength(9);
     expect(world.targets).toHaveLength(3);
+    expect(world.pickups).toHaveLength(12);
+    expect(world.pickups.filter((pickup) => pickup.kind === 'health')).toHaveLength(6);
+    expect(world.pickups.filter((pickup) => pickup.kind === 'armor')).toHaveLength(6);
+    expect(world.pickups[0]).toMatchObject({
+      amount: 30,
+      radius: 14,
+      respawnSeconds: 18,
+    });
   });
 
   it('keeps the start entry point clear and on the waystation', () => {
@@ -58,6 +66,7 @@ describe('Greenreach Wilds', () => {
       ...world.decorations,
       ...world.creatureSpawns,
       ...world.targets,
+      ...world.pickups,
       ...world.pointsOfInterest,
     ].map((item) => item.id);
 
@@ -87,6 +96,44 @@ describe('Greenreach Wilds', () => {
         entryPoints: {},
       }),
     ).toThrow(/start/);
+  });
+
+  it('rejects pickups that overlap a solid prop', () => {
+    const map = createGreenreachMap();
+    const pickup = map.pickups[0];
+
+    expect(() =>
+      loadMap({
+        ...map,
+        props: [
+          ...map.props,
+          {
+            id: 'invalid-pickup-blocker',
+            kind: 'boulder',
+            x: pickup.x - 10,
+            y: pickup.y - 10,
+            width: 20,
+            height: 20,
+            solid: true,
+          },
+        ],
+      }),
+    ).toThrow(/pickup.*overlap/i);
+  });
+
+  it('rejects pickups outside the map', () => {
+    const map = createGreenreachMap();
+    const pickup = map.pickups[0];
+
+    expect(() =>
+      loadMap({
+        ...map,
+        pickups: [
+          ...map.pickups,
+          { ...pickup, id: 'invalid-pickup-outside', x: -20 },
+        ],
+      }),
+    ).toThrow(/pickup.*outside/i);
   });
 
   it('rejects creature spawns that overlap a solid prop', () => {

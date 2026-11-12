@@ -32,6 +32,22 @@ export function drawPlayer(
     context.restore();
   }
 
+  if (player.maxArmor > 0 && player.armor > 0) {
+    const armorRatio = Math.max(0, Math.min(1, player.armor / player.maxArmor));
+
+    context.strokeStyle = `rgba(127, 199, 255, ${0.42 + armorRatio * 0.42})`;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(
+      0,
+      0,
+      radius + 4.5,
+      -Math.PI / 2,
+      -Math.PI / 2 + Math.PI * 2 * armorRatio,
+    );
+    context.stroke();
+  }
+
   if (player.invulnerable) {
     context.strokeStyle = "rgba(247, 191, 91, 0.82)";
     context.lineWidth = 2;

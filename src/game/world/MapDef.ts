@@ -72,6 +72,24 @@ export interface MapTargetDef extends Vec2 {
   maxHealth?: number;
 }
 
+export type PickupKind = "health" | "armor";
+
+export interface MapPickupDef extends Vec2 {
+  id: string;
+  kind: PickupKind;
+  amount?: number;
+  radius?: number;
+  respawnSeconds?: number;
+}
+
+export interface LoadedPickupDef extends Vec2 {
+  id: string;
+  kind: PickupKind;
+  amount: number;
+  radius: number;
+  respawnSeconds: number;
+}
+
 export type PointOfInterestKind =
   | "waystation"
   | "ruin"
@@ -98,6 +116,7 @@ export interface MapDef {
   props: readonly MapPropDef[];
   creatureSpawns: readonly MapSpawnPoint[];
   targets: readonly MapTargetDef[];
+  pickups: readonly MapPickupDef[];
   entryPoints: Record<string, Vec2>;
   pointsOfInterest: readonly MapPointOfInterestDef[];
 }
@@ -114,6 +133,7 @@ export interface LoadedWorld extends CollisionWorld {
   solidProps: readonly WorldProp[];
   creatureSpawns: readonly MapSpawnPoint[];
   targets: readonly MapTargetDef[];
+  pickups: readonly LoadedPickupDef[];
   entryPoints: Record<string, Vec2>;
   spawn: Vec2;
   pointsOfInterest: readonly MapPointOfInterestDef[];

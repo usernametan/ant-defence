@@ -2,10 +2,10 @@ export const GAME_IDENTITY = {
   title: "Monster Frontier",
   wordmark: "MONSTER FRONTIER",
   kicker: "PROJECT VERDANT",
-  stage: "Stage 5 — World & Map Systems",
-  version: "0.5.0",
+  stage: "Stage 6 — Survival & Damage Systems",
+  version: "0.6.0",
   tagline:
-    "Greenreach Wilds is open. Follow the old waystation roads through broken ruins, dark woods, and creature-held ground.",
+    "Greenreach Wilds is hostile. Track armor and health, recover from field caches, and survive the roads beyond Waystation Echo.",
   firstRegion: "Greenreach Wilds",
   regions: [
     "Greenreach Wilds",
@@ -18,10 +18,10 @@ export const GAME_IDENTITY = {
 } as const;
 
 export const PROTOTYPE_CHECKS = [
-  { label: "World", detail: "Greenreach 2048 × 1280" },
-  { label: "Terrain", detail: "8 painterly surfaces" },
-  { label: "Landmarks", detail: "Waystation · ruins · ford" },
-  { label: "Collision", detail: "Props · trees · boundaries" },
-  { label: "Camera", detail: "Explore · aim offset" },
-  { label: "Spawns", detail: "Authored map points" },
+  { label: "Health", detail: "Clamped vitals · hit feedback" },
+  { label: "Armor", detail: "Absorbs impacts first" },
+  { label: "Recovery", detail: "12 authored caches" },
+  { label: "Respawn", detail: "Waystation relink shield" },
+  { label: "Feedback", detail: "Damage · recovery · death" },
+  { label: "Balance", detail: "Fair creature pressure" },
 ] as const;

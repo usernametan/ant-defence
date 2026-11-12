@@ -1,9 +1,12 @@
 import { getCreatureArchetype } from "../content/creatures";
+import { getPickupType } from "../content/pickups";
 import type { Vec2 } from "../core/types";
 import { circleIntersectsAabb } from "./Collision";
 import {
+  type LoadedPickupDef,
   type LoadedWorld,
   type MapDef,
+  type MapPickupDef,
   type MapPropDef,
   type MapPropKind,
   type PropLayer,
@@ -44,6 +47,7 @@ export function loadMap(def: MapDef): LoadedWorld {
     normalizeProp(prop),
   );
   const solidProps = props.filter((prop) => prop.solid);
+  const pickups = def.pickups.map((pickup) => normalizePickup(pickup));
   const spawn = def.entryPoints.start;
 
   if (!spawn) {
@@ -65,6 +69,7 @@ export function loadMap(def: MapDef): LoadedWorld {
     obstacles: solidProps,
     creatureSpawns: def.creatureSpawns,
     targets: def.targets,
+    pickups,
     entryPoints: def.entryPoints,
     spawn: { ...spawn },
     pointsOfInterest: def.pointsOfInterest,
@@ -75,6 +80,7 @@ export function loadMap(def: MapDef): LoadedWorld {
   validateEntryPoints(world);
   validateCreatureSpawns(world);
   validateTargets(world);
+  validatePickups(world);
 
   return world;
 }
@@ -89,6 +95,17 @@ function normalizeProp(prop: MapPropDef): WorldProp {
 
 function defaultLayer(kind: MapPropKind): PropLayer {
   return kind === "bridge" ? "ground" : "object";
+}
+
+function normalizePickup(pickup: MapPickupDef): LoadedPickupDef {
+  const type = getPickupType(pickup.kind);
+
+  return {
+    ...pickup,
+    amount: pickup.amount ?? type.amount,
+    radius: pickup.radius ?? type.radius,
+    respawnSeconds: pickup.respawnSeconds ?? type.respawnSeconds,
+  };
 }
 
 function validateDimensions(def: MapDef): void {
@@ -156,6 +173,7 @@ function validateUniqueIds(world: LoadedWorld): void {
     ...world.decorations,
     ...world.creatureSpawns,
     ...world.targets,
+    ...world.pickups,
     ...world.pointsOfInterest,
   ]) {
     if (ids.has(item.id)) {
@@ -202,6 +220,29 @@ function validateTargets(world: LoadedWorld): void {
 
     if (isCircleBlocked(target, radius, world)) {
       throw new Error(`Target "${target.id}" overlaps a solid prop`);
+    }
+  }
+}
+
+function validatePickups(world: LoadedWorld): void {
+  for (const pickup of world.pickups) {
+    if (
+      !Number.isFinite(pickup.amount) ||
+      !Number.isFinite(pickup.radius) ||
+      !Number.isFinite(pickup.respawnSeconds) ||
+      pickup.amount <= 0 ||
+      pickup.radius <= 0 ||
+      pickup.respawnSeconds <= 0
+    ) {
+      throw new Error(`Pickup "${pickup.id}" has invalid recovery values`);
+    }
+
+    if (!isCircleInBounds(pickup, pickup.radius, world)) {
+      throw new Error(`Pickup "${pickup.id}" is outside the map`);
+    }
+
+    if (isCircleBlocked(pickup, pickup.radius, world)) {
+      throw new Error(`Pickup "${pickup.id}" overlaps a solid prop`);
     }
   }
 }

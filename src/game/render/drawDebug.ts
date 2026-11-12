@@ -18,6 +18,10 @@ export interface DebugCombatState {
   kills: number;
   playerHealth: number;
   playerMaxHealth: number;
+  playerArmor: number;
+  playerMaxArmor: number;
+  pickupsActive: number;
+  pickupsTotal: number;
 }
 
 export interface DebugRenderState {
@@ -75,6 +79,18 @@ export function drawWorldDebug(
   for (const target of targets) {
     context.beginPath();
     context.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+    context.stroke();
+  }
+
+  context.setLineDash([2, 3]);
+
+  for (const pickup of world.pickups) {
+    context.strokeStyle =
+      pickup.kind === "health"
+        ? "rgba(255, 113, 92, 0.62)"
+        : "rgba(127, 199, 255, 0.62)";
+    context.beginPath();
+    context.arc(pickup.x, pickup.y, pickup.radius, 0, Math.PI * 2);
     context.stroke();
   }
 
@@ -169,6 +185,8 @@ export function drawDebugOverlay(
     `DODGE ${player.dodgeCooldown.toFixed(2)}s`,
     `STAMINA ${player.stamina.toFixed(0)} / ${player.maxStamina}`,
     `HEALTH ${player.health.toFixed(0)} / ${player.maxHealth}`,
+    `ARMOR ${player.armor.toFixed(0)} / ${player.maxArmor}`,
+    `RESPAWN ${player.alive ? "READY" : "DOWN"}`,
     `AIM ${aim ? `${Math.round(aim.x)} / ${Math.round(aim.y)}` : "outside"}`,
   ];
 
@@ -202,6 +220,7 @@ export function drawDebugOverlay(
       `TARGETS ${combat.targetsAlive} / ${combat.targetsTotal}`,
       `ENEMIES ${combat.enemiesAlive} / ${combat.enemiesTotal}`,
       `KILLS ${combat.kills}`,
+      `PICKUPS ${combat.pickupsActive} / ${combat.pickupsTotal}`,
     );
   }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SnapshotStore,
   createInitialSnapshot,
+  selectArmorPercent,
   selectCameraReadout,
   selectDodgeLabel,
   selectDodgeReady,
@@ -155,6 +156,7 @@ describe('UI selectors', () => {
     const snapshot = createInitialSnapshot();
 
     expect(selectHealthPercent(snapshot)).toBe(100);
+    expect(selectArmorPercent(snapshot)).toBe(100);
     expect(selectEnemiesReadout(snapshot)).toBe('0 / 0');
 
     const engaged = {
@@ -163,6 +165,8 @@ describe('UI selectors', () => {
         ...snapshot.player,
         health: 35,
         maxHealth: 100,
+        armor: 24,
+        maxArmor: 80,
       },
       combat: {
         ...snapshot.combat,
@@ -174,6 +178,7 @@ describe('UI selectors', () => {
     };
 
     expect(selectHealthPercent(engaged)).toBe(35);
+    expect(selectArmorPercent(engaged)).toBe(30);
     expect(selectEnemiesReadout(engaged)).toBe('4 / 8');
     expect(selectHostilesReadout(engaged)).toBe('6');
     expect(engaged.combat.kills).toBe(5);

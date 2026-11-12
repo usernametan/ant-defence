@@ -35,6 +35,25 @@ export interface CombatSnapshot {
   weapons: readonly WeaponSnapshot[];
 }
 
+export type SurvivalNoticeTone =
+  | "health"
+  | "armor"
+  | "damage"
+  | "death"
+  | "respawn";
+
+export interface SurvivalNoticeSnapshot {
+  text: string;
+  tone: SurvivalNoticeTone;
+  remaining: number;
+}
+
+export interface SurvivalSnapshot {
+  pickupsActive: number;
+  pickupsTotal: number;
+  notice: SurvivalNoticeSnapshot | null;
+}
+
 export interface PlayerSnapshot {
   x: number;
   y: number;
@@ -49,6 +68,8 @@ export interface PlayerSnapshot {
   dodgeCooldownMax: number;
   health: number;
   maxHealth: number;
+  armor: number;
+  maxArmor: number;
   alive: boolean;
   respawnRemaining: number;
 }
@@ -69,6 +90,7 @@ export interface UiSnapshot {
   };
   player: PlayerSnapshot;
   combat: CombatSnapshot;
+  survival: SurvivalSnapshot;
   frame: number;
   elapsed: number;
   fps: number;
@@ -106,6 +128,8 @@ export function createInitialSnapshot(): UiSnapshot {
       dodgeCooldownMax: 0,
       health: DEFAULT_PLAYER_CONFIG.maxHealth,
       maxHealth: DEFAULT_PLAYER_CONFIG.maxHealth,
+      armor: DEFAULT_PLAYER_CONFIG.maxArmor,
+      maxArmor: DEFAULT_PLAYER_CONFIG.maxArmor,
       alive: true,
       respawnRemaining: 0,
     },
@@ -134,6 +158,11 @@ export function createInitialSnapshot(): UiSnapshot {
         energyCost: weapon.energyCost,
         selected: index === 0,
       })),
+    },
+    survival: {
+      pickupsActive: 0,
+      pickupsTotal: 0,
+      notice: null,
     },
     frame: 0,
     elapsed: 0,
@@ -242,6 +271,16 @@ export function selectHealthPercent(snapshot: UiSnapshot): number {
 
   return Math.round(
     (snapshot.player.health / snapshot.player.maxHealth) * 100,
+  );
+}
+
+export function selectArmorPercent(snapshot: UiSnapshot): number {
+  if (snapshot.player.maxArmor <= 0) {
+    return 0;
+  }
+
+  return Math.round(
+    (snapshot.player.armor / snapshot.player.maxArmor) * 100,
   );
 }
 

@@ -78,6 +78,33 @@ export class CombatSfx {
     this.noise(context, 0.16, 0.055, 430);
   }
 
+  pickup(kind: "health" | "armor"): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    const notes =
+      kind === "health" ? [392, 523, 659] : [294, 440, 587];
+
+    notes.forEach((frequency, index) => {
+      const start = context.currentTime + index * 0.055;
+      const oscillator = context.createOscillator();
+      const envelope = context.createGain();
+
+      oscillator.type = kind === "health" ? "sine" : "triangle";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      envelope.gain.setValueAtTime(0.0001, start);
+      envelope.gain.exponentialRampToValueAtTime(0.035, start + 0.01);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+      oscillator.connect(envelope);
+      envelope.connect(this.master!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.14);
+    });
+  }
+
   creatureDeath(): void {
     const context = this.ensure();
 

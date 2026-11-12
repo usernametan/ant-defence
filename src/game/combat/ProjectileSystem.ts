@@ -35,6 +35,8 @@ export interface ProjectileImpact {
   coreColor: string;
   targetId?: string;
   damageApplied?: number;
+  armorAbsorbed?: number;
+  remainingArmor?: number;
   killed?: boolean;
 }
 
@@ -234,6 +236,8 @@ export class ProjectileSystem {
         coreColor: projectile.coreColor,
         targetId: hit.target.id,
         damageApplied: damage.applied,
+        armorAbsorbed: damage.armorAbsorbed,
+        remainingArmor: damage.remainingArmor,
         killed: damage.killed,
       });
 

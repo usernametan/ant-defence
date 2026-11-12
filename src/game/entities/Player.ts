@@ -14,6 +14,9 @@ import {
 export interface PlayerConfig {
   radius: number;
   maxHealth: number;
+  maxArmor: number;
+  armorAbsorbRatio: number;
+  respawnInvulnerability: number;
   moveSpeed: number;
   sprintMultiplier: number;
   acceleration: number;
@@ -31,6 +34,9 @@ export interface PlayerConfig {
 export const DEFAULT_PLAYER_CONFIG: PlayerConfig = {
   radius: 18,
   maxHealth: 100,
+  maxArmor: 80,
+  armorAbsorbRatio: 0.55,
+  respawnInvulnerability: 1.8,
   moveSpeed: 220,
   sprintMultiplier: 1.35,
   acceleration: 1800,
@@ -61,6 +67,8 @@ export interface PlayerRenderState {
   dodgeCooldownMax: number;
   health: number;
   maxHealth: number;
+  armor: number;
+  maxArmor: number;
   alive: boolean;
   hitFlash: number;
 }
@@ -69,6 +77,7 @@ export class Player implements Damageable {
   readonly id = "player";
   readonly team: Team = "player";
   readonly maxHealth: number;
+  readonly maxArmor: number;
   private readonly config: PlayerConfig;
   private position: Vec2;
   private previousPosition: Vec2;
@@ -76,6 +85,7 @@ export class Player implements Damageable {
   private facing = 0;
   private previousFacing = 0;
   private currentHealth: number;
+  private currentArmor: number;
   private flash = 0;
   private stamina: number;
   private staminaRegenDelayRemaining = 0;
@@ -91,9 +101,11 @@ export class Player implements Damageable {
   ) {
     this.config = config;
     this.maxHealth = config.maxHealth;
+    this.maxArmor = config.maxArmor;
     this.position = { ...spawn };
     this.previousPosition = { ...spawn };
     this.currentHealth = config.maxHealth;
+    this.currentArmor = config.maxArmor;
     this.stamina = config.maxStamina;
   }
 
@@ -133,6 +145,10 @@ export class Player implements Damageable {
     return this.currentHealth;
   }
 
+  get armor(): number {
+    return this.currentArmor;
+  }
+
   get alive(): boolean {
     return this.currentHealth > 0;
   }
@@ -168,6 +184,7 @@ export class Player implements Damageable {
     this.facing = 0;
     this.previousFacing = 0;
     this.currentHealth = this.maxHealth;
+    this.currentArmor = this.maxArmor;
     this.flash = 0;
     this.stamina = this.config.maxStamina;
     this.staminaRegenDelayRemaining = 0;
@@ -176,6 +193,36 @@ export class Player implements Damageable {
     this.dodgeCooldownRemainingSeconds = 0;
     this.invulnerableRemaining = 0;
     this.dodgeDirection = { x: 1, y: 0 };
+  }
+
+  respawn(spawn: Vec2): void {
+    this.reset(spawn);
+    this.invulnerableRemaining = Math.max(
+      0,
+      this.config.respawnInvulnerability,
+    );
+  }
+
+  restoreHealth(amount: number): number {
+    if (!Number.isFinite(amount) || amount <= 0 || !this.alive) {
+      return 0;
+    }
+
+    const restored = Math.min(this.maxHealth - this.currentHealth, amount);
+    this.currentHealth += restored;
+
+    return restored;
+  }
+
+  restoreArmor(amount: number): number {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return 0;
+    }
+
+    const restored = Math.min(this.maxArmor - this.currentArmor, amount);
+    this.currentArmor += restored;
+
+    return restored;
   }
 
   takeDamage(amount: number, _context: DamageContext): DamageResult {
@@ -192,8 +239,15 @@ export class Player implements Damageable {
       };
     }
 
-    const applied = Math.min(this.currentHealth, amount);
-    this.currentHealth = Math.max(0, this.currentHealth - amount);
+    const armorAbsorbed = Math.min(
+      this.currentArmor,
+      amount * this.config.armorAbsorbRatio,
+    );
+    const healthDamage = amount - armorAbsorbed;
+    const applied = Math.min(this.currentHealth, healthDamage);
+
+    this.currentArmor = Math.max(0, this.currentArmor - armorAbsorbed);
+    this.currentHealth = Math.max(0, this.currentHealth - healthDamage);
     this.flash = 1;
 
     if (this.currentHealth === 0) {
@@ -206,6 +260,8 @@ export class Player implements Damageable {
       applied,
       killed: this.currentHealth === 0,
       remainingHealth: this.currentHealth,
+      armorAbsorbed,
+      remainingArmor: this.currentArmor,
     };
   }
 
@@ -379,6 +435,8 @@ export class Player implements Damageable {
       dodgeCooldownMax: this.config.dodgeCooldown,
       health: this.currentHealth,
       maxHealth: this.maxHealth,
+      armor: this.currentArmor,
+      maxArmor: this.maxArmor,
       alive: this.alive,
       hitFlash: this.flash,
     };

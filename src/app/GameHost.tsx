@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { GAME_IDENTITY, PROTOTYPE_CHECKS } from '../game/content';
 import { Game } from '../game/Game';
 import {
+  selectArmorPercent,
   selectCameraReadout,
   selectDodgeLabel,
   selectDodgeReady,
@@ -92,9 +93,9 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <kbd>Enter</kbd>
           </button>
           <p className="mf-action-note">
-            Stage 5 opens the wilds beyond the waystation. Cross the ruined
-            range, follow old roads through the ford, and learn where the
-            frontier still belongs to monsters.
+            Stage 6 hardens the expedition. Read the field, spend armor before
+            health, recover at caches along the roads, and make every trip
+            beyond Waystation Echo count.
           </p>
         </div>
 
@@ -159,7 +160,9 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
 function Hud({ snapshot }: { snapshot: UiSnapshot }) {
   const stamina = selectStaminaPercent(snapshot);
   const health = selectHealthPercent(snapshot);
+  const armor = selectArmorPercent(snapshot);
   const dodgeReady = selectDodgeReady(snapshot);
+  const notice = snapshot.survival.notice;
 
   return (
     <div className="mf-hud" aria-live="polite">
@@ -209,6 +212,11 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
           <span>ENEMY {selectEnemiesReadout(snapshot)}</span>
           <span>KILLS {snapshot.combat.kills}</span>
           <span>HP {health}%</span>
+          <span>ARM {armor}%</span>
+          <span>
+            PICKUP {snapshot.survival.pickupsActive}/
+            {snapshot.survival.pickupsTotal}
+          </span>
           <span>DODGE {snapshot.player.dodgeCooldown.toFixed(2)}s</span>
           <span>STAM {stamina}%</span>
           <span>FPS {snapshot.fps.toFixed(0)}</span>
@@ -218,7 +226,7 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
       <div className="mf-hud-bottom">
         <div className="mf-status-stack">
           <span className="mf-stage-stamp">
-            {snapshot.stage} // creatures live
+            {snapshot.stage} // survival online
           </span>
           <div className="mf-player-meters">
             <div
@@ -238,6 +246,17 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
                   DOWN {snapshot.player.respawnRemaining.toFixed(1)}s
                 </strong>
               )}
+            </div>
+            <div className="mf-meter-row mf-armor-row">
+              <span>
+                ARMOR <strong>{armor}%</strong>
+              </span>
+              <span className="mf-meter" aria-hidden="true">
+                <span
+                  className="mf-meter-fill mf-armor-fill"
+                  style={{ width: `${armor}%` }}
+                />
+              </span>
             </div>
             <div className="mf-meter-row">
               <span>
@@ -261,6 +280,17 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
 
         <WeaponPanel snapshot={snapshot} />
 
+        {notice && snapshot.player.alive && (
+          <div
+            className={`mf-survival-notice is-${notice.tone}`}
+            role="status"
+          >
+            <span className="mf-survival-notice-pulse" aria-hidden="true" />
+            <strong>{notice.text}</strong>
+            <small>{Math.max(0, notice.remaining).toFixed(1)}s</small>
+          </div>
+        )}
+
         <span className="mf-hud-controls">
           <kbd>WASD</kbd> move <span aria-hidden="true">·</span>{' '}
           <kbd>Shift</kbd> sprint <span aria-hidden="true">·</span>{' '}
@@ -271,6 +301,16 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
           <kbd>F3</kbd> debug
         </span>
       </div>
+
+      {!snapshot.player.alive && (
+        <div className="mf-death-overlay" role="status" aria-live="assertive">
+          <span className="mf-death-kicker">Signal lost</span>
+          <strong>Redeploying in {snapshot.player.respawnRemaining.toFixed(1)}s</strong>
+          <span className="mf-death-detail">
+            Waystation Echo uplink · health and plating restored
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -346,7 +386,7 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
           </button>
         </div>
         <p className="mf-pause-footnote">
-          Stage 5 / World & Map Systems · build {snapshot.version}
+          Stage 6 / Survival & Damage Systems · build {snapshot.version}
         </p>
       </div>
     </div>

@@ -29,8 +29,12 @@ import {
 import { Camera } from "./render/Camera";
 import { ImpactEffects } from "./render/effects";
 import { Renderer } from "./render/Renderer";
+import { PickupSystem } from "./systems/PickupSystem";
 import { SpawnDirector } from "./systems/SpawnDirector";
-import { SnapshotStore } from "./ui/UiSnapshot";
+import {
+  SnapshotStore,
+  type SurvivalNoticeTone,
+} from "./ui/UiSnapshot";
 import { SpatialHash } from "./world/SpatialHash";
 import { createGreenreachMap } from "./content/maps/greenreach";
 import { loadMap } from "./world/MapLoader";
@@ -89,6 +93,7 @@ export class Game {
   private readonly combat: CombatSystem;
   private readonly projectiles: ProjectileSystem;
   private readonly spawnDirector: SpawnDirector;
+  private readonly pickups: PickupSystem;
   private readonly spatialHash = new SpatialHash<Creature>(120);
   private readonly effects = new ImpactEffects();
   private readonly sfx = new CombatSfx();
@@ -96,6 +101,9 @@ export class Game {
   private readonly events = new EventBus<GameEvents>();
   private phase: GamePhase = "menu";
   private playerRespawnRemaining = 0;
+  private feedbackText = "";
+  private feedbackTone: SurvivalNoticeTone = "health";
+  private feedbackRemaining = 0;
   private frame = 0;
   private elapsed = 0;
   private visualTime = 0;
@@ -124,6 +132,7 @@ export class Game {
     this.combat = new CombatSystem();
     this.projectiles = new ProjectileSystem();
     this.spawnDirector = new SpawnDirector(this.world.creatureSpawns);
+    this.pickups = new PickupSystem(this.world.pickups);
     this.targets = createTrainingDummies(this.world.targets);
     this.camera.moveTo(this.player.x, this.player.y);
     this.input = new InputRouter(window, canvas, {
@@ -225,8 +234,11 @@ export class Game {
     this.combat.reset();
     this.projectiles.clear();
     this.spawnDirector.reset(this.world);
+    this.pickups.reset();
     this.effects.clear();
     this.playerRespawnRemaining = 0;
+    this.feedbackText = "";
+    this.feedbackRemaining = 0;
 
     for (const target of this.targets) {
       target.reset();
@@ -296,13 +308,21 @@ export class Game {
 
     this.elapsed += stepSeconds;
     this.frame += 1;
+    this.feedbackRemaining = Math.max(
+      0,
+      this.feedbackRemaining - stepSeconds,
+    );
+
+    if (this.feedbackRemaining === 0) {
+      this.feedbackText = "";
+    }
 
     const pointer = this.input.getPointer();
     const aim = this.getAimWorld(pointer);
 
     if (!this.player.alive) {
       if (this.playerRespawnRemaining <= 0) {
-        this.playerRespawnRemaining = 1.6;
+        this.handlePlayerDeath();
       }
 
       this.playerRespawnRemaining = Math.max(
@@ -318,7 +338,7 @@ export class Game {
       );
 
       if (this.playerRespawnRemaining <= 0) {
-        this.player.reset(this.world.spawn);
+        this.player.respawn(this.world.spawn);
         this.camera.moveTo(this.player.x, this.player.y);
         this.effects.spawnImpact(
           this.player.x,
@@ -327,6 +347,8 @@ export class Game {
           "#e9fff8",
           14,
         );
+        this.sfx.pickup("health");
+        this.showFeedback("WAYSTATION RELINK · SHIELD ACTIVE", "respawn", 2.2);
       }
     } else {
       this.player.update(
@@ -338,7 +360,11 @@ export class Game {
       );
     }
 
+    this.pickups.update(stepSeconds);
+
     if (this.player.alive) {
+      this.collectPickups();
+
       const muzzle = this.getMuzzlePosition(aim);
       const shot = this.combat.update(stepSeconds, {
         firing: this.input.isFiring(),
@@ -413,10 +439,14 @@ export class Game {
             killed,
           });
           this.sfx.playerHit();
+          this.showDamageFeedback(
+            impact.damageApplied ?? 0,
+            impact.armorAbsorbed ?? 0,
+          );
         }
 
         if (killed) {
-          this.playerRespawnRemaining = 1.6;
+          this.handlePlayerDeath();
         }
 
         continue;
@@ -519,9 +549,10 @@ export class Game {
         health: hit.remainingHealth,
         killed: hit.killed,
       });
+      this.showDamageFeedback(hit.applied, hit.armorAbsorbed ?? 0);
 
       if (hit.killed) {
-        this.playerRespawnRemaining = 1.6;
+        this.handlePlayerDeath();
       }
 
       return;
@@ -561,6 +592,59 @@ export class Game {
       projectile.coreColor,
     );
     this.sfx.enemyAttack("projectile");
+  }
+
+  private collectPickups(): void {
+    const collected = this.pickups.collect(this.player);
+
+    for (const drop of collected) {
+      const type = this.pickups.getType(drop.pickup.kind);
+
+      this.effects.spawnImpact(
+        drop.pickup.x,
+        drop.pickup.y,
+        type.color,
+        type.coreColor,
+        12,
+      );
+      this.sfx.pickup(drop.pickup.kind);
+      this.showFeedback(
+        `${drop.pickup.kind === "health" ? "BIO RECOVERED" : "PLATING RESTORED"} +${Math.round(drop.restored)}`,
+        drop.pickup.kind,
+        1.5,
+      );
+    }
+  }
+
+  private showDamageFeedback(healthDamage: number, armorAbsorbed: number): void {
+    if (healthDamage <= 0 && armorAbsorbed <= 0) {
+      return;
+    }
+
+    const healthText = `-${Math.ceil(healthDamage)} HP`;
+    const armorText =
+      armorAbsorbed > 0 ? ` · -${Math.ceil(armorAbsorbed)} ARM` : "";
+
+    this.showFeedback(`IMPACT ${healthText}${armorText}`, "damage", 0.9);
+  }
+
+  private handlePlayerDeath(): void {
+    if (this.playerRespawnRemaining <= 0) {
+      this.playerRespawnRemaining = 1.6;
+    }
+
+    this.showFeedback("SIGNAL LOST · REDEPLOYING", "death", 2);
+  }
+
+  private showFeedback(
+    text: string,
+    tone: SurvivalNoticeTone,
+    seconds: number,
+  ): void {
+    this.feedbackText = text;
+    this.feedbackTone = tone;
+    this.feedbackRemaining = seconds;
+    this.publish(true);
   }
 
   private collectDamageTargets(): Damageable[] {
@@ -637,6 +721,7 @@ export class Game {
       creatureStates: creatures.map((creature) =>
         creature.getRenderState(interpolation),
       ),
+      pickups: this.pickups,
       effects: this.effects,
       combat: {
         weaponName: this.combat.currentWeapon.name,
@@ -651,6 +736,10 @@ export class Game {
         kills: this.spawnDirector.defeatedCount,
         playerHealth: this.player.health,
         playerMaxHealth: this.player.maxHealth,
+        playerArmor: this.player.armor,
+        playerMaxArmor: this.player.maxArmor,
+        pickupsActive: this.pickups.activeCount,
+        pickupsTotal: this.pickups.totalCount,
       },
     });
     this.publish();
@@ -738,8 +827,21 @@ export class Game {
           dodgeCooldownMax: this.player.dodgeCooldownMax,
           health: this.player.health,
           maxHealth: this.player.maxHealth,
+          armor: this.player.armor,
+          maxArmor: this.player.maxArmor,
           alive: this.player.alive,
           respawnRemaining: this.playerRespawnRemaining,
+        },
+        survival: {
+          pickupsActive: this.pickups.activeCount,
+          pickupsTotal: this.pickups.totalCount,
+          notice: this.feedbackText
+            ? {
+                text: this.feedbackText,
+                tone: this.feedbackTone,
+                remaining: this.feedbackRemaining,
+              }
+            : null,
         },
         combat: {
           weaponId: this.combat.currentWeapon.id,

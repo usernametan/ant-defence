@@ -4,10 +4,12 @@ import type { GameConfig, Vec2 } from "../core/types";
 import type { Creature, CreatureRenderState } from "../entities/Creature";
 import type { PlayerRenderState } from "../entities/Player";
 import type { TargetDummy } from "../entities/TargetDummy";
+import type { PickupSystem } from "../systems/PickupSystem";
 import type { LoadedWorld } from "../world/MapDef";
 import type { Camera } from "./Camera";
 import { drawCreature } from "./drawCreature";
 import { drawDebugOverlay, drawWorldDebug } from "./drawDebug";
+import { drawPickup } from "./drawPickups";
 import { drawPlayer } from "./drawPlayer";
 import { drawProjectiles } from "./drawProjectiles";
 import { drawTargetDummy } from "./drawTargetDummy";
@@ -35,6 +37,10 @@ export interface CombatRenderState {
   kills: number;
   playerHealth: number;
   playerMaxHealth: number;
+  playerArmor: number;
+  playerMaxArmor: number;
+  pickupsActive: number;
+  pickupsTotal: number;
 }
 
 export interface RenderState {
@@ -47,6 +53,7 @@ export interface RenderState {
   targets: readonly TargetDummy[];
   creatures: readonly Creature[];
   creatureStates: readonly CreatureRenderState[];
+  pickups: PickupSystem;
   effects: ImpactEffects;
   combat: CombatRenderState;
 }
@@ -147,6 +154,8 @@ export class Renderer {
 
     context.restore();
 
+    this.drawSurvivalOverlay(state);
+
     if (state.debug) {
       context.setTransform(this.scaleX, 0, 0, this.scaleY, 0, 0);
       drawDebugOverlay(context, {
@@ -235,6 +244,17 @@ export class Renderer {
       items.push({
         y: target.y,
         draw: () => drawTargetDummy(context, target),
+      });
+    }
+
+    for (const pickup of state.pickups.pickups) {
+      if (!pickup.active) {
+        continue;
+      }
+
+      items.push({
+        y: pickup.y,
+        draw: () => drawPickup(context, pickup, state.timeSeconds),
       });
     }
 
@@ -364,6 +384,40 @@ export class Renderer {
     glow.addColorStop(0.48, "rgba(21, 86, 73, 0.08)");
     glow.addColorStop(1, "rgba(3, 10, 9, 0)");
     context.fillStyle = glow;
+    context.fillRect(0, 0, viewportWidth, viewportHeight);
+  }
+
+  private drawSurvivalOverlay(state: RenderState): void {
+    const { player } = state;
+    const healthRatio =
+      player.maxHealth > 0
+        ? clamp(player.health / player.maxHealth, 0, 1)
+        : 0;
+    const hitGlow = clamp(player.hitFlash, 0, 1) * 0.34;
+    const lowHealthGlow =
+      player.alive && healthRatio < 0.3
+        ? (0.3 - healthRatio) * 0.8
+        : 0;
+    const intensity = Math.max(hitGlow, lowHealthGlow);
+
+    if (intensity <= 0.001) {
+      return;
+    }
+
+    const context = this.context;
+    const { viewportWidth, viewportHeight } = this.config;
+    const gradient = context.createRadialGradient(
+      viewportWidth / 2,
+      viewportHeight / 2,
+      viewportHeight * 0.22,
+      viewportWidth / 2,
+      viewportHeight / 2,
+      viewportWidth * 0.74,
+    );
+    gradient.addColorStop(0, "rgba(160, 28, 18, 0)");
+    gradient.addColorStop(0.62, `rgba(160, 28, 18, ${intensity * 0.18})`);
+    gradient.addColorStop(1, `rgba(178, 25, 13, ${intensity})`);
+    context.fillStyle = gradient;
     context.fillRect(0, 0, viewportWidth, viewportHeight);
   }
 
