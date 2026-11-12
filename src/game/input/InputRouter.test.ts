@@ -21,12 +21,15 @@ function createKeyboardEvent(
 function createPointerEvent(
   clientX: number,
   clientY: number,
+  type = 'pointermove',
+  button = 0,
 ): PointerEvent {
-  const event = new Event('pointermove');
+  const event = new Event(type, { cancelable: true });
 
   Object.defineProperties(event, {
     clientX: { value: clientX },
     clientY: { value: clientY },
+    button: { value: button },
   });
 
   return event as unknown as PointerEvent;
@@ -89,6 +92,55 @@ describe('InputRouter', () => {
     target.dispatchEvent(createKeyboardEvent('keydown', 'Space', true));
 
     expect(actions).toEqual(['start', 'dodge']);
+
+    router.detach();
+  });
+
+  it('dispatches weapon selection actions from number keys', () => {
+    const { target, actions, router } = createHarness();
+    router.attach();
+
+    target.dispatchEvent(createKeyboardEvent('keydown', 'Digit1'));
+    target.dispatchEvent(createKeyboardEvent('keydown', 'Digit2'));
+    target.dispatchEvent(createKeyboardEvent('keydown', 'Digit3'));
+
+    expect(actions).toEqual(['weapon1', 'weapon2', 'weapon3']);
+
+    router.detach();
+  });
+
+  it('tracks left-button fire until pointer release', () => {
+    const { target, canvas, router } = createHarness();
+    router.attach();
+
+    canvas.dispatchEvent(
+      createPointerEvent(460, 250, 'pointerdown', 0),
+    );
+    expect(router.isFiring()).toBe(true);
+
+    target.dispatchEvent(createPointerEvent(460, 250, 'pointerup', 0));
+    expect(router.isFiring()).toBe(false);
+
+    canvas.dispatchEvent(
+      createPointerEvent(460, 250, 'pointerdown', 2),
+    );
+    expect(router.isFiring()).toBe(false);
+
+    router.detach();
+  });
+
+  it('clears fire when the pointer leaves the canvas', () => {
+    const { canvas, router } = createHarness();
+    router.attach();
+
+    canvas.dispatchEvent(
+      createPointerEvent(300, 200, 'pointerdown', 0),
+    );
+    expect(router.isFiring()).toBe(true);
+
+    canvas.dispatchEvent(createPointerEvent(300, 200, 'pointerleave'));
+    expect(router.isFiring()).toBe(false);
+    expect(router.getPointer().inside).toBe(false);
 
     router.detach();
   });

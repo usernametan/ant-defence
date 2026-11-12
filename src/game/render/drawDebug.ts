@@ -1,7 +1,18 @@
 import type { GameConfig, Vec2 } from "../core/types";
 import type { PlayerRenderState } from "../entities/Player";
+import type { TargetDummy } from "../entities/TargetDummy";
 import type { TestArena } from "../world/TestArena";
 import type { Camera } from "./Camera";
+
+export interface DebugCombatState {
+  weaponName: string;
+  energy: number;
+  maxEnergy: number;
+  cooldown: number;
+  projectileCount: number;
+  targetsAlive: number;
+  targetsTotal: number;
+}
 
 export interface DebugRenderState {
   camera: Camera;
@@ -9,13 +20,15 @@ export interface DebugRenderState {
   arena: TestArena;
   player: PlayerRenderState;
   aim: Vec2 | null;
+  targets?: readonly TargetDummy[];
+  combat?: DebugCombatState;
 }
 
 export function drawWorldDebug(
   context: CanvasRenderingContext2D,
   state: DebugRenderState,
 ): void {
-  const { player, aim, arena } = state;
+  const { player, aim, arena, targets = [] } = state;
 
   context.save();
   context.strokeStyle = "rgba(247, 191, 91, 0.82)";
@@ -32,6 +45,14 @@ export function drawWorldDebug(
   }
 
   context.setLineDash([3, 3]);
+  context.strokeStyle = "rgba(159, 211, 255, 0.62)";
+
+  for (const target of targets) {
+    context.beginPath();
+    context.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+    context.stroke();
+  }
+
   context.strokeStyle = "rgba(117, 245, 203, 0.9)";
   context.beginPath();
   context.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
@@ -78,7 +99,7 @@ export function drawDebugOverlay(
   context: CanvasRenderingContext2D,
   state: DebugRenderState,
 ): void {
-  const { camera, config, arena, player, aim } = state;
+  const { camera, config, arena, player, aim, combat } = state;
   const lines = [
     `CAM ${Math.round(camera.x)} / ${Math.round(camera.y)}`,
     `PLAYER ${Math.round(player.x)} / ${Math.round(player.y)}`,
@@ -86,9 +107,22 @@ export function drawDebugOverlay(
     `DODGE ${player.dodgeCooldown.toFixed(2)}s`,
     `STAMINA ${player.stamina.toFixed(0)} / ${player.maxStamina}`,
     `AIM ${aim ? `${Math.round(aim.x)} / ${Math.round(aim.y)}` : "outside"}`,
+  ];
+
+  if (combat) {
+    lines.push(
+      `WEAPON ${combat.weaponName.toUpperCase()}`,
+      `ENERGY ${combat.energy.toFixed(0)} / ${combat.maxEnergy}`,
+      `COOLDOWN ${combat.cooldown.toFixed(2)}s`,
+      `PROJECTILES ${combat.projectileCount}`,
+      `TARGETS ${combat.targetsAlive} / ${combat.targetsTotal}`,
+    );
+  }
+
+  lines.push(
     `ARENA ${arena.width} x ${arena.height} / ${arena.obstacles.length} solids`,
     `WORLD ${config.worldWidth} x ${config.worldHeight}`,
-  ];
+  );
   const panelWidth = 318;
   const panelHeight = 26 + lines.length * 18;
 

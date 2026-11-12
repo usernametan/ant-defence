@@ -18,6 +18,7 @@ export class InputState {
     normalizedX: 0.5,
     normalizedY: 0.5,
     inside: false,
+    fireHeld: false,
   };
 
   press(code: string): void {
@@ -30,6 +31,10 @@ export class InputState {
 
   clear(): void {
     this.downKeys.clear();
+    this.pointer = {
+      ...this.pointer,
+      fireHeld: false,
+    };
   }
 
   isKeyDown(code: string): boolean {
@@ -53,6 +58,10 @@ export class InputState {
     return { ...this.pointer };
   }
 
+  isFiring(): boolean {
+    return this.pointer.inside && this.pointer.fireHeld;
+  }
+
   setPointer(
     x: number,
     y: number,
@@ -69,6 +78,7 @@ export class InputState {
       normalizedX: clamp(x / safeWidth, 0, 1),
       normalizedY: clamp(y / safeHeight, 0, 1),
       inside,
+      fireHeld: this.pointer.fireHeld,
     };
   }
 
@@ -76,6 +86,13 @@ export class InputState {
     this.pointer = {
       ...this.pointer,
       inside,
+    };
+  }
+
+  setFireHeld(fireHeld: boolean): void {
+    this.pointer = {
+      ...this.pointer,
+      fireHeld,
     };
   }
 

@@ -5,9 +5,12 @@ import {
   selectCameraReadout,
   selectDodgeLabel,
   selectDodgeReady,
+  selectEnergyPercent,
   selectPhaseLabel,
   selectPlayerReadout,
   selectStaminaPercent,
+  selectTargetsReadout,
+  selectWeaponStatus,
   type UiSnapshot,
 } from '../game/ui/UiSnapshot';
 import { useGameSnapshot } from './useGameSnapshot';
@@ -40,7 +43,7 @@ export function GameHost() {
         <canvas
           ref={canvasRef}
           className="game-canvas"
-          aria-label="Monster Frontier test arena"
+          aria-label="Monster Frontier combat test arena"
         />
         {snapshot.phase === 'menu' && (
           <MenuScreen snapshot={snapshot} game={game} />
@@ -87,12 +90,13 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <kbd>Enter</kbd>
           </button>
           <p className="mf-action-note">
-            Stage 2 puts a field agent in the Greenreach test grounds. Move,
-            sprint, dodge, and aim with the mouse. Combat comes later.
+            Stage 3 arms the field agent with three fictional energy blasters.
+            Test fire, switch loadouts, and break the training dummies before
+            the creatures arrive.
           </p>
         </div>
 
-        <ul className="mf-checks" aria-label="Player prototype systems">
+        <ul className="mf-checks" aria-label="Combat prototype systems">
           {PROTOTYPE_CHECKS.map((check) => (
             <li key={check.label} className="mf-check">
               <span className="mf-check-signal" aria-hidden="true" />
@@ -105,12 +109,13 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
         </ul>
       </div>
 
-      <aside className="mf-briefing" aria-label="Player prototype briefing">
-        <p className="mf-briefing-label">Deployment ready</p>
+      <aside className="mf-briefing" aria-label="Combat prototype briefing">
+        <p className="mf-briefing-label">Weapons hot</p>
         <p className="mf-briefing-region">{snapshot.region}</p>
         <p className="mf-briefing-copy">
-          The old line held long enough to open the frontier. The test grounds
-          are live, and the first field agent is ready to move.
+          The frontier is still quiet, but the range is live. Three arcade
+          emitters are online, and the training dummies are waiting for a
+          proper field test.
         </p>
         <dl className="mf-specs">
           <div>
@@ -122,12 +127,12 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <dd>60 Hz</dd>
           </div>
           <div>
-            <dt>Player</dt>
-            <dd>Circle / 18u</dd>
+            <dt>Weapons</dt>
+            <dd>3 Arcade lines</dd>
           </div>
           <div>
-            <dt>Collision</dt>
-            <dd>Slide response</dd>
+            <dt>Targets</dt>
+            <dd>Live dummies</dd>
           </div>
           <div>
             <dt>Camera</dt>
@@ -141,7 +146,8 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
           </div>
         </dl>
         <p className="mf-briefing-footnote">
-          WASD move · Shift sprint · Space dodge · F3 diagnostics
+          WASD move · Shift sprint · Space dodge · LMB fire · 1–3 weapons · F3
+          diagnostics
         </p>
       </aside>
     </section>
@@ -170,6 +176,12 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
             POS <strong>{selectPlayerReadout(snapshot)}</strong>
           </span>
           <span>
+            WPN <strong>{snapshot.combat.weaponSlot + 1}</strong>
+          </span>
+          <span>
+            TGT <strong>{selectTargetsReadout(snapshot)}</strong>
+          </span>
+          <span>
             FPS <strong>{Math.round(snapshot.fps || 60)}</strong>
           </span>
         </div>
@@ -180,6 +192,11 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
           <span>FRAME {snapshot.frame}</span>
           <span>SIM {snapshot.elapsed.toFixed(1)}s</span>
           <span>VEL {snapshot.player.speed.toFixed(0)}</span>
+          <span>WEAPON {snapshot.combat.weaponName.toUpperCase()}</span>
+          <span>CELL {snapshot.combat.energy.toFixed(0)}</span>
+          <span>CD {snapshot.combat.cooldown.toFixed(2)}s</span>
+          <span>PROJ {snapshot.combat.projectilesActive}</span>
+          <span>TGT {selectTargetsReadout(snapshot)}</span>
           <span>DODGE {snapshot.player.dodgeCooldown.toFixed(2)}s</span>
           <span>STAM {stamina}%</span>
           <span>FPS {snapshot.fps.toFixed(0)}</span>
@@ -189,7 +206,7 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
       <div className="mf-hud-bottom">
         <div className="mf-status-stack">
           <span className="mf-stage-stamp">
-            {snapshot.stage} // field agent active
+            {snapshot.stage} // weapons live
           </span>
           <div className="mf-player-meters">
             <div className="mf-meter-row">
@@ -211,13 +228,61 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
             </div>
           </div>
         </div>
+
+        <WeaponPanel snapshot={snapshot} />
+
         <span className="mf-hud-controls">
           <kbd>WASD</kbd> move <span aria-hidden="true">·</span>{' '}
           <kbd>Shift</kbd> sprint <span aria-hidden="true">·</span>{' '}
           <kbd>Space</kbd> dodge <span aria-hidden="true">·</span>{' '}
+          <kbd>LMB</kbd> fire <span aria-hidden="true">·</span>{' '}
+          <kbd>1–3</kbd> weapon <span aria-hidden="true">·</span>{' '}
           <kbd>Esc</kbd> pause <span aria-hidden="true">·</span>{' '}
           <kbd>F3</kbd> debug
         </span>
+      </div>
+    </div>
+  );
+}
+
+function WeaponPanel({ snapshot }: { snapshot: UiSnapshot }) {
+  const energy = selectEnergyPercent(snapshot);
+  const status = selectWeaponStatus(snapshot);
+  const { combat } = snapshot;
+
+  return (
+    <div
+      className={`mf-weapon-panel${combat.ready ? ' is-ready' : ''}`}
+      aria-label="Current weapon"
+    >
+      <div className="mf-weapon-heading">
+        <span className="mf-weapon-index">
+          WPN {combat.weaponSlot + 1}/{combat.weaponCount}
+        </span>
+        <strong>{combat.weaponName}</strong>
+        <span className="mf-weapon-status">{status}</span>
+      </div>
+      <div className="mf-weapon-energy">
+        <span>
+          CELL <strong>{Math.round(combat.energy)}</strong> / {combat.maxEnergy}
+        </span>
+        <span className="mf-meter mf-weapon-meter" aria-hidden="true">
+          <span
+            className="mf-meter-fill"
+            style={{ width: `${energy}%` }}
+          />
+        </span>
+      </div>
+      <div className="mf-weapon-slots">
+        {combat.weapons.map((weapon) => (
+          <span
+            key={weapon.id}
+            className={`mf-weapon-slot${weapon.selected ? ' is-selected' : ''}`}
+          >
+            <kbd>{weapon.slot + 1}</kbd>
+            {weapon.name}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -230,8 +295,8 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
         <p className="mf-kicker">Signal held</p>
         <h2>Expedition paused</h2>
         <p>
-          The {snapshot.region} test arena is suspended. Resume when you are
-          ready to continue the movement prototype.
+          The {snapshot.region} combat prototype is suspended. Resume when you
+          are ready to continue the weapons test.
         </p>
         <div className="mf-pause-actions">
           <button
@@ -251,7 +316,7 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
           </button>
         </div>
         <p className="mf-pause-footnote">
-          Stage 2 / Player Prototype · build {snapshot.version}
+          Stage 3 / Combat Prototype · build {snapshot.version}
         </p>
       </div>
     </div>

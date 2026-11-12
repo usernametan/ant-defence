@@ -24,6 +24,99 @@ export function circleIntersectsAabb(
   return deltaX * deltaX + deltaY * deltaY < radius * radius;
 }
 
+export function segmentCircleHit(
+  start: Vec2,
+  end: Vec2,
+  center: Vec2,
+  radius: number,
+): number | null {
+  const deltaX = end.x - start.x;
+  const deltaY = end.y - start.y;
+  const offsetX = start.x - center.x;
+  const offsetY = start.y - center.y;
+  const radiusSquared = radius * radius;
+
+  if (offsetX * offsetX + offsetY * offsetY <= radiusSquared) {
+    return 0;
+  }
+
+  const a = deltaX * deltaX + deltaY * deltaY;
+
+  if (a < 1e-9) {
+    return null;
+  }
+
+  const b = 2 * (offsetX * deltaX + offsetY * deltaY);
+  const c = offsetX * offsetX + offsetY * offsetY - radiusSquared;
+  const discriminant = b * b - 4 * a * c;
+
+  if (discriminant < 0) {
+    return null;
+  }
+
+  const t = (-b - Math.sqrt(discriminant)) / (2 * a);
+
+  return t >= 0 && t <= 1 ? t : null;
+}
+
+export function segmentAabbHit(
+  start: Vec2,
+  end: Vec2,
+  rect: Rect,
+  padding = 0,
+): number | null {
+  const minX = rect.x - padding;
+  const maxX = rect.x + rect.width + padding;
+  const minY = rect.y - padding;
+  const maxY = rect.y + rect.height + padding;
+  const deltaX = end.x - start.x;
+  const deltaY = end.y - start.y;
+  let entry = 0;
+  let exit = 1;
+
+  if (Math.abs(deltaX) < 1e-9) {
+    if (start.x < minX || start.x > maxX) {
+      return null;
+    }
+  } else {
+    let nearX = (minX - start.x) / deltaX;
+    let farX = (maxX - start.x) / deltaX;
+
+    if (nearX > farX) {
+      [nearX, farX] = [farX, nearX];
+    }
+
+    entry = Math.max(entry, nearX);
+    exit = Math.min(exit, farX);
+
+    if (entry > exit) {
+      return null;
+    }
+  }
+
+  if (Math.abs(deltaY) < 1e-9) {
+    if (start.y < minY || start.y > maxY) {
+      return null;
+    }
+  } else {
+    let nearY = (minY - start.y) / deltaY;
+    let farY = (maxY - start.y) / deltaY;
+
+    if (nearY > farY) {
+      [nearY, farY] = [farY, nearY];
+    }
+
+    entry = Math.max(entry, nearY);
+    exit = Math.min(exit, farY);
+
+    if (entry > exit) {
+      return null;
+    }
+  }
+
+  return entry;
+}
+
 export function moveCircleWithCollision(
   position: Vec2,
   delta: Vec2,

@@ -5,11 +5,14 @@ import {
   selectCameraReadout,
   selectDodgeLabel,
   selectDodgeReady,
+  selectEnergyPercent,
   selectIsPaused,
   selectIsPlaying,
   selectPhaseLabel,
   selectPlayerReadout,
   selectStaminaPercent,
+  selectTargetsReadout,
+  selectWeaponStatus,
 } from './UiSnapshot';
 
 describe('SnapshotStore', () => {
@@ -143,5 +146,44 @@ describe('UI selectors', () => {
 
     expect(selectDodgeReady(readySnapshot)).toBe(true);
     expect(selectDodgeLabel(readySnapshot)).toBe('Ready');
+  });
+
+  it('derives weapon, energy, and target readouts', () => {
+    const snapshot = createInitialSnapshot();
+
+    expect(snapshot.combat.weaponId).toBe('basic-blaster');
+    expect(snapshot.combat.weaponCount).toBe(3);
+    expect(snapshot.combat.weapons).toHaveLength(3);
+    expect(snapshot.combat.weapons[0].selected).toBe(true);
+    expect(selectEnergyPercent(snapshot)).toBe(100);
+    expect(selectWeaponStatus(snapshot)).toBe('Ready');
+    expect(selectTargetsReadout(snapshot)).toBe('3 / 3');
+
+    const drained = {
+      ...snapshot,
+      combat: {
+        ...snapshot.combat,
+        energy: 2,
+        cooldown: 0.5,
+        ready: false,
+        targetsAlive: 2,
+      },
+    };
+
+    expect(selectEnergyPercent(drained)).toBe(2);
+    expect(selectWeaponStatus(drained)).toBe('Low cell');
+    expect(selectTargetsReadout(drained)).toBe('2 / 3');
+
+    const cooling = {
+      ...snapshot,
+      combat: {
+        ...snapshot.combat,
+        energy: 50,
+        cooldown: 0.5,
+        ready: false,
+      },
+    };
+
+    expect(selectWeaponStatus(cooling)).toBe('0.5s');
   });
 });

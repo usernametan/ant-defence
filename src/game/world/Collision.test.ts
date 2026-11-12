@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   circleIntersectsAabb,
   moveCircleWithCollision,
+  segmentAabbHit,
+  segmentCircleHit,
   type CollisionWorld,
 } from './Collision';
 
@@ -48,6 +50,53 @@ describe('circleIntersectsAabb', () => {
         { x: 10, y: 10, width: 20, height: 20 },
       ),
     ).toBe(true);
+  });
+});
+
+describe('segment collisions', () => {
+  it('finds the first segment-circle intersection', () => {
+    expect(
+      segmentCircleHit(
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 50, y: 0 },
+        10,
+      ),
+    ).toBeCloseTo(0.4);
+    expect(
+      segmentCircleHit(
+        { x: 0, y: 100 },
+        { x: 100, y: 100 },
+        { x: 50, y: 0 },
+        10,
+      ),
+    ).toBeNull();
+    expect(
+      segmentCircleHit(
+        { x: 50, y: 0 },
+        { x: 100, y: 0 },
+        { x: 50, y: 0 },
+        10,
+      ),
+    ).toBe(0);
+  });
+
+  it('finds the first segment-AABB intersection with padding', () => {
+    const rect = { x: 40, y: -10, width: 20, height: 20 };
+
+    expect(
+      segmentAabbHit({ x: 0, y: 0 }, { x: 100, y: 0 }, rect),
+    ).toBeCloseTo(0.4);
+    expect(
+      segmentAabbHit({ x: 0, y: 0 }, { x: 100, y: 0 }, rect, 10),
+    ).toBeCloseTo(0.3);
+    expect(
+      segmentAabbHit(
+        { x: 0, y: 40 },
+        { x: 100, y: 40 },
+        rect,
+      ),
+    ).toBeNull();
   });
 });
 

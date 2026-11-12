@@ -1,3 +1,6 @@
+import { CombatSfx } from "./audio/CombatSfx";
+import { CombatSystem } from "./combat/CombatSystem";
+import { ProjectileSystem } from "./combat/ProjectileSystem";
 import { GAME_IDENTITY } from "./content";
 import { EventBus } from "./core/EventBus";
 import {
@@ -13,11 +16,16 @@ import {
 } from "./core/types";
 import { Player } from "./entities/Player";
 import {
+  createTrainingDummies,
+  type TargetDummy,
+} from "./entities/TargetDummy";
+import {
   InputRouter,
   type InputAction,
   type PointerState,
 } from "./input/InputRouter";
 import { Camera } from "./render/Camera";
+import { ImpactEffects } from "./render/effects";
 import { Renderer } from "./render/Renderer";
 import { SnapshotStore } from "./ui/UiSnapshot";
 import { createTestArena, type TestArena } from "./world/TestArena";
@@ -26,6 +34,20 @@ type GameEvents = {
   "game:phase-changed": {
     from: GamePhase;
     to: GamePhase;
+  };
+  "combat:weapon-fired": {
+    weaponId: string;
+    x: number;
+    y: number;
+    projectiles: number;
+  };
+  "combat:target-hit": {
+    targetId: string;
+    weaponId: string;
+    damage: number;
+    killed: boolean;
+    x: number;
+    y: number;
   };
 };
 
@@ -46,6 +68,11 @@ export class Game {
   private readonly loop: FixedStepLoop;
   private readonly arena: TestArena;
   private readonly player: Player;
+  private readonly combat: CombatSystem;
+  private readonly projectiles: ProjectileSystem;
+  private readonly effects = new ImpactEffects();
+  private readonly sfx = new CombatSfx();
+  private readonly targets: readonly TargetDummy[];
   private readonly events = new EventBus<GameEvents>();
   private phase: GamePhase = "menu";
   private frame = 0;
@@ -74,6 +101,9 @@ export class Game {
       this.config.tileSize,
     );
     this.player = new Player(this.arena.spawn);
+    this.combat = new CombatSystem();
+    this.projectiles = new ProjectileSystem();
+    this.targets = createTrainingDummies();
     this.camera.moveTo(this.player.x, this.player.y);
     this.input = new InputRouter(window, canvas, {
       onAction: this.handleAction,
@@ -118,6 +148,7 @@ export class Game {
     this.loop.stop();
     this.input.detach();
     this.renderer.destroy();
+    this.sfx.dispose();
     this.events.clear();
     document.removeEventListener(
       "visibilitychange",
@@ -131,8 +162,7 @@ export class Game {
     }
 
     if (this.phase === "menu") {
-      this.player.reset(this.arena.spawn);
-      this.camera.moveTo(this.player.x, this.player.y);
+      this.resetRun();
     }
 
     this.setPhase("playing");
@@ -159,14 +189,29 @@ export class Game {
       return;
     }
 
-    this.player.reset(this.arena.spawn);
-    this.camera.moveTo(this.player.x, this.player.y);
+    this.resetRun();
     this.setPhase("menu");
   }
 
   toggleDebug(): void {
     this.debug = !this.debug;
     this.publish(true);
+  }
+
+  private resetRun(): void {
+    this.player.reset(this.arena.spawn);
+    this.camera.moveTo(this.player.x, this.player.y);
+    this.combat.reset();
+    this.projectiles.clear();
+    this.effects.clear();
+
+    for (const target of this.targets) {
+      target.reset();
+    }
+
+    this.elapsed = 0;
+    this.frame = 0;
+    this.interpolation = 0;
   }
 
   private readonly handleAction = (action: InputAction): void => {
@@ -199,8 +244,27 @@ export class Game {
           this.publish(true);
         }
         break;
+      case "weapon1":
+        this.selectWeapon(0);
+        break;
+      case "weapon2":
+        this.selectWeapon(1);
+        break;
+      case "weapon3":
+        this.selectWeapon(2);
+        break;
     }
   };
+
+  private selectWeapon(index: number): void {
+    if (this.phase === "menu") {
+      return;
+    }
+
+    if (this.combat.selectWeapon(index)) {
+      this.publish(true);
+    }
+  }
 
   private readonly update = (stepSeconds: number): void => {
     if (this.phase !== "playing") {
@@ -211,13 +275,81 @@ export class Game {
     this.frame += 1;
 
     const pointer = this.input.getPointer();
+    const aim = this.getAimWorld(pointer);
     this.player.update(
       stepSeconds,
       this.input.getMovementIntent(),
       this.input.isSprinting(),
       this.arena,
-      this.getAimWorld(pointer),
+      aim,
     );
+
+    const muzzle = this.getMuzzlePosition(aim);
+    const shot = this.combat.update(stepSeconds, {
+      firing: this.input.isFiring(),
+      origin: muzzle,
+      aim,
+    });
+
+    if (shot) {
+      for (const spawn of shot.spawns) {
+        this.projectiles.spawn({
+          ...spawn,
+          x: muzzle.x,
+          y: muzzle.y,
+          ownerTeam: "player",
+        });
+      }
+
+      this.effects.spawnMuzzle(
+        muzzle.x,
+        muzzle.y,
+        shot.spawns[0]?.angle ?? this.player.facingAngle,
+        shot.weapon.projectile.color,
+        shot.weapon.projectile.coreColor,
+      );
+      this.events.emit("combat:weapon-fired", {
+        weaponId: shot.weapon.id,
+        x: muzzle.x,
+        y: muzzle.y,
+        projectiles: shot.spawns.length,
+      });
+      this.sfx.shoot(shot.weapon.category);
+    }
+
+    for (const target of this.targets) {
+      target.update(stepSeconds);
+    }
+
+    const impacts = this.projectiles.update(
+      stepSeconds,
+      this.arena,
+      this.targets,
+    );
+
+    for (const impact of impacts) {
+      this.effects.spawnImpact(
+        impact.x,
+        impact.y,
+        impact.color,
+        impact.coreColor,
+        impact.kind === "target" ? 10 : 6,
+      );
+
+      if (impact.kind === "target" && impact.targetId) {
+        this.events.emit("combat:target-hit", {
+          targetId: impact.targetId,
+          weaponId: impact.weaponId,
+          damage: impact.damageApplied ?? 0,
+          killed: impact.killed ?? false,
+          x: impact.x,
+          y: impact.y,
+        });
+        this.sfx.hit(impact.killed ?? false);
+      }
+    }
+
+    this.effects.update(stepSeconds);
   };
 
   private readonly render = (interpolation: number): void => {
@@ -268,6 +400,18 @@ export class Game {
       arena: this.arena,
       player: this.player.getRenderState(interpolation),
       aim,
+      projectiles: this.projectiles,
+      targets: this.targets,
+      effects: this.effects,
+      combat: {
+        weaponName: this.combat.currentWeapon.name,
+        energy: this.combat.currentEnergy,
+        maxEnergy: this.combat.maxEnergy,
+        cooldown: this.combat.currentCooldownRemaining,
+        projectileCount: this.projectiles.activeCount,
+        targetsAlive: this.countAliveTargets(),
+        targetsTotal: this.targets.length,
+      },
     });
     this.publish();
   };
@@ -281,6 +425,30 @@ export class Game {
       x: pointer.normalizedX * this.config.viewportWidth,
       y: pointer.normalizedY * this.config.viewportHeight,
     });
+  }
+
+  private getMuzzlePosition(aim: Vec2 | null): Vec2 {
+    const angle = aim
+      ? Math.atan2(aim.y - this.player.y, aim.x - this.player.x)
+      : this.player.facingAngle;
+    const distance = this.player.radius + 8;
+
+    return {
+      x: this.player.x + Math.cos(angle) * distance,
+      y: this.player.y + Math.sin(angle) * distance,
+    };
+  }
+
+  private countAliveTargets(): number {
+    let alive = 0;
+
+    for (const target of this.targets) {
+      if (target.alive) {
+        alive += 1;
+      }
+    }
+
+    return alive;
   }
 
   private setPhase(nextPhase: GamePhase): void {
@@ -328,6 +496,29 @@ export class Game {
           invulnerable: this.player.isInvulnerable,
           dodgeCooldown: this.player.dodgeCooldownRemaining,
           dodgeCooldownMax: this.player.dodgeCooldownMax,
+        },
+        combat: {
+          weaponId: this.combat.currentWeapon.id,
+          weaponName: this.combat.currentWeapon.name,
+          weaponSlot: this.combat.currentWeapon.slot,
+          weaponCount: this.combat.availableWeapons.length,
+          energy: this.combat.currentEnergy,
+          maxEnergy: this.combat.maxEnergy,
+          energyCost: this.combat.currentWeapon.energyCost,
+          cooldown: this.combat.currentCooldownRemaining,
+          cooldownMax: this.combat.currentCooldownMax,
+          ready: this.combat.isReady,
+          projectilesActive: this.projectiles.activeCount,
+          projectilesMax: this.projectiles.maxProjectiles,
+          targetsAlive: this.countAliveTargets(),
+          targetsTotal: this.targets.length,
+          weapons: this.combat.availableWeapons.map((weapon) => ({
+            id: weapon.id,
+            name: weapon.name,
+            slot: weapon.slot,
+            energyCost: weapon.energyCost,
+            selected: weapon.id === this.combat.currentWeapon.id,
+          })),
         },
         frame: this.frame,
         elapsed: this.elapsed,

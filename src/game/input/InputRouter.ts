@@ -1,6 +1,13 @@
 import { InputState, MOVEMENT_BINDINGS } from "./InputState";
 
-export type InputAction = "start" | "pause" | "toggleDebug" | "dodge";
+export type InputAction =
+  | "start"
+  | "pause"
+  | "toggleDebug"
+  | "dodge"
+  | "weapon1"
+  | "weapon2"
+  | "weapon3";
 
 export interface PointerState {
   x: number;
@@ -8,6 +15,7 @@ export interface PointerState {
   normalizedX: number;
   normalizedY: number;
   inside: boolean;
+  fireHeld: boolean;
 }
 
 export interface InputHandlers {
@@ -21,6 +29,9 @@ export const DEFAULT_BINDINGS: Record<InputAction, readonly string[]> = {
   pause: ["Escape"],
   toggleDebug: ["F3"],
   dodge: ["Space"],
+  weapon1: ["Digit1"],
+  weapon2: ["Digit2"],
+  weapon3: ["Digit3"],
 };
 
 const MOVEMENT_KEYS = new Set<string>(
@@ -53,9 +64,12 @@ export class InputRouter {
     this.target.addEventListener("keydown", this.handleKeyDown);
     this.target.addEventListener("keyup", this.handleKeyUp);
     this.target.addEventListener("blur", this.handleBlur);
+    this.target.addEventListener("pointerup", this.handlePointerUp);
+    this.target.addEventListener("pointercancel", this.handlePointerUp);
     this.canvas.addEventListener("pointermove", this.handlePointerMove);
     this.canvas.addEventListener("pointerenter", this.handlePointerMove);
     this.canvas.addEventListener("pointerleave", this.handlePointerLeave);
+    this.canvas.addEventListener("pointerdown", this.handlePointerDown);
   }
 
   detach(): void {
@@ -67,9 +81,12 @@ export class InputRouter {
     this.target.removeEventListener("keydown", this.handleKeyDown);
     this.target.removeEventListener("keyup", this.handleKeyUp);
     this.target.removeEventListener("blur", this.handleBlur);
+    this.target.removeEventListener("pointerup", this.handlePointerUp);
+    this.target.removeEventListener("pointercancel", this.handlePointerUp);
     this.canvas.removeEventListener("pointermove", this.handlePointerMove);
     this.canvas.removeEventListener("pointerenter", this.handlePointerMove);
     this.canvas.removeEventListener("pointerleave", this.handlePointerLeave);
+    this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
     this.state.clear();
   }
 
@@ -83,6 +100,10 @@ export class InputRouter {
 
   isSprinting(): boolean {
     return this.state.isSprinting();
+  }
+
+  isFiring(): boolean {
+    return this.state.isFiring();
   }
 
   getPointer(): PointerState {
@@ -116,16 +137,37 @@ export class InputRouter {
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    this.updatePointer(event);
+    this.handlers.onPointerMove?.(this.state.getPointer());
+  };
 
-    this.state.setPointer(x, y, rect.width, rect.height, true);
+  private readonly handlePointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    this.updatePointer(event);
+    this.state.setFireHeld(true);
+    this.handlers.onPointerMove?.(this.state.getPointer());
+  };
+
+  private readonly handlePointerUp = (): void => {
+    this.state.setFireHeld(false);
     this.handlers.onPointerMove?.(this.state.getPointer());
   };
 
   private readonly handlePointerLeave = (): void => {
     this.state.setPointerInside(false);
+    this.state.setFireHeld(false);
     this.handlers.onPointerMove?.(this.state.getPointer());
   };
+
+  private updatePointer(event: PointerEvent): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    this.state.setPointer(x, y, rect.width, rect.height, true);
+  }
 }

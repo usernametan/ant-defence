@@ -63,6 +63,7 @@ describe('InputState', () => {
       normalizedX: 0.5,
       normalizedY: 0.5,
       inside: true,
+      fireHeld: false,
     });
 
     state.setPointer(1200, -20, 960, 540, true);
@@ -72,5 +73,21 @@ describe('InputState', () => {
 
     state.setPointerInside(false);
     expect(state.getPointer().inside).toBe(false);
+  });
+
+  it('tracks held fire and clears it with the rest of the input state', () => {
+    const state = new InputState();
+
+    state.setPointer(10, 10, 100, 100, true);
+    state.setFireHeld(true);
+    expect(state.isFiring()).toBe(true);
+
+    state.setPointerInside(false);
+    expect(state.isFiring()).toBe(false);
+
+    state.setPointerInside(true);
+    state.clear();
+    expect(state.isFiring()).toBe(false);
+    expect(state.getPointer().fireHeld).toBe(false);
   });
 });

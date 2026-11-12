@@ -1,5 +1,35 @@
+import {
+  DEFAULT_COMBAT_CONFIG,
+} from "../combat/CombatSystem";
+import { STARTER_WEAPONS } from "../content/equipment";
 import { GAME_IDENTITY } from "../content";
 import type { GamePhase, Size } from "../core/types";
+
+export interface WeaponSnapshot {
+  id: string;
+  name: string;
+  slot: number;
+  energyCost: number;
+  selected: boolean;
+}
+
+export interface CombatSnapshot {
+  weaponId: string;
+  weaponName: string;
+  weaponSlot: number;
+  weaponCount: number;
+  energy: number;
+  maxEnergy: number;
+  energyCost: number;
+  cooldown: number;
+  cooldownMax: number;
+  ready: boolean;
+  projectilesActive: number;
+  projectilesMax: number;
+  targetsAlive: number;
+  targetsTotal: number;
+  weapons: readonly WeaponSnapshot[];
+}
 
 export interface PlayerSnapshot {
   x: number;
@@ -30,6 +60,7 @@ export interface UiSnapshot {
     viewportHeight: number;
   };
   player: PlayerSnapshot;
+  combat: CombatSnapshot;
   frame: number;
   elapsed: number;
   fps: number;
@@ -65,6 +96,29 @@ export function createInitialSnapshot(): UiSnapshot {
       invulnerable: false,
       dodgeCooldown: 0,
       dodgeCooldownMax: 0,
+    },
+    combat: {
+      weaponId: STARTER_WEAPONS[0].id,
+      weaponName: STARTER_WEAPONS[0].name,
+      weaponSlot: STARTER_WEAPONS[0].slot,
+      weaponCount: STARTER_WEAPONS.length,
+      energy: DEFAULT_COMBAT_CONFIG.maxEnergy,
+      maxEnergy: DEFAULT_COMBAT_CONFIG.maxEnergy,
+      energyCost: STARTER_WEAPONS[0].energyCost,
+      cooldown: 0,
+      cooldownMax: STARTER_WEAPONS[0].cooldown,
+      ready: true,
+      projectilesActive: 0,
+      projectilesMax: 0,
+      targetsAlive: 3,
+      targetsTotal: 3,
+      weapons: STARTER_WEAPONS.map((weapon, index) => ({
+        id: weapon.id,
+        name: weapon.name,
+        slot: weapon.slot,
+        energyCost: weapon.energyCost,
+        selected: index === 0,
+      })),
     },
     frame: 0,
     elapsed: 0,
@@ -174,6 +228,32 @@ export function selectDodgeLabel(snapshot: UiSnapshot): string {
   return selectDodgeReady(snapshot)
     ? "Ready"
     : `${snapshot.player.dodgeCooldown.toFixed(1)}s`;
+}
+
+export function selectEnergyPercent(snapshot: UiSnapshot): number {
+  if (snapshot.combat.maxEnergy <= 0) {
+    return 0;
+  }
+
+  return Math.round(
+    (snapshot.combat.energy / snapshot.combat.maxEnergy) * 100,
+  );
+}
+
+export function selectWeaponStatus(snapshot: UiSnapshot): string {
+  if (snapshot.combat.ready) {
+    return "Ready";
+  }
+
+  if (snapshot.combat.energy < snapshot.combat.energyCost) {
+    return "Low cell";
+  }
+
+  return `${snapshot.combat.cooldown.toFixed(1)}s`;
+}
+
+export function selectTargetsReadout(snapshot: UiSnapshot): string {
+  return `${snapshot.combat.targetsAlive} / ${snapshot.combat.targetsTotal}`;
 }
 
 export function selectPhaseLabel(snapshot: UiSnapshot): string {

@@ -1,10 +1,25 @@
+import type { ProjectileSystem } from "../combat/ProjectileSystem";
 import { clamp } from "../core/math";
 import type { GameConfig, Vec2 } from "../core/types";
 import type { PlayerRenderState } from "../entities/Player";
+import type { TargetDummy } from "../entities/TargetDummy";
 import type { ArenaObstacle, TestArena } from "../world/TestArena";
 import type { Camera } from "./Camera";
 import { drawDebugOverlay, drawWorldDebug } from "./drawDebug";
 import { drawPlayer } from "./drawPlayer";
+import { drawProjectiles } from "./drawProjectiles";
+import { drawTargetDummy } from "./drawTargetDummy";
+import type { ImpactEffects } from "./effects";
+
+export interface CombatRenderState {
+  weaponName: string;
+  energy: number;
+  maxEnergy: number;
+  cooldown: number;
+  projectileCount: number;
+  targetsAlive: number;
+  targetsTotal: number;
+}
 
 export interface RenderState {
   timeSeconds: number;
@@ -12,6 +27,10 @@ export interface RenderState {
   arena: TestArena;
   player: PlayerRenderState;
   aim: Vec2 | null;
+  projectiles: ProjectileSystem;
+  targets: readonly TargetDummy[];
+  effects: ImpactEffects;
+  combat: CombatRenderState;
 }
 
 const GRID_COLOR = "rgba(117, 245, 203, 0.07)";
@@ -77,8 +96,15 @@ export class Renderer {
     context.save();
     context.translate(-this.camera.left, -this.camera.top);
     this.drawArena(state.arena, state.timeSeconds);
+
+    for (const target of state.targets) {
+      drawTargetDummy(context, target);
+    }
+
     drawPlayer(context, state.player, state.timeSeconds);
+    drawProjectiles(context, state.projectiles);
     this.drawAimGuide(state.player, state.aim, state.timeSeconds);
+    state.effects.draw(context);
 
     if (state.debug) {
       drawWorldDebug(context, {
@@ -87,6 +113,7 @@ export class Renderer {
         arena: state.arena,
         player: state.player,
         aim: state.aim,
+        targets: state.targets,
       });
     }
 
@@ -100,6 +127,7 @@ export class Renderer {
         arena: state.arena,
         player: state.player,
         aim: state.aim,
+        combat: state.combat,
       });
     }
 
