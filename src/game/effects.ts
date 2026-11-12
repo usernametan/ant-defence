@@ -1,5 +1,12 @@
 import { COLOR, POWERUP_DEFS, VIEW_HEIGHT, VIEW_WIDTH, WORLD } from './config';
-import type { Bullet, FloatingText, Particle, Pickup, PowerupType } from './types';
+import type {
+  AcidGlob,
+  Bullet,
+  FloatingText,
+  Particle,
+  Pickup,
+  PowerupType,
+} from './types';
 
 export function drawDefenseLine(
   ctx: CanvasRenderingContext2D,
@@ -588,6 +595,158 @@ export function drawPickupLabels(
     ctx.font = PICKUP_BADGE_FONT;
     ctx.fillStyle = style.edge;
     ctx.fillText(POWERUP_DEFS[pickup.type].name, lx + padX, ly - 7);
+  }
+  ctx.restore();
+}
+
+export function drawRazorWire(
+  ctx: CanvasRenderingContext2D,
+  time: number,
+): void {
+  const x = WORLD.wireX;
+  const top = 636;
+  const bottom = 762;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(205, 214, 224, 0.55)';
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, bottom);
+  ctx.stroke();
+
+  for (let i = 0; i < 6; i += 1) {
+    const cy = top + 12 + i * 21;
+    const gleam = 0.45 + Math.sin(time * 4 + i) * 0.2;
+    ctx.strokeStyle = `rgba(235, 242, 250, ${gleam})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(x, cy, 8, 11, 0.2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 6, cy - 4);
+    ctx.lineTo(x + 6, cy + 4);
+    ctx.moveTo(x + 6, cy - 4);
+    ctx.lineTo(x - 6, cy + 4);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export function spawnCritBlast(
+  particles: Particle[],
+  x: number,
+  y: number,
+  radius: number,
+): void {
+  particles.push({
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    life: 0.42,
+    maxLife: 0.42,
+    size: radius * 0.35,
+    color: 'rgba(255, 218, 108, 0.92)',
+    gravity: 0,
+    drag: 0,
+    shape: 'ring',
+  });
+  for (let i = 0; i < 24; i += 1) {
+    const angle = (i / 24) * Math.PI * 2 + Math.random() * 0.2;
+    const speed = 110 + Math.random() * 210;
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 0.25 + Math.random() * 0.3,
+      maxLife: 0.55,
+      size: 1.8 + Math.random() * 2.4,
+      color: i % 2 === 0 ? COLOR.goldBright : '#ff9d5c',
+      gravity: 120,
+      drag: 1.8,
+      shape: 'spark',
+    });
+  }
+}
+
+export function drawAcidGlobs(
+  ctx: CanvasRenderingContext2D,
+  globs: AcidGlob[],
+  time: number,
+): void {
+  ctx.save();
+  for (const glob of globs) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(
+      glob.x,
+      glob.y,
+      2,
+      glob.x,
+      glob.y,
+      26,
+    );
+    glow.addColorStop(0, 'rgba(180, 255, 160, 0.92)');
+    glow.addColorStop(0.45, 'rgba(110, 240, 125, 0.5)');
+    glow.addColorStop(1, 'rgba(60, 180, 80, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(glob.x, glob.y, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = '#9eff8a';
+    ctx.strokeStyle = '#2d6e32';
+    ctx.lineWidth = 1.5;
+    const wobble = Math.sin(time * 14 + glob.id) * 1.6;
+    ctx.beginPath();
+    ctx.ellipse(glob.x, glob.y, 8 + wobble, 6.5 - wobble * 0.5, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export function drawAcidLabels(
+  ctx: CanvasRenderingContext2D,
+  globs: AcidGlob[],
+  typed: string,
+  targetAcidId: number | null,
+): void {
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  for (const glob of globs) {
+    const isTarget = glob.id === targetAcidId;
+    ctx.font = PICKUP_FONT;
+    const metrics = ctx.measureText(glob.word);
+    const padX = 10;
+    const width = Math.max(42, metrics.width + padX * 2);
+    const height = 24;
+    const lx = Math.max(12, Math.min(VIEW_WIDTH - width - 12, glob.x - width / 2));
+    const ly = glob.y - 38;
+
+    ctx.save();
+    ctx.fillStyle = isTarget ? 'rgba(23, 17, 9, 0.96)' : 'rgba(6, 16, 10, 0.92)';
+    roundRect(ctx, lx, ly, width, height, 6);
+    ctx.fill();
+    ctx.strokeStyle = isTarget
+      ? 'rgba(255, 211, 118, 0.95)'
+      : 'rgba(125, 255, 145, 0.8)';
+    ctx.lineWidth = isTarget ? 1.8 : 1.2;
+    roundRect(ctx, lx, ly, width, height, 6);
+    ctx.stroke();
+    ctx.restore();
+
+    drawWordText(
+      ctx,
+      glob.word,
+      isTarget ? typed : '',
+      lx + (width - metrics.width) / 2,
+      ly + height / 2,
+      PICKUP_FONT,
+    );
   }
   ctx.restore();
 }

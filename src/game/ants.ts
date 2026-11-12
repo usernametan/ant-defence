@@ -1,4 +1,11 @@
-import { ANT_TYPES, COLOR, LEECH, LANES, VIEW_WIDTH } from './config';
+import {
+  ANT_TYPES,
+  COLOR,
+  LEECH,
+  LANES,
+  SPECIAL_ANTS,
+  VIEW_WIDTH,
+} from './config';
 import { drawWordText } from './effects';
 import type { Ant, AntKind } from './types';
 
@@ -30,6 +37,7 @@ export function makeAnt(
   word: string,
   speedMultiplier: number,
   wave: number,
+  critical = false,
 ): Ant {
   const config = ANT_TYPES[kind];
   let hp = config.hp;
@@ -57,19 +65,40 @@ export function makeAnt(
     hitFlash: 0,
     boss: kind === 'queen',
     minionTimer: 0,
+    critical: kind !== 'queen' && critical,
+    burrowed: false,
+    burrowTimer: 0,
+    hasBurrowed: false,
+    spitTimer: kind === 'spitter' ? 2.2 + Math.random() * 1.4 : 0,
+    wireTriggered: false,
+    boosted: false,
   };
 }
 
 export function updateAnt(ant: Ant, dt: number, speedScale: number): void {
+  if (!ant.alive) {
+    ant.deathTimer = Math.max(0, ant.deathTimer - dt);
+    ant.x += 42 * dt * (ant.deathTimer / 0.42);
+    return;
+  }
+
   ant.spawnTimer = Math.max(0, ant.spawnTimer - dt);
   ant.hitFlash = Math.max(0, ant.hitFlash - dt);
-  ant.legPhase += dt * (2.6 + ant.speed * 0.08);
+
+  const boostMult = ant.boosted ? SPECIAL_ANTS.pheromoneSpeedBoost : 1;
+  const burrowMult = ant.burrowed ? SPECIAL_ANTS.burrowSpeedMultiplier : 1;
+  const spitterMult =
+    ant.kind === 'spitter' && ant.x <= SPECIAL_ANTS.spitterStopX ? 0.22 : 1;
+  const effectiveSpeed =
+    ant.speed * speedScale * boostMult * burrowMult * spitterMult;
+
+  ant.legPhase += dt * (2.6 + effectiveSpeed * 0.08);
   if (ant.kind === 'weaver') {
     ant.swayPhase += dt * 8.2;
     const ease = 1 - ant.spawnTimer / 0.45;
     ant.y = LANES[ant.lane].y + Math.sin(ant.swayPhase) * 26 * ease;
   }
-  ant.x -= ant.speed * speedScale * dt;
+  ant.x -= effectiveSpeed * dt;
 }
 
 function bodyColor(ant: Ant): string {
@@ -89,6 +118,12 @@ function bodyColor(ant: Ant): string {
       return '#1a1210';
     case 'leech':
       return '#1d0d0c';
+    case 'burrower':
+      return '#23180f';
+    case 'pheromone':
+      return '#151e12';
+    case 'spitter':
+      return '#141f14';
     default:
       return '#17100b';
   }
@@ -96,6 +131,7 @@ function bodyColor(ant: Ant): string {
 
 function rimColor(ant: Ant): string {
   if (ant.hitFlash > 0) return '#fff3da';
+  if (ant.critical) return 'rgba(255, 215, 96, 0.65)';
   switch (ant.kind) {
     case 'fast':
       return 'rgba(255, 144, 92, 0.36)';
@@ -111,6 +147,12 @@ function rimColor(ant: Ant): string {
       return 'rgba(244, 224, 205, 0.38)';
     case 'leech':
       return 'rgba(255, 82, 80, 0.45)';
+    case 'burrower':
+      return 'rgba(218, 168, 108, 0.48)';
+    case 'pheromone':
+      return 'rgba(182, 248, 118, 0.52)';
+    case 'spitter':
+      return 'rgba(116, 255, 138, 0.5)';
     default:
       return 'rgba(247, 184, 120, 0.3)';
   }
@@ -122,28 +164,60 @@ export function drawAnt(
   time: number,
   targeted: boolean,
 ): void {
-  const spawnAlpha = 1 - Math.max(0, ant.spawnTimer) / 0.45;
   if (ant.x > VIEW_WIDTH + 40) return;
 
+  // Underground burrower disturbance rendering
+  if (ant.alive && ant.burrowed) {
+    ctx.save();
+    ctx.translate(ant.x, ant.y);
+    const pulse = 0.6 + Math.sin(time * 18) * 0.3;
+    ctx.fillStyle = `rgba(92, 68, 44, ${0.72 * pulse})`;
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 34 * ant.scale, 9 * ant.scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(218, 175, 118, 0.45)';
+    ctx.lineWidth = 1.6;
+    for (let i = 0; i < 4; i += 1) {
+      const ox = (i - 1.5) * 14 + Math.sin(time * 22 + i) * 4;
+      ctx.beginPath();
+      ctx.arc(ox, -5 - (i % 2) * 3, 4 + (i % 2) * 2, Math.PI, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  const dying = !ant.alive;
+  const deathRatio = dying ? Math.max(0, ant.deathTimer / 0.42) : 1;
+  const spawnAlpha = 1 - Math.max(0, ant.spawnTimer) / 0.45;
   const scale = ant.scale;
-  const gait = Math.sin(ant.legPhase);
-  const gait2 = Math.sin(ant.legPhase + Math.PI);
-  const body = bodyColor(ant);
-  const rim = rimColor(ant);
+  const gait = dying ? 0.2 : Math.sin(ant.legPhase);
+  const gait2 = dying ? -0.2 : Math.sin(ant.legPhase + Math.PI);
+  const body = dying ? '#120c09' : bodyColor(ant);
+  const rim = dying ? 'rgba(160, 130, 100, 0.22)' : rimColor(ant);
   const boss = ant.kind === 'queen';
 
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, spawnAlpha));
+  ctx.globalAlpha = Math.max(0, Math.min(1, spawnAlpha * deathRatio));
   ctx.translate(ant.x, ant.y);
   ctx.scale(scale, scale);
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+  if (dying) {
+    const curl = 1 - deathRatio;
+    ctx.translate(curl * 14, -curl * 6);
+    ctx.rotate(curl * 0.32);
+    ctx.scale(1, 1 - curl * 0.28);
+  }
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.36)';
   ctx.beginPath();
   ctx.ellipse(4, 0, boss ? 54 : 40, boss ? 8 : 5.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  if (ant.kind === 'fast') {
-    ctx.strokeStyle = 'rgba(255, 221, 190, 0.14)';
+  if (ant.kind === 'fast' || ant.boosted) {
+    ctx.strokeStyle = ant.boosted
+      ? 'rgba(186, 255, 128, 0.24)'
+      : 'rgba(255, 221, 190, 0.14)';
     ctx.lineWidth = 1.6;
     for (let i = 0; i < 3; i += 1) {
       ctx.beginPath();
@@ -151,6 +225,18 @@ export function drawAnt(
       ctx.lineTo(79 + i * 9, -34 + i * 11);
       ctx.stroke();
     }
+  }
+
+  if (ant.kind === 'pheromone' && !dying) {
+    const auraPulse = 0.5 + Math.sin(time * 4.2 + ant.legPhase) * 0.5;
+    const aura = ctx.createRadialGradient(10, -28, 8, 10, -28, 76);
+    aura.addColorStop(0, `rgba(176, 248, 112, ${0.14 + auraPulse * 0.08})`);
+    aura.addColorStop(0.7, `rgba(140, 230, 96, ${0.05 + auraPulse * 0.04})`);
+    aura.addColorStop(1, 'rgba(120, 220, 90, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.ellipse(10, -28, 78, 52, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   if (boss) {
@@ -203,6 +289,7 @@ export function drawAnt(
 
   ctx.strokeStyle = ant.kind === 'armored' ? '#382415' : '#0a0705';
   ctx.lineWidth = 2.35;
+  const curlFactor = dying ? (1 - deathRatio) * 10 : 0;
   for (let side = 0; side < 2; side += 1) {
     const dir = side === 0 ? 1 : -1;
     for (let i = 0; i < legPairs.length; i += 1) {
@@ -211,9 +298,9 @@ export function drawAnt(
       const hipX = pair.hipX - 1;
       const hipY = pair.hipY + 3;
       const kneeX = hipX + pair.spread * (0.6 + i * 0.08) + phase * 4.5 * dir;
-      const kneeY = hipY + 10 + pair.lift;
-      const footX = kneeX + pair.spread * 0.55 + phase * 7 * dir;
-      const footY = 0 - (phase > 0 ? 2.5 : 0);
+      const kneeY = hipY + 10 + pair.lift - curlFactor;
+      const footX = kneeX + pair.spread * 0.55 + phase * 7 * dir - curlFactor * 0.5;
+      const footY = 0 - (phase > 0 ? 2.5 : 0) - curlFactor * 1.2;
       ctx.beginPath();
       ctx.moveTo(hipX, hipY);
       ctx.lineTo(kneeX, kneeY);
@@ -261,6 +348,32 @@ export function drawAnt(
       ctx.closePath();
       ctx.fill();
     }
+  }
+
+  if (ant.kind === 'burrower') {
+    // Digging claws and dirt crest
+    ctx.fillStyle = 'rgba(218, 168, 108, 0.4)';
+    for (let i = 0; i < 3; i += 1) {
+      ctx.beginPath();
+      ctx.arc(22 + i * 9, -39, 4.5, Math.PI, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  if (ant.kind === 'pheromone') {
+    // Glowing dorsal spore sac
+    ctx.fillStyle = 'rgba(182, 248, 118, 0.42)';
+    ctx.beginPath();
+    ctx.ellipse(30, -39, 13, 6.5, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (ant.kind === 'spitter') {
+    // Venomous acid gland on gaster
+    ctx.fillStyle = 'rgba(116, 255, 138, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(34, -30, 14, 9, -0.15, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   if (ant.kind === 'weaver') {
@@ -362,26 +475,30 @@ export function drawAnt(
   ctx.lineTo(-37, -21);
   ctx.stroke();
 
-  const eyeColor =
-    ant.kind === 'queen'
-      ? '#ff6b73'
-      : ant.kind === 'weaver'
-        ? '#8ef2b6'
-        : ant.kind === 'leech'
-          ? '#ff5a55'
-          : '#ff6b47';
-  ctx.fillStyle = eyeColor;
-  ctx.shadowColor = eyeColor;
-  ctx.shadowBlur = 8;
-  ctx.beginPath();
-  ctx.arc(-22, -33, 2.3, 0, Math.PI * 2);
-  ctx.fill();
-  if (boss) {
+  if (!dying) {
+    const eyeColor =
+      ant.kind === 'queen'
+        ? '#ff6b73'
+        : ant.kind === 'weaver' || ant.kind === 'spitter'
+          ? '#8ef2b6'
+          : ant.kind === 'pheromone'
+            ? '#d4ff70'
+            : ant.kind === 'leech'
+              ? '#ff5a55'
+              : '#ff6b47';
+    ctx.fillStyle = eyeColor;
+    ctx.shadowColor = eyeColor;
+    ctx.shadowBlur = 8;
     ctx.beginPath();
-    ctx.arc(-18, -34, 1.6, 0, Math.PI * 2);
+    ctx.arc(-22, -33, 2.3, 0, Math.PI * 2);
     ctx.fill();
+    if (boss) {
+      ctx.beginPath();
+      ctx.arc(-18, -34, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
   }
-  ctx.shadowBlur = 0;
 
   if (boss) {
     ctx.fillStyle = COLOR.gold;
@@ -402,7 +519,7 @@ export function drawAnt(
 
   ctx.restore();
 
-  if (targeted) {
+  if (targeted && ant.alive) {
     drawTargetReticle(ctx, ant.x, ant.y - 34 * ant.scale, ant.scale, time);
   }
 }
@@ -483,6 +600,12 @@ function kindBadgeColor(kind: AntKind): string | null {
       return 'rgba(240, 224, 205, 0.92)';
     case 'leech':
       return 'rgba(255, 140, 130, 0.95)';
+    case 'burrower':
+      return 'rgba(235, 190, 130, 0.95)';
+    case 'pheromone':
+      return 'rgba(190, 255, 130, 0.95)';
+    case 'spitter':
+      return 'rgba(125, 255, 155, 0.95)';
     default:
       return null;
   }
@@ -498,7 +621,13 @@ export function drawAntLabels(
   ctx.textBaseline = 'middle';
 
   const ordered = ants
-    .filter((ant) => ant.x < VIEW_WIDTH + 20 && ant.x > -100)
+    .filter(
+      (ant) =>
+        ant.alive &&
+        !ant.burrowed &&
+        ant.x < VIEW_WIDTH + 20 &&
+        ant.x > -100,
+    )
     .slice()
     .sort((a, b) => {
       if (a.id === targetId) return -1;
@@ -569,21 +698,25 @@ export function drawAntLabels(
       ctx.shadowColor = 'rgba(255, 196, 82, 0.85)';
       ctx.shadowBlur = 18;
     } else {
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.78)';
+      ctx.shadowBlur = 12;
     }
     ctx.fillStyle = isTarget
-      ? 'rgba(23, 17, 9, 0.94)'
-      : 'rgba(8, 12, 17, 0.84)';
+      ? 'rgba(23, 17, 9, 0.96)'
+      : ant.critical
+        ? 'rgba(22, 16, 6, 0.94)'
+        : 'rgba(5, 8, 12, 0.94)';
     roundRect(ctx, x, y, width, height, boss ? 9 : 7);
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = isTarget
       ? 'rgba(255, 211, 118, 0.95)'
-      : boss
-        ? 'rgba(255, 118, 104, 0.5)'
-        : 'rgba(255, 249, 232, 0.2)';
-    ctx.lineWidth = isTarget ? 1.8 : 1;
+      : ant.critical
+        ? 'rgba(255, 206, 92, 0.78)'
+        : boss
+          ? 'rgba(255, 118, 104, 0.55)'
+          : 'rgba(255, 249, 232, 0.28)';
+    ctx.lineWidth = isTarget ? 1.8 : ant.critical ? 1.5 : 1.1;
     roundRect(ctx, x, y, width, height, boss ? 9 : 7);
     ctx.stroke();
     ctx.restore();
@@ -609,7 +742,12 @@ export function drawAntLabels(
       ctx.fillStyle = 'rgba(255, 178, 156, 0.92)';
       ctx.textAlign = 'left';
       ctx.fillText('QUEEN', x + padX, y - 7);
+    } else if (ant.critical) {
+      ctx.font = '600 9px "IBM Plex Mono", monospace';
+      ctx.fillStyle = COLOR.goldBright;
       ctx.textAlign = 'left';
+      const kindLabel = kindBadgeColor(ant.kind) ? `${ANT_TYPES[ant.kind].label} • ` : '';
+      ctx.fillText(`${kindLabel}CRIT ★`, x + padX, y - 7);
     } else {
       const badgeColor = kindBadgeColor(ant.kind);
       if (badgeColor !== null) {
@@ -617,7 +755,6 @@ export function drawAntLabels(
         ctx.fillStyle = badgeColor;
         ctx.textAlign = 'left';
         ctx.fillText(ANT_TYPES[ant.kind].label, x + padX, y - 7);
-        ctx.textAlign = 'left';
       }
     }
   }

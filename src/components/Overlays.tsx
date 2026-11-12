@@ -4,6 +4,7 @@ import {
   DIFFICULTY_IDS,
   DIFFICULTY_PRESETS,
 } from '../game/difficulty';
+import { WORD_PACK_IDS, WORD_PACK_META } from '../game/settings';
 import { formatScore, formatTime } from '../utils/format';
 import { AntIcon, CrosshairIcon, SoundIcon } from './Icons';
 import { WpmGraph } from './WpmGraph';
@@ -20,6 +21,9 @@ export function Overlays({ hud, engine, onOpenRecords }: OverlayProps) {
   }
   if (hud.phase === 'paused') {
     return <PauseOverlay hud={hud} engine={engine} />;
+  }
+  if (hud.phase === 'upgrade') {
+    return <UpgradeOverlay hud={hud} engine={engine} />;
   }
   if (hud.phase === 'gameover') {
     return <GameOverOverlay hud={hud} engine={engine} />;
@@ -91,59 +95,123 @@ function StartOverlay({ hud, engine, onOpenRecords }: OverlayProps) {
             <span className="instruction-index">02</span>
             <span className="instruction-glyph">A–Z</span>
             <h2>TYPE</h2>
-            <p>Type the word to lock on. The last letter fires the shot.</p>
+            <p>Type the word to lock on. Clean kills on CRIT ★ trigger AoE blasts.</p>
           </article>
           <article className="instruction">
             <span className="instruction-index">03</span>
             <AntIcon className="instruction-icon ant-icon-large" />
             <h2>HOLD</h2>
-            <p>Let one cross the red line and the colony takes your blood.</p>
+            <p>Intercept acid globs, survive burrowers, and claim field upgrades.</p>
           </article>
         </div>
 
-        <div className="difficulty-select">
-          <span className="difficulty-label">THREAT LEVEL</span>
-          <div className="difficulty-options">
-            {DIFFICULTY_IDS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                className={`difficulty-option ${
-                  hud.difficulty === id ? 'is-selected' : ''
-                }`}
-                onClick={() => engine.setDifficulty(id)}
-                onMouseDown={(event) => event.preventDefault()}
-              >
-                <strong>{DIFFICULTY_PRESETS[id].label}</strong>
-                <span>{DIFFICULTY_PRESETS[id].description}</span>
-              </button>
-            ))}
+        <div className="start-config-grid">
+          <div className="difficulty-select">
+            <span className="difficulty-label">THREAT LEVEL</span>
+            <div className="difficulty-options">
+              {DIFFICULTY_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`difficulty-option ${
+                    hud.difficulty === id ? 'is-selected' : ''
+                  }`}
+                  onClick={() => engine.setDifficulty(id)}
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  <strong>{DIFFICULTY_PRESETS[id].label}</strong>
+                  <span>{DIFFICULTY_PRESETS[id].description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="difficulty-select">
+            <span className="difficulty-label">LEXICON MODE</span>
+            <div className="difficulty-options">
+              {WORD_PACK_IDS.map((pack) => (
+                <button
+                  key={pack}
+                  type="button"
+                  className={`difficulty-option ${
+                    hud.wordPack === pack ? 'is-selected' : ''
+                  }`}
+                  onClick={() => engine.setWordPack(pack)}
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  <strong>{WORD_PACK_META[pack].label}</strong>
+                  <span>{WORD_PACK_META[pack].description}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <button
-          type="button"
-          className="primary-button start-button"
-          onClick={() => engine.startGame()}
-        >
-          <span>BEGIN DEFENSE</span>
-          <kbd>ENTER</kbd>
-        </button>
+        <div className="start-actions-row">
+          <button
+            type="button"
+            className="primary-button start-button"
+            onClick={() => engine.startGame()}
+          >
+            <span>BEGIN DEFENSE</span>
+            <kbd>ENTER</kbd>
+          </button>
 
-        <button
-          type="button"
-          className="ghost-button records-button"
-          onClick={onOpenRecords}
-        >
-          RECORD BOOK <kbd>L</kbd>
-        </button>
+          <button
+            type="button"
+            className="ghost-button records-button"
+            onClick={onOpenRecords}
+          >
+            RECORD BOOK <kbd>L</kbd>
+          </button>
+
+          <button
+            type="button"
+            className="ghost-button records-button"
+            onClick={() => engine.toggleSceneryMode()}
+          >
+            BG: {hud.sceneryMode === 'photo' ? 'REAL PHOTO' : 'PROCEDURAL'}
+          </button>
+        </div>
 
         <div className="start-footer">
           <span><kbd>A–Z</kbd> TYPE</span>
           <span><kbd>BKSP</kbd> ERASE</span>
           <span><kbd>ESC</kbd> PAUSE</span>
-          <span><kbd>1–3</kbd> ABILITIES</span>
+          <span><kbd>1–3</kbd> ABILITIES &amp; UPGRADES</span>
           <span className="audio-note">HEADPHONES RECOMMENDED</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UpgradeOverlay({ hud, engine }: OverlayProps) {
+  return (
+    <div className="overlay overlay-pause">
+      <div className="modal upgrade-modal">
+        <span className="modal-eyebrow">FIELD REQUISITION — WAVE {hud.wave} CLEARED</span>
+        <h2 className="modal-title">TACTICAL UPGRADE</h2>
+        <p className="modal-copy">
+          Select one permanent field modification before Wave {hud.wave + 1}{' '}
+          begins. Press <kbd>1</kbd>, <kbd>2</kbd>, or <kbd>3</kbd> to equip.
+        </p>
+        <div className="upgrade-grid">
+          {hud.upgradeChoices.map((upgrade, index) => (
+            <button
+              key={upgrade.id}
+              type="button"
+              className="upgrade-card"
+              onClick={() => engine.selectUpgrade(upgrade.id)}
+            >
+              <div className="upgrade-card-head">
+                <span className="upgrade-badge">{upgrade.badge}</span>
+                <kbd>{index + 1}</kbd>
+              </div>
+              <strong className="upgrade-name">{upgrade.name}</strong>
+              <p className="upgrade-desc">{upgrade.description}</p>
+            </button>
+          ))}
         </div>
       </div>
     </div>
@@ -192,6 +260,14 @@ function PauseOverlay({ hud, engine }: OverlayProps) {
         >
           <SoundIcon muted={hud.muted} className="inline-audio-icon" />
           AUDIO {hud.muted ? 'OFF' : 'ON'} <kbd>M</kbd>
+        </button>
+        <button
+          type="button"
+          className="inline-motion-toggle"
+          onClick={() => engine.toggleSceneryMode()}
+        >
+          SCENERY: {hud.sceneryMode === 'photo' ? 'REAL PHOTO' : 'PROCEDURAL'}{' '}
+          <kbd>B</kbd>
         </button>
         <button
           type="button"

@@ -1,8 +1,11 @@
 import type { DifficultyId } from './difficulty';
 import type { LeaderboardEntry } from './leaderboard';
 import type { NewRecords, PlayerProgress } from './progress';
+import type { SceneryMode, WordPackId } from './settings';
 
-export type GamePhase = 'menu' | 'playing' | 'paused' | 'gameover';
+export type GamePhase = 'menu' | 'playing' | 'paused' | 'upgrade' | 'gameover';
+
+export type BiomeId = 'dusk' | 'night' | 'ash';
 
 export interface WpmSample {
   t: number;
@@ -17,11 +20,29 @@ export type AntKind =
   | 'queen'
   | 'weaver'
   | 'splitter'
-  | 'leech';
+  | 'leech'
+  | 'burrower'
+  | 'pheromone'
+  | 'spitter';
 
 export type PowerupType = 'med' | 'amp' | 'gold';
 
 export type AbilityId = 'focus' | 'aegis' | 'power';
+
+export type UpgradeId =
+  | 'ricochet'
+  | 'wire'
+  | 'overclock'
+  | 'hollow'
+  | 'medic'
+  | 'mag';
+
+export interface UpgradeOption {
+  id: UpgradeId;
+  name: string;
+  description: string;
+  badge: string;
+}
 
 export interface AntTypeConfig {
   hp: number;
@@ -53,6 +74,25 @@ export interface Ant {
   hitFlash: number;
   boss: boolean;
   minionTimer: number;
+  critical: boolean;
+  burrowed: boolean;
+  burrowTimer: number;
+  hasBurrowed: boolean;
+  spitTimer: number;
+  wireTriggered: boolean;
+  boosted: boolean;
+}
+
+export interface AcidGlob {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  word: string;
+  damage: number;
+  life: number;
+  maxLife: number;
 }
 
 export interface Pickup {
@@ -133,6 +173,8 @@ export interface HudSnapshot {
   targetWord: string;
   targetSelected: boolean;
   targetIsPickup: boolean;
+  targetIsAcid: boolean;
+  targetCritical: boolean;
   scoreSurgeSeconds: number;
   leechDraining: boolean;
   runRank: number | null;
@@ -145,6 +187,11 @@ export interface HudSnapshot {
   wpm: number;
   muted: boolean;
   reducedMotion: boolean;
+  sceneryMode: SceneryMode;
+  biome: BiomeId;
+  wordPack: WordPackId;
+  activeUpgrades: UpgradeId[];
+  upgradeChoices: UpgradeOption[];
   abilities: AbilitySnapshot[];
   shieldSeconds: number;
   slowSeconds: number;

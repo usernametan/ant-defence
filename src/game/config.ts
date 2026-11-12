@@ -1,4 +1,10 @@
-import type { AntKind, AntTypeConfig, PowerupType } from './types';
+import type {
+  AntKind,
+  AntTypeConfig,
+  PowerupType,
+  UpgradeId,
+  UpgradeOption,
+} from './types';
 
 export const VIEW_WIDTH = 1600;
 export const VIEW_HEIGHT = 900;
@@ -7,10 +13,11 @@ export const WORLD = {
   playerX: 330,
   playerFeetY: 752,
   lineX: 560,
+  wireX: 770,
   lineTop: 236,
   lineBottom: 782,
   spawnX: 1650,
-  maxActiveAnts: 9,
+  maxActiveAnts: 10,
   health: 100,
 };
 
@@ -111,6 +118,33 @@ export const ANT_TYPES: Record<AntKind, AntTypeConfig> = {
     wordRange: [5, 6],
     label: 'LEECH',
   },
+  burrower: {
+    hp: 1,
+    speed: 62,
+    scale: 0.96,
+    damage: 7,
+    score: 215,
+    wordRange: [4, 6],
+    label: 'BURROWER',
+  },
+  pheromone: {
+    hp: 2,
+    speed: 38,
+    scale: 1.12,
+    damage: 8,
+    score: 280,
+    wordRange: [5, 7],
+    label: 'CARRIER',
+  },
+  spitter: {
+    hp: 2,
+    speed: 35,
+    scale: 1.08,
+    damage: 8,
+    score: 295,
+    wordRange: [5, 6],
+    label: 'SPITTER',
+  },
 };
 
 export const LEECH = {
@@ -120,14 +154,68 @@ export const LEECH = {
   maxDrainPerRun: 1000,
 } as const;
 
+export const SPECIAL_ANTS = {
+  burrowTriggerX: 1120,
+  burrowDuration: 1.35,
+  burrowSpeedMultiplier: 1.65,
+  pheromoneRadius: 230,
+  pheromoneSpeedBoost: 1.32,
+  spitterStopX: 1020,
+  spitterInterval: 4.4,
+  acidDamage: 6,
+  acidTravelTime: 2.8,
+  criticalChance: 0.16,
+  criticalBlastRadius: 155,
+  criticalBonusScore: 75,
+} as const;
+
+export const UPGRADE_DEFS: Record<UpgradeId, UpgradeOption> = {
+  ricochet: {
+    id: 'ricochet',
+    name: 'RICOCHET ROUNDS',
+    description: 'Kills arc 1 damage to a nearby ant in range.',
+    badge: 'OFFENSE',
+  },
+  wire: {
+    id: 'wire',
+    name: 'RAZOR BARRICADE',
+    description: 'Barbed wire at mid-field deals 1 damage to multi-HP ants.',
+    badge: 'FORTIFY',
+  },
+  overclock: {
+    id: 'overclock',
+    name: 'OVERCLOCKED RELAYS',
+    description: 'Reduces all ability cooldowns by 28%.',
+    badge: 'TECH',
+  },
+  hollow: {
+    id: 'hollow',
+    name: 'SHOCKWAVE CORE',
+    description: 'Critical word blasts deal +1 damage in a 50% wider radius.',
+    badge: 'ORDNANCE',
+  },
+  medic: {
+    id: 'medic',
+    name: 'FIELD TRAUMA KIT',
+    description: 'Restores +25 Vitality immediately and raises Max HP by +15.',
+    badge: 'SURVIVAL',
+  },
+  mag: {
+    id: 'mag',
+    name: 'EXTENDED CAPACITOR',
+    description: 'Power ability and Overcharge drops grant +2 extra rounds.',
+    badge: 'ORDNANCE',
+  },
+};
+
 export const POWERUPS = {
   minWave: 3,
-  dropChance: 0.07,
+  dropChance: 0.075,
   lifetime: 9,
   maxOnField: 2,
   medHeal: 15,
   ampCharges: 3,
-  maxPowerCharges: 6,
+  maxPowerCharges: 8,
   surgeDuration: 10,
   surgeMultiplier: 2,
 } as const;
@@ -157,7 +245,7 @@ export const ABILITIES = {
   power: {
     key: '3',
     name: 'POWER',
-    description: '3 piercing rounds',
+    description: 'Piercing rounds',
     charges: 3,
     cooldown: 24,
   },

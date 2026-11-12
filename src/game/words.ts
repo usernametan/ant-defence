@@ -1,9 +1,11 @@
+import type { WordPackId } from './settings';
+
 interface WordLevel {
   minWave: number;
   pools: Record<number, string[]>;
 }
 
-const WORD_LEVELS: WordLevel[] = [
+const STANDARD_LEVELS: WordLevel[] = [
   {
     minWave: 1,
     pools: {
@@ -86,9 +88,113 @@ const WORD_LEVELS: WordLevel[] = [
   },
 ];
 
-const ALL_WORDS = WORD_LEVELS.flatMap((level) =>
-  Object.values(level.pools).flat(),
-);
+const CODE_LEVELS: WordLevel[] = [
+  {
+    minWave: 1,
+    pools: {
+      3: ['LET', 'VAR', 'INT', 'FOR', 'NEW', 'TRY', 'GIT', 'API', 'DOM', 'SQL'],
+      4: [
+        'VOID', 'NULL', 'TRUE', 'BYTE', 'CHAR', 'ENUM', 'HASH', 'LOOP',
+        'NODE', 'PIPE', 'PORT', 'PUSH', 'RUST', 'SYNC', 'TYPE', 'UINT',
+      ],
+      5: [
+        'ASYNC', 'AWAIT', 'BREAK', 'CATCH', 'CLASS', 'CONST', 'ARRAY',
+        'EVENT', 'FETCH', 'FLOAT', 'FRAME', 'MUTEX', 'PARSE', 'QUEUE',
+        'STATE', 'TUPLE', 'YIELD',
+      ],
+      6: [
+        'BUFFER', 'CLIENT', 'DOCKER', 'EXPORT', 'IMPORT', 'KERNEL',
+        'LAMBDA', 'MODULE', 'OBJECT', 'RETURN', 'SCHEMA', 'SOCKET',
+        'STATIC', 'STREAM', 'STRING', 'SWITCH', 'THREAD', 'VECTOR',
+      ],
+      7: ['BOOLEAN', 'CLOSURE', 'COMPILE', 'DEFAULT', 'PACKAGE', 'PROMISE'],
+    },
+  },
+  {
+    minWave: 5,
+    pools: {
+      6: ['ATOMIC', 'BINARY', 'CRYPTO', 'DAEMON', 'MEMORY', 'ROUTER'],
+      7: [
+        'BACKEND', 'BITWISE', 'CHANNEL', 'CLUSTER', 'CONTEXT', 'FIREWALL',
+        'GARBAGE', 'GATEWAY', 'GENERIC', 'HANDLER', 'POINTER', 'PROCESS',
+        'RUNTIME', 'SYSCALL', 'VIRTUAL', 'WEBHOOK',
+      ],
+      8: [
+        'ABSTRACT', 'CALLBACK', 'COMPILER', 'DATABASE', 'DEADLOCK',
+        'DEBOUNCE', 'DISPATCH', 'ENDPOINT', 'FUNCTION', 'ITERATOR',
+        'MUTATION', 'OVERFLOW', 'PIPELINE', 'PROTOCOL', 'SNAPSHOT',
+        'THROTTLE', 'UNSIGNED', 'VOLATILE',
+      ],
+      9: [
+        'ALGORITHM', 'BANDWIDTH', 'COMPONENT', 'COROUTINE', 'EXCEPTION',
+        'INTERFACE', 'NAMESPACE', 'PARTITION', 'PREDICATE', 'RECURSION',
+        'SINGLETON', 'TELEMETRY',
+      ],
+      10: [
+        'CONCURRENT', 'DEPENDENCY', 'DESCRIPTOR', 'ENCRYPTION',
+        'HYPERVISOR', 'IDEMPOTENT', 'KUBERNETES', 'MIDDLEWARE',
+        'POLYMORPHIC', 'REPOSITORY', 'SERIALIZER', 'TYPESCRIPT',
+      ],
+      12: ['ASYNCHRONOUS', 'ENCAPSULATED', 'MICROSERVICE'],
+    },
+  },
+];
+
+const HARDCORE_LEVELS: WordLevel[] = [
+  {
+    minWave: 1,
+    pools: {
+      3: ['IRE', 'VEX', 'WRY', 'EON', 'ASH', 'PYX', 'ORB', 'RUE'],
+      4: [
+        'BANE', 'CRUX', 'DIRE', 'DOOM', 'FLUX', 'GRIM', 'OMEN', 'PYRE',
+        'RIFT', 'RUIN', 'SCAR', 'VOID', 'WARD', 'ZEAL',
+      ],
+      5: [
+        'ABYSS', 'AEGIS', 'ASHEN', 'BLIGHT', 'CHAOS', 'CHASM', 'CRYPT',
+        'DREAD', 'EPOCH', 'FUROR', 'GHOUL', 'HAVOC', 'NEXUS', 'RELIC',
+        'SCION', 'SMITE', 'TITAN', 'VIGIL',
+      ],
+      6: [
+        'ARCANE', 'ASTRAL', 'BASTION', 'CHITIN', 'CIPHER', 'CINDER',
+        'FAMINE', 'HERALD', 'MIASMA', 'MYRIAD', 'ORACLE', 'PARIAH',
+        'PHALANX', 'PLAGUE', 'SCHISM', 'SHROUD', 'TEMPEST', 'TREMOR',
+        'TYRANT', 'VORTEX', 'WRAITH', 'ZENITH',
+      ],
+      7: [
+        'ARACHNID', 'BULWARK', 'CATACOMB', 'CHIMERA', 'CITADEL',
+        'ECLIPSE', 'EMPYREAN', 'HARBINGER', 'INFERNO', 'MONOLITH',
+        'NEMESIS', 'OBELISK', 'OBSIDIAN', 'OMINOUS', 'PANTHEON',
+        'PHANTOM', 'REVENANT', 'SPECTER', 'TORMENT',
+      ],
+      8: [
+        'ABATTOIR', 'ANATHEMA', 'BASILISK', 'BEHEMOTH', 'CALAMITY',
+        'CATACLYSM', 'COLOSSUS', 'COVENANT', 'CRUCIBLE', 'DOMINION',
+        'ETHEREAL', 'GARGOYLE', 'LABYRINTH', 'LEVIATHAN', 'MAELSTROM',
+        'PARADIGM', 'PAROXYSM', 'SOVEREIGN', 'VALKYRIE',
+      ],
+      9: [
+        'APOCRYPHA', 'CHITINOUS', 'CATACLYSM', 'EFFULGENT', 'EPHEMERAL',
+        'HARBINGER', 'INEFFABLE', 'MALEFICENT', 'NIGHTMARE', 'ONSLAUGHT',
+        'PRIMORDIAL', 'PURGATORY', 'SACRILEGE', 'SERAPHIM',
+      ],
+      10: [
+        'APOCALYPSE', 'CATACOMBS', 'IMMOLATION', 'JUDGEMENT', 'LABYRINTHS',
+        'MELANCHOLY', 'NECROPOLIS', 'OBLITERATE', 'OMNISCIENT', 'SUBTERFUGE',
+      ],
+      12: ['ANNIHILATION', 'CONFLAGRATION', 'OMNIPRESENCE'],
+    },
+  },
+];
+
+const ACID_WORDS = [
+  'X', 'Z', 'Q', 'V', 'K', 'J', 'VX', 'ZX', 'QK', 'KV', 'XZ', 'JQ', 'TX', 'RZ',
+];
+
+function getPackLevels(pack: WordPackId): WordLevel[] {
+  if (pack === 'code') return CODE_LEVELS;
+  if (pack === 'hardcore') return HARDCORE_LEVELS;
+  return STANDARD_LEVELS;
+}
 
 export interface WordSelection {
   word: string;
@@ -108,8 +214,45 @@ function randomOf<T>(items: T[], rng: () => number): T {
   return items[Math.floor(rng() * items.length)];
 }
 
-function unlockedLevels(wave: number): WordLevel[] {
-  return WORD_LEVELS.filter((level) => wave >= level.minWave);
+function unlockedLevels(wave: number, pack: WordPackId): WordLevel[] {
+  const levels = getPackLevels(pack);
+  return levels.filter((level) => wave >= level.minWave);
+}
+
+export function createDailyRng(): () => number {
+  const now = new Date();
+  const dateKey = `${now.getUTCFullYear()}-${now.getUTCMonth() + 1}-${now.getUTCDate()}`;
+  let seed = 2166136261;
+  for (let i = 0; i < dateKey.length; i += 1) {
+    seed ^= dateKey.charCodeAt(i);
+    seed = Math.imul(seed, 16777619);
+  }
+  let state = seed >>> 0;
+  return () => {
+    state += 0x6d2b79f5;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function pickAcidWord(
+  activeWords: string[],
+  typedPrefix: string,
+  rng: () => number,
+): string {
+  const targetWords = activeWords.concat(typedPrefix ? [typedPrefix] : []);
+  const available = ACID_WORDS.filter((word) => !conflicts(word, targetWords));
+  if (available.length > 0) return randomOf(available, rng);
+  const letters = 'XZQVKJWY';
+  for (const a of letters) {
+    for (const b of letters) {
+      const candidate = `${a}${b}`;
+      if (!conflicts(candidate, targetWords)) return candidate;
+    }
+  }
+  return 'XZ';
 }
 
 export function pickWord(
@@ -119,6 +262,7 @@ export function pickWord(
   activeWords: string[],
   typedPrefix: string,
   rng: () => number,
+  pack: WordPackId = 'standard',
 ): string {
   const targetWords = activeWords.concat(
     typedPrefix ? [typedPrefix] : [],
@@ -128,7 +272,7 @@ export function pickWord(
     if (length >= 3 && length <= 12) lengths.push(length);
   }
 
-  const unlocked = unlockedLevels(wave);
+  const unlocked = unlockedLevels(wave, pack);
   for (let index = unlocked.length - 1; index >= 0; index -= 1) {
     const preferred = lengths.flatMap(
       (length) => unlocked[index].pools[length] ?? [],
@@ -144,7 +288,10 @@ export function pickWord(
     .filter((word) => !conflicts(word, targetWords));
   if (relaxed.length > 0) return randomOf(relaxed, rng);
 
-  const fallback = ALL_WORDS.filter((word) => !conflicts(word, targetWords));
+  const allWords = getPackLevels(pack).flatMap((level) =>
+    Object.values(level.pools).flat(),
+  );
+  const fallback = allWords.filter((word) => !conflicts(word, targetWords));
   if (fallback.length > 0) return randomOf(fallback, rng);
 
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -165,10 +312,15 @@ export const WAVE_NAMES = [
   'THE SWARM GATHERS',
   'SHELLS IN THE GRASS',
   'THE QUEEN AWAKENS',
-  'A DARKER TIDE',
-  'NO GROUND GIVEN',
+  'NIGHTFALL IN THE PINES',
+  'SHADOWS BELOW THE MOSS',
   'THE LINE TREMBLES',
-  'LEGION UNBOUND',
+  'VENOM IN THE DARK',
+  'THE QUEEN OF NIGHT',
+  'ASH ON THE HORIZON',
+  'THE EMBER WASTE',
+  'CHITIN AND CINDER',
+  'NO GROUND GIVEN',
   'THE FINAL HOUR',
 ];
 

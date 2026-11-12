@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import { LEECH, POWERUPS } from '../game/config';
+import { LEECH, POWERUPS, UPGRADE_DEFS } from '../game/config';
 import type { GameEngine } from '../game/engine';
-import type { AbilityId, HudSnapshot } from '../game/types';
+import type { AbilityId, BiomeId, HudSnapshot } from '../game/types';
 import { formatScore, formatTime, pad2 } from '../utils/format';
 import {
   AntIcon,
@@ -23,6 +23,12 @@ const ABILITY_ICONS: Record<AbilityId, JSX.Element> = {
   focus: <FocusIcon className="ability-icon" />,
   aegis: <ShieldIcon className="ability-icon" />,
   power: <BoltIcon className="ability-icon" />,
+};
+
+const BIOME_LABELS: Record<BiomeId, string> = {
+  dusk: 'DUSK PINE PASS',
+  night: 'BIOLUMINESCENT NIGHT',
+  ash: 'ASH & EMBER WASTE',
 };
 
 function abilityStatus(id: AbilityId, cooldown: number, active: number, charges: number): string {
@@ -64,7 +70,13 @@ export function Hud({ hud, engine }: HudProps) {
                 <div className="health-ticks" />
               </div>
               <div className="health-note">
-                {critical ? 'CRITICAL — HOLD THE LINE' : 'LAST DEFENDER OF THE PASS'}
+                {critical
+                  ? 'CRITICAL — HOLD THE LINE'
+                  : hud.activeUpgrades.length > 0
+                    ? hud.activeUpgrades
+                        .map((id) => UPGRADE_DEFS[id].name.split(' ')[0])
+                        .join(' • ')
+                    : 'LAST DEFENDER OF THE PASS'}
               </div>
             </div>
           </div>
@@ -72,7 +84,9 @@ export function Hud({ hud, engine }: HudProps) {
 
         <section className="hud-center">
           <div className="wave-panel">
-            <span className="micro-label center-label">SURVIVAL PROTOCOL</span>
+            <span className="micro-label center-label">
+              {BIOME_LABELS[hud.biome]}
+            </span>
             <div className="wave-line">
               <span className="wave-word">WAVE</span>
               <span className="wave-number">{pad2(hud.wave)}</span>
@@ -172,8 +186,8 @@ export function Hud({ hud, engine }: HudProps) {
               <span>PAUSE</span>
             </div>
             <div className="hint-row">
-              <kbd>MED</kbd>
-              <span>SUPPLY DROPS — TYPE THE WORD</span>
+              <kbd>CRIT ★</kbd>
+              <span>NO MISFIRE = AOE BLAST</span>
             </div>
             <div className="hint-row">
               <kbd>1</kbd>
@@ -186,7 +200,7 @@ export function Hud({ hud, engine }: HudProps) {
           <section
             key={hud.mistakes}
             className={`typing-panel ${hud.targetSelected ? 'has-target' : ''} ${
-              hud.targetIsPickup ? 'is-pickup' : ''
+              hud.targetIsPickup || hud.targetIsAcid ? 'is-pickup' : ''
             } ${hud.inputError ? 'is-error' : ''}`}
           >
             <div className="typing-head">
@@ -196,7 +210,11 @@ export function Hud({ hud, engine }: HudProps) {
                     <CrosshairIcon className="typing-crosshair" />
                     {hud.targetIsPickup
                       ? 'SUPPLY DROP — TYPE TO CLAIM'
-                      : 'TARGET LOCKED'}
+                      : hud.targetIsAcid
+                        ? 'ACID GLOB — TYPE TO INTERCEPT'
+                        : hud.targetCritical
+                          ? 'CRITICAL TARGET ★ — CLEAN KILL FOR AOE BLAST'
+                          : 'TARGET LOCKED'}
                   </>
                 ) : (
                   'TYPE TO FIRE'

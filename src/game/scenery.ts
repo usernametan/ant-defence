@@ -1,4 +1,6 @@
 import { VIEW_HEIGHT, VIEW_WIDTH } from './config';
+import type { SceneryMode } from './settings';
+import type { BiomeId } from './types';
 
 type RidgeOptions = {
   height: number;
@@ -144,12 +146,7 @@ function buildRidge(options: RidgeOptions): HTMLCanvasElement {
   return canvas;
 }
 
-function buildForeground(): HTMLCanvasElement {
-  const canvas = makeCanvas(VIEW_WIDTH, VIEW_HEIGHT);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return canvas;
-  const rng = mulberry32(90321);
-
+function createGroundBankPath(): Path2D {
   const bank = new Path2D();
   bank.moveTo(0, 622);
   bank.bezierCurveTo(200, 612, 360, 640, 560, 636);
@@ -158,6 +155,28 @@ function buildForeground(): HTMLCanvasElement {
   bank.lineTo(1600, VIEW_HEIGHT);
   bank.lineTo(0, VIEW_HEIGHT);
   bank.closePath();
+  return bank;
+}
+
+function createTrailPath(): Path2D {
+  const trail = new Path2D();
+  trail.moveTo(-40, 734);
+  trail.bezierCurveTo(320, 730, 520, 700, 760, 690);
+  trail.bezierCurveTo(1040, 676, 1330, 690, 1650, 676);
+  trail.lineTo(1650, 768);
+  trail.bezierCurveTo(1300, 786, 1010, 770, 760, 770);
+  trail.bezierCurveTo(480, 772, 260, 800, -40, 810);
+  trail.closePath();
+  return trail;
+}
+
+function buildForeground(): HTMLCanvasElement {
+  const canvas = makeCanvas(VIEW_WIDTH, VIEW_HEIGHT);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  const rng = mulberry32(90321);
+
+  const bank = createGroundBankPath();
 
   const bankGradient = ctx.createLinearGradient(0, 620, 0, VIEW_HEIGHT);
   bankGradient.addColorStop(0, '#1e3728');
@@ -169,14 +188,7 @@ function buildForeground(): HTMLCanvasElement {
   ctx.save();
   ctx.clip(bank);
 
-  const trail = new Path2D();
-  trail.moveTo(-40, 734);
-  trail.bezierCurveTo(320, 730, 520, 700, 760, 690);
-  trail.bezierCurveTo(1040, 676, 1330, 690, 1650, 676);
-  trail.lineTo(1650, 768);
-  trail.bezierCurveTo(1300, 786, 1010, 770, 760, 770);
-  trail.bezierCurveTo(480, 772, 260, 800, -40, 810);
-  trail.closePath();
+  const trail = createTrailPath();
 
   const trailGradient = ctx.createLinearGradient(0, 660, 0, 820);
   trailGradient.addColorStop(0, '#2b2419');
@@ -259,6 +271,118 @@ function buildForeground(): HTMLCanvasElement {
   drawPine(ctx, 1384, 636, 0.62);
   drawPine(ctx, 1010, 628, 0.36);
 
+  ctx.restore();
+
+  return canvas;
+}
+
+function buildPhotoComposite(
+  biome: BiomeId,
+  bgImg: HTMLImageElement,
+  groundImg: HTMLImageElement,
+): HTMLCanvasElement {
+  const canvas = makeCanvas(VIEW_WIDTH, VIEW_HEIGHT);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  // 1. Draw real background scenery photo with subtle depth-of-field blur & mood grading
+  ctx.save();
+  ctx.filter = 'blur(1.6px) saturate(1.08) contrast(1.05)';
+  const bgAspect = bgImg.naturalWidth / Math.max(1, bgImg.naturalHeight);
+  const targetH = 685;
+  const drawW = Math.max(VIEW_WIDTH + 24, targetH * bgAspect);
+  const drawH = drawW / Math.max(0.1, bgAspect);
+  const bgX = (VIEW_WIDTH - drawW) * 0.5;
+  const bgY = Math.min(0, (targetH - drawH) * 0.45);
+  ctx.drawImage(bgImg, bgX, bgY, drawW, drawH);
+  ctx.restore();
+
+  // 2. Atmospheric biome color grade & mid-ground readability darkening for word labels
+  const grade = ctx.createLinearGradient(0, 0, 0, 665);
+  if (biome === 'dusk') {
+    grade.addColorStop(0, 'rgba(8, 12, 22, 0.42)');
+    grade.addColorStop(0.45, 'rgba(18, 14, 16, 0.26)');
+    grade.addColorStop(0.76, 'rgba(12, 10, 12, 0.54)');
+    grade.addColorStop(1, 'rgba(7, 9, 10, 0.85)');
+  } else if (biome === 'night') {
+    grade.addColorStop(0, 'rgba(4, 11, 20, 0.56)');
+    grade.addColorStop(0.5, 'rgba(6, 18, 26, 0.48)');
+    grade.addColorStop(0.8, 'rgba(5, 13, 18, 0.68)');
+    grade.addColorStop(1, 'rgba(4, 9, 12, 0.88)');
+  } else {
+    grade.addColorStop(0, 'rgba(16, 6, 6, 0.45)');
+    grade.addColorStop(0.5, 'rgba(24, 8, 6, 0.35)');
+    grade.addColorStop(0.8, 'rgba(15, 6, 6, 0.64)');
+    grade.addColorStop(1, 'rgba(8, 5, 5, 0.9)');
+  }
+  ctx.fillStyle = grade;
+  ctx.fillRect(0, 0, VIEW_WIDTH, 665);
+
+  // 3. Draw real ground texture photo clipped to the terrain bank (y: 618..900)
+  const bank = createGroundBankPath();
+  ctx.save();
+  ctx.clip(bank);
+
+  // Tile / cover the real ground texture across the ground strip with perspective foreshortening
+  ctx.save();
+  ctx.filter =
+    biome === 'dusk'
+      ? 'brightness(0.46) contrast(1.18) saturate(0.85) sepia(0.18)'
+      : biome === 'night'
+        ? 'brightness(0.36) contrast(1.22) saturate(0.75) hue-rotate(155deg)'
+        : 'brightness(0.38) contrast(1.28) saturate(0.9)';
+  const tileW = 820;
+  const tileH = 340;
+  for (let x = 0; x < VIEW_WIDTH; x += tileW - 4) {
+    ctx.drawImage(groundImg, x, 610, tileW, tileH);
+  }
+  ctx.restore();
+
+  // Darken the active combat lane path so vector ants and shadows read with razor clarity
+  const trail = createTrailPath();
+  const trailGrad = ctx.createLinearGradient(0, 640, 0, 810);
+  if (biome === 'dusk') {
+    trailGrad.addColorStop(0, 'rgba(24, 18, 12, 0.72)');
+    trailGrad.addColorStop(0.5, 'rgba(18, 13, 9, 0.64)');
+    trailGrad.addColorStop(1, 'rgba(8, 6, 5, 0.82)');
+  } else if (biome === 'night') {
+    trailGrad.addColorStop(0, 'rgba(8, 16, 18, 0.74)');
+    trailGrad.addColorStop(0.5, 'rgba(6, 12, 15, 0.66)');
+    trailGrad.addColorStop(1, 'rgba(4, 8, 10, 0.85)');
+  } else {
+    trailGrad.addColorStop(0, 'rgba(22, 10, 9, 0.74)');
+    trailGrad.addColorStop(0.5, 'rgba(16, 8, 7, 0.68)');
+    trailGrad.addColorStop(1, 'rgba(7, 4, 4, 0.86)');
+  }
+  ctx.fillStyle = trailGrad;
+  ctx.fill(trail);
+
+  // Subtle depth shading from horizon ridge to bottom edge
+  const groundShade = ctx.createLinearGradient(0, 618, 0, VIEW_HEIGHT);
+  groundShade.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+  groundShade.addColorStop(0.16, 'rgba(0, 0, 0, 0.08)');
+  groundShade.addColorStop(0.72, 'rgba(0, 0, 0, 0.25)');
+  groundShade.addColorStop(1, 'rgba(0, 0, 0, 0.78)');
+  ctx.fillStyle = groundShade;
+  ctx.fillRect(0, 618, VIEW_WIDTH, VIEW_HEIGHT - 618);
+
+  ctx.restore();
+
+  // 4. Horizon rim highlight where the ground meets the background photo
+  ctx.save();
+  ctx.strokeStyle =
+    biome === 'dusk'
+      ? 'rgba(255, 206, 146, 0.22)'
+      : biome === 'night'
+        ? 'rgba(116, 224, 210, 0.18)'
+        : 'rgba(255, 114, 76, 0.25)';
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(0, 622);
+  ctx.bezierCurveTo(200, 612, 360, 640, 560, 636);
+  ctx.bezierCurveTo(830, 626, 1040, 646, 1280, 630);
+  ctx.bezierCurveTo(1420, 620, 1520, 642, 1600, 632);
+  ctx.stroke();
   ctx.restore();
 
   return canvas;
@@ -382,6 +506,28 @@ type Firefly = {
   size: number;
 };
 
+const PHOTO_ASSETS: Record<BiomeId, { bg: string; ground: string }> = {
+  dusk: {
+    bg: '/scenery/bg-dusk.jpg',
+    ground: '/scenery/ground-dirt.jpg',
+  },
+  night: {
+    bg: '/scenery/bg-night.jpg',
+    ground: '/scenery/ground-moss.jpg',
+  },
+  ash: {
+    bg: '/scenery/bg-ash.jpg',
+    ground: '/scenery/ground-ash.jpg',
+  },
+};
+
+export function waveToBiome(wave: number): BiomeId {
+  const cycle = Math.floor((Math.max(1, wave) - 1) / 5) % 3;
+  if (cycle === 1) return 'night';
+  if (cycle === 2) return 'ash';
+  return 'dusk';
+}
+
 export class Scenery {
   private farRidge: HTMLCanvasElement;
 
@@ -391,6 +537,8 @@ export class Scenery {
 
   private foreground: HTMLCanvasElement;
 
+  private photoComposites: Partial<Record<BiomeId, HTMLCanvasElement>> = {};
+
   private clouds: Cloud[];
 
   private fireflies: Firefly[];
@@ -398,6 +546,8 @@ export class Scenery {
   private scroll = 0;
 
   private time = 0;
+
+  private lightningFlash = 0;
 
   constructor() {
     this.farRidge = buildRidge({
@@ -456,78 +606,177 @@ export class Scenery {
       drift: 3 + rng() * 9,
       size: 0.8 + rng() * 1.7,
     }));
+
+    this.preloadPhotos();
+  }
+
+  private preloadPhotos(): void {
+    if (typeof Image === 'undefined') return;
+    (['dusk', 'night', 'ash'] as BiomeId[]).forEach((biome) => {
+      const urls = PHOTO_ASSETS[biome];
+      const bgImg = new Image();
+      const groundImg = new Image();
+      let bgLoaded = false;
+      let groundLoaded = false;
+
+      const tryBuild = () => {
+        if (bgLoaded && groundLoaded) {
+          this.photoComposites[biome] = buildPhotoComposite(
+            biome,
+            bgImg,
+            groundImg,
+          );
+        }
+      };
+
+      bgImg.onload = () => {
+        bgLoaded = true;
+        tryBuild();
+      };
+      groundImg.onload = () => {
+        groundLoaded = true;
+        tryBuild();
+      };
+      bgImg.src = urls.bg;
+      groundImg.src = urls.ground;
+    });
+  }
+
+  triggerLightning(): void {
+    this.lightningFlash = 0.85;
   }
 
   update(dt: number): void {
     this.time += dt;
     this.scroll += dt * 26;
+    this.lightningFlash = Math.max(0, this.lightningFlash - dt * 2.4);
   }
 
   drawBack(
     ctx: CanvasRenderingContext2D,
     shakeX: number,
     shakeY: number,
+    mode: SceneryMode = 'photo',
+    biome: BiomeId = 'dusk',
   ): void {
     ctx.save();
     ctx.translate(shakeX, shakeY);
 
-    this.drawSky(ctx);
-    this.drawSun(ctx);
-    this.drawClouds(ctx);
+    const photoCanvas = this.photoComposites[biome];
+    if (mode === 'photo' && photoCanvas) {
+      // Static real scenery background + real textured ground (only ants & gameplay animate)
+      ctx.drawImage(photoCanvas, 0, 0);
+      if (this.lightningFlash > 0) {
+        ctx.fillStyle = `rgba(235, 244, 255, ${this.lightningFlash * 0.25})`;
+        ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+      }
+      ctx.restore();
+      return;
+    }
+
+    this.drawSky(ctx, biome);
+    this.drawSun(ctx, biome);
+    this.drawClouds(ctx, biome);
     this.drawBirds(ctx);
 
     this.tileLayer(ctx, this.farRidge, this.scroll * 0.035, 262);
-    this.drawHaze(ctx);
+    this.drawHaze(ctx, biome);
     this.tileLayer(ctx, this.midRidge, this.scroll * 0.08, 342);
-    this.drawWater(ctx);
+    this.drawWater(ctx, biome);
     this.drawWaterfall(ctx);
     this.tileLayer(ctx, this.nearRidge, this.scroll * 0.155, 452);
-    this.drawForeground(ctx);
-    this.drawForegroundMotion(ctx);
+    this.drawForeground(ctx, biome);
+    this.drawForegroundMotion(ctx, biome);
+
+    if (this.lightningFlash > 0) {
+      ctx.fillStyle = `rgba(235, 244, 255, ${this.lightningFlash * 0.25})`;
+      ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    }
 
     ctx.restore();
   }
 
-  private drawSky(ctx: CanvasRenderingContext2D): void {
+  private drawSky(ctx: CanvasRenderingContext2D, biome: BiomeId): void {
     const sky = ctx.createLinearGradient(0, 0, 0, 640);
-    sky.addColorStop(0, '#0b1526');
-    sky.addColorStop(0.25, '#25304c');
-    sky.addColorStop(0.48, '#5c5572');
-    sky.addColorStop(0.63, '#a8737a');
-    sky.addColorStop(0.76, '#e3a171');
-    sky.addColorStop(0.87, '#ffd3a0');
-    sky.addColorStop(1, '#ffe6be');
+    if (biome === 'night') {
+      sky.addColorStop(0, '#030710');
+      sky.addColorStop(0.32, '#081426');
+      sky.addColorStop(0.62, '#0f283d');
+      sky.addColorStop(0.85, '#163c4c');
+      sky.addColorStop(1, '#225963');
+    } else if (biome === 'ash') {
+      sky.addColorStop(0, '#0d0607');
+      sky.addColorStop(0.3, '#220b0d');
+      sky.addColorStop(0.58, '#4c1714');
+      sky.addColorStop(0.8, '#8a2b19');
+      sky.addColorStop(1, '#d45b2a');
+    } else {
+      sky.addColorStop(0, '#0b1526');
+      sky.addColorStop(0.25, '#25304c');
+      sky.addColorStop(0.48, '#5c5572');
+      sky.addColorStop(0.63, '#a8737a');
+      sky.addColorStop(0.76, '#e3a171');
+      sky.addColorStop(0.87, '#ffd3a0');
+      sky.addColorStop(1, '#ffe6be');
+    }
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, VIEW_WIDTH, 680);
 
     const bloom = ctx.createRadialGradient(1170, 468, 20, 1170, 468, 560);
-    bloom.addColorStop(0, 'rgba(255, 207, 140, 0.34)');
-    bloom.addColorStop(0.45, 'rgba(255, 160, 105, 0.1)');
-    bloom.addColorStop(1, 'rgba(255, 130, 90, 0)');
+    if (biome === 'night') {
+      bloom.addColorStop(0, 'rgba(130, 235, 225, 0.22)');
+      bloom.addColorStop(0.45, 'rgba(72, 165, 185, 0.08)');
+      bloom.addColorStop(1, 'rgba(40, 110, 140, 0)');
+    } else if (biome === 'ash') {
+      bloom.addColorStop(0, 'rgba(255, 115, 58, 0.36)');
+      bloom.addColorStop(0.45, 'rgba(210, 60, 32, 0.14)');
+      bloom.addColorStop(1, 'rgba(120, 20, 15, 0)');
+    } else {
+      bloom.addColorStop(0, 'rgba(255, 207, 140, 0.34)');
+      bloom.addColorStop(0.45, 'rgba(255, 160, 105, 0.1)');
+      bloom.addColorStop(1, 'rgba(255, 130, 90, 0)');
+    }
     ctx.fillStyle = bloom;
     ctx.fillRect(400, 0, 1400, 760);
   }
 
-  private drawSun(ctx: CanvasRenderingContext2D): void {
+  private drawSun(ctx: CanvasRenderingContext2D, biome: BiomeId): void {
     const x = 1170;
     const y = 464;
     const glow = ctx.createRadialGradient(x, y, 4, x, y, 210);
-    glow.addColorStop(0, 'rgba(255, 246, 215, 0.95)');
-    glow.addColorStop(0.16, 'rgba(255, 220, 154, 0.55)');
-    glow.addColorStop(0.5, 'rgba(255, 171, 104, 0.16)');
-    glow.addColorStop(1, 'rgba(255, 150, 90, 0)');
+    if (biome === 'night') {
+      glow.addColorStop(0, 'rgba(218, 250, 255, 0.85)');
+      glow.addColorStop(0.18, 'rgba(130, 225, 235, 0.38)');
+      glow.addColorStop(0.5, 'rgba(68, 150, 178, 0.12)');
+      glow.addColorStop(1, 'rgba(40, 95, 130, 0)');
+    } else if (biome === 'ash') {
+      glow.addColorStop(0, 'rgba(255, 210, 150, 0.9)');
+      glow.addColorStop(0.18, 'rgba(255, 104, 54, 0.55)');
+      glow.addColorStop(0.5, 'rgba(195, 42, 24, 0.2)');
+      glow.addColorStop(1, 'rgba(120, 20, 15, 0)');
+    } else {
+      glow.addColorStop(0, 'rgba(255, 246, 215, 0.95)');
+      glow.addColorStop(0.16, 'rgba(255, 220, 154, 0.55)');
+      glow.addColorStop(0.5, 'rgba(255, 171, 104, 0.16)');
+      glow.addColorStop(1, 'rgba(255, 150, 90, 0)');
+    }
     ctx.fillStyle = glow;
     ctx.beginPath();
     ctx.arc(x, y, 210, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(255, 247, 220, 0.92)';
+    ctx.fillStyle =
+      biome === 'night'
+        ? 'rgba(225, 250, 255, 0.88)'
+        : biome === 'ash'
+          ? 'rgba(255, 165, 110, 0.88)'
+          : 'rgba(255, 247, 220, 0.92)';
     ctx.beginPath();
-    ctx.arc(x, y, 46, 0, Math.PI * 2);
+    ctx.arc(x, y, biome === 'night' ? 36 : 46, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  private drawClouds(ctx: CanvasRenderingContext2D): void {
+  private drawClouds(ctx: CanvasRenderingContext2D, biome: BiomeId): void {
     for (const cloud of this.clouds) {
       const x = ((cloud.x - this.time * cloud.speed) % (VIEW_WIDTH + 420) + VIEW_WIDTH + 420) % (VIEW_WIDTH + 420);
       const y = cloud.y + Math.sin(this.time * 0.12 + cloud.x) * 4;
@@ -535,8 +784,16 @@ export class Scenery {
       ctx.translate(x, y);
       ctx.scale(cloud.scale, cloud.scale);
       const gradient = ctx.createLinearGradient(0, -40, 0, 60);
-      gradient.addColorStop(0, `rgba(255, 226, 200, ${cloud.alpha + 0.12})`);
-      gradient.addColorStop(1, `rgba(255, 196, 174, ${cloud.alpha * 0.4})`);
+      if (biome === 'night') {
+        gradient.addColorStop(0, `rgba(140, 210, 225, ${cloud.alpha})`);
+        gradient.addColorStop(1, `rgba(70, 130, 155, ${cloud.alpha * 0.35})`);
+      } else if (biome === 'ash') {
+        gradient.addColorStop(0, `rgba(255, 140, 100, ${cloud.alpha + 0.08})`);
+        gradient.addColorStop(1, `rgba(90, 35, 30, ${cloud.alpha * 0.5})`);
+      } else {
+        gradient.addColorStop(0, `rgba(255, 226, 200, ${cloud.alpha + 0.12})`);
+        gradient.addColorStop(1, `rgba(255, 196, 174, ${cloud.alpha * 0.4})`);
+      }
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.ellipse(0, 0, 96, 22, 0, 0, Math.PI * 2);
@@ -568,30 +825,60 @@ export class Scenery {
     }
   }
 
-  private drawHaze(ctx: CanvasRenderingContext2D): void {
+  private drawHaze(ctx: CanvasRenderingContext2D, biome: BiomeId): void {
     const haze = ctx.createLinearGradient(0, 380, 0, 680);
-    haze.addColorStop(0, 'rgba(255, 198, 158, 0)');
-    haze.addColorStop(0.52, 'rgba(255, 196, 156, 0.14)');
-    haze.addColorStop(0.8, 'rgba(202, 173, 156, 0.2)');
-    haze.addColorStop(1, 'rgba(167, 177, 167, 0)');
+    if (biome === 'night') {
+      haze.addColorStop(0, 'rgba(80, 190, 200, 0)');
+      haze.addColorStop(0.55, 'rgba(65, 165, 175, 0.14)');
+      haze.addColorStop(1, 'rgba(30, 80, 90, 0)');
+    } else if (biome === 'ash') {
+      haze.addColorStop(0, 'rgba(255, 110, 65, 0)');
+      haze.addColorStop(0.55, 'rgba(220, 80, 48, 0.16)');
+      haze.addColorStop(1, 'rgba(90, 30, 24, 0)');
+    } else {
+      haze.addColorStop(0, 'rgba(255, 198, 158, 0)');
+      haze.addColorStop(0.52, 'rgba(255, 196, 156, 0.14)');
+      haze.addColorStop(0.8, 'rgba(202, 173, 156, 0.2)');
+      haze.addColorStop(1, 'rgba(167, 177, 167, 0)');
+    }
     ctx.fillStyle = haze;
     ctx.fillRect(0, 360, VIEW_WIDTH, 340);
   }
 
-  private drawWater(ctx: CanvasRenderingContext2D): void {
+  private drawWater(ctx: CanvasRenderingContext2D, biome: BiomeId): void {
     const top = 536;
     const bottom = 666;
     const water = ctx.createLinearGradient(0, top, 0, bottom);
-    water.addColorStop(0, 'rgba(103, 126, 143, 0.95)');
-    water.addColorStop(0.38, 'rgba(82, 107, 125, 0.98)');
-    water.addColorStop(1, 'rgba(39, 60, 68, 1)');
+    if (biome === 'night') {
+      water.addColorStop(0, 'rgba(28, 66, 82, 0.95)');
+      water.addColorStop(0.4, 'rgba(20, 50, 64, 0.98)');
+      water.addColorStop(1, 'rgba(10, 28, 36, 1)');
+    } else if (biome === 'ash') {
+      water.addColorStop(0, 'rgba(92, 34, 26, 0.95)');
+      water.addColorStop(0.4, 'rgba(64, 22, 18, 0.98)');
+      water.addColorStop(1, 'rgba(32, 12, 10, 1)');
+    } else {
+      water.addColorStop(0, 'rgba(103, 126, 143, 0.95)');
+      water.addColorStop(0.38, 'rgba(82, 107, 125, 0.98)');
+      water.addColorStop(1, 'rgba(39, 60, 68, 1)');
+    }
     ctx.fillStyle = water;
     ctx.fillRect(0, top, VIEW_WIDTH, bottom - top);
 
     const reflection = ctx.createRadialGradient(1170, top + 8, 4, 1170, top + 8, 280);
-    reflection.addColorStop(0, 'rgba(255, 231, 177, 0.55)');
-    reflection.addColorStop(0.35, 'rgba(255, 201, 130, 0.18)');
-    reflection.addColorStop(1, 'rgba(255, 173, 106, 0)');
+    if (biome === 'night') {
+      reflection.addColorStop(0, 'rgba(155, 240, 245, 0.45)');
+      reflection.addColorStop(0.35, 'rgba(85, 190, 205, 0.16)');
+      reflection.addColorStop(1, 'rgba(40, 120, 140, 0)');
+    } else if (biome === 'ash') {
+      reflection.addColorStop(0, 'rgba(255, 145, 78, 0.55)');
+      reflection.addColorStop(0.35, 'rgba(220, 72, 38, 0.22)');
+      reflection.addColorStop(1, 'rgba(140, 30, 18, 0)');
+    } else {
+      reflection.addColorStop(0, 'rgba(255, 231, 177, 0.55)');
+      reflection.addColorStop(0.35, 'rgba(255, 201, 130, 0.18)');
+      reflection.addColorStop(1, 'rgba(255, 173, 106, 0)');
+    }
     ctx.fillStyle = reflection;
     ctx.fillRect(840, top, 660, bottom - top);
 
@@ -606,17 +893,6 @@ export class Scenery {
       ctx.beginPath();
       ctx.moveTo(160 + offset + ((i * 83) % 300), y);
       ctx.lineTo(160 + offset + ((i * 83) % 300) + width, y);
-      ctx.stroke();
-    }
-
-    for (let i = 0; i < 20; i += 1) {
-      const y = top + 8 + i * 6;
-      const x = 1010 + Math.sin(this.time * 0.9 + i * 0.55) * 70 + ((i * 31) % 70);
-      ctx.strokeStyle = `rgba(255, 214, 150, ${0.16 - i * 0.005})`;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + 30 + ((i * 17) % 40), y);
       ctx.stroke();
     }
 
@@ -675,36 +951,24 @@ export class Scenery {
     ctx.strokeStyle = 'rgba(255, 255, 252, 0.28)';
     ctx.lineWidth = 1.4;
     ctx.stroke(flow);
-
-    for (let i = 0; i < 9; i += 1) {
-      const phase = (this.time * 0.64 + i * 0.23) % 1;
-      const y = top + phase * (bottom - top);
-      const jitter = Math.sin(this.time * 2.6 + i * 2.4) * 4;
-      ctx.strokeStyle = `rgba(255, 255, 250, ${0.08 + (i % 4) * 0.06})`;
-      ctx.lineWidth = 0.8 + (i % 3) * 0.7;
-      ctx.beginPath();
-      ctx.moveTo(x + jitter - width * 0.3, y);
-      ctx.lineTo(x + jitter + 1, y + 16 + (i % 5) * 5);
-      ctx.stroke();
-    }
-
-    for (let i = 0; i < 8; i += 1) {
-      const phase = (this.time * 0.45 + i * 0.17) % 1;
-      const px = x + Math.sin(i * 5.7 + this.time * 0.8) * 26;
-      const py = bottom - 12 - phase * 26;
-      ctx.fillStyle = `rgba(226, 237, 231, ${0.13 * (1 - phase)})`;
-      ctx.beginPath();
-      ctx.arc(px, py, 3 + i * 0.45, 0, Math.PI * 2);
-      ctx.fill();
-    }
     ctx.restore();
   }
 
-  private drawForeground(ctx: CanvasRenderingContext2D): void {
+  private drawForeground(ctx: CanvasRenderingContext2D, biome: BiomeId): void {
+    ctx.save();
+    if (biome === 'night') {
+      ctx.filter = 'hue-rotate(45deg) saturate(0.8) brightness(0.82)';
+    } else if (biome === 'ash') {
+      ctx.filter = 'sepia(0.55) hue-rotate(-32deg) saturate(1.1) brightness(0.78)';
+    }
     ctx.drawImage(this.foreground, 0, 0);
+    ctx.restore();
   }
 
-  private drawForegroundMotion(ctx: CanvasRenderingContext2D): void {
+  private drawForegroundMotion(
+    ctx: CanvasRenderingContext2D,
+    biome: BiomeId,
+  ): void {
     ctx.save();
     for (let i = 0; i < 70; i += 1) {
       const baseX = (i * 233) % VIEW_WIDTH;
@@ -712,7 +976,12 @@ export class Scenery {
       const sway = Math.sin(this.time * 1.1 + i * 1.7) * 3;
       const height = 7 + ((i * 13) % 15);
       const alpha = 0.12 + ((i * 7) % 12) / 90;
-      ctx.strokeStyle = `rgba(98, 146, 98, ${alpha})`;
+      ctx.strokeStyle =
+        biome === 'night'
+          ? `rgba(72, 168, 160, ${alpha})`
+          : biome === 'ash'
+            ? `rgba(168, 92, 68, ${alpha})`
+            : `rgba(98, 146, 98, ${alpha})`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(baseX, baseY);
@@ -722,16 +991,32 @@ export class Scenery {
 
     for (const firefly of this.fireflies) {
       const x = firefly.x + Math.sin(this.time * 0.28 + firefly.phase) * 34;
-      const y = firefly.y + Math.cos(this.time * 0.21 + firefly.phase * 1.4) * 18;
+      const y =
+        biome === 'ash'
+          ? 860 - (((this.time * 22 + firefly.y) % 280))
+          : firefly.y + Math.cos(this.time * 0.21 + firefly.phase * 1.4) * 18;
       const pulse = 0.32 + 0.32 * Math.sin(this.time * 2.2 + firefly.phase);
       const glow = ctx.createRadialGradient(x, y, 0, x, y, firefly.size * 9);
-      glow.addColorStop(0, `rgba(255, 225, 148, ${pulse * 0.75})`);
-      glow.addColorStop(1, 'rgba(255, 210, 120, 0)');
+      if (biome === 'night') {
+        glow.addColorStop(0, `rgba(110, 245, 225, ${pulse * 0.8})`);
+        glow.addColorStop(1, 'rgba(60, 200, 190, 0)');
+      } else if (biome === 'ash') {
+        glow.addColorStop(0, `rgba(255, 130, 68, ${pulse * 0.85})`);
+        glow.addColorStop(1, 'rgba(255, 70, 30, 0)');
+      } else {
+        glow.addColorStop(0, `rgba(255, 225, 148, ${pulse * 0.75})`);
+        glow.addColorStop(1, 'rgba(255, 210, 120, 0)');
+      }
       ctx.fillStyle = glow;
       ctx.beginPath();
       ctx.arc(x, y, firefly.size * 9, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = `rgba(255, 241, 193, ${pulse})`;
+      ctx.fillStyle =
+        biome === 'night'
+          ? `rgba(195, 255, 245, ${pulse})`
+          : biome === 'ash'
+            ? `rgba(255, 205, 140, ${pulse})`
+            : `rgba(255, 241, 193, ${pulse})`;
       ctx.beginPath();
       ctx.arc(x, y, firefly.size, 0, Math.PI * 2);
       ctx.fill();

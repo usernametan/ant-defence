@@ -1244,13 +1244,30 @@ kbd {
   line-height: 1.42;
 }
 
+.start-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 1.1cqw;
+  width: 68cqw;
+  margin: 0 auto 1.3cqw;
+}
+
 .difficulty-select {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.6cqw;
-  width: 47cqw;
+  gap: 0.45cqw;
+  width: 100%;
   margin: 0 auto;
+}
+
+.start-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.7cqw;
+  margin-top: 0.6cqw;
 }
 
 .difficulty-label {
@@ -1368,7 +1385,79 @@ kbd {
 }
 
 .records-button {
-  margin-top: 0.9cqw;
+  margin-top: 0;
+}
+
+.upgrade-modal {
+  width: 64cqw;
+}
+
+.upgrade-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85cqw;
+  margin-top: 0.6cqw;
+}
+
+.upgrade-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45cqw;
+  padding: 1.05cqw 1.1cqw;
+  border: 1px solid rgba(242, 195, 100, 0.25);
+  border-radius: 0.28cqw;
+  background: linear-gradient(155deg, rgba(14, 21, 30, 0.88), rgba(7, 11, 16, 0.75));
+  color: var(--cream);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.upgrade-card:hover {
+  transform: translateY(-0.18cqw);
+  border-color: rgba(242, 195, 100, 0.72);
+  background: linear-gradient(155deg, rgba(28, 22, 12, 0.9), rgba(14, 16, 20, 0.82));
+  box-shadow:
+    0 0.8cqw 2.4cqw rgba(0, 0, 0, 0.55),
+    0 0 1.8cqw rgba(242, 195, 100, 0.18);
+}
+
+.upgrade-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.upgrade-badge {
+  padding: 0.1cqw 0.4cqw;
+  border: 1px solid rgba(242, 195, 100, 0.35);
+  border-radius: 0.12cqw;
+  background: rgba(242, 195, 100, 0.1);
+  color: var(--gold-bright);
+  font-family: var(--mono);
+  font-size: clamp(6px, 0.46cqw, 9px);
+  letter-spacing: 0.16em;
+}
+
+.upgrade-name {
+  color: var(--gold-bright);
+  font-family: var(--display);
+  font-size: clamp(13px, 1.12cqw, 21px);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+}
+
+.upgrade-desc {
+  margin: 0;
+  color: rgba(243, 234, 216, 0.65);
+  font-size: clamp(9px, 0.76cqw, 14px);
+  line-height: 1.42;
 }
 
 .start-footer {
