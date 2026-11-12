@@ -50,6 +50,45 @@ export class CombatSfx {
     this.noise(context, killed ? 0.15 : 0.05, 0.035, 800);
   }
 
+  enemyAttack(kind: "melee" | "projectile"): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    if (kind === "projectile") {
+      this.tone(context, 300, 92, 0.14, "sawtooth", 0.04);
+      this.noise(context, 0.1, 0.026, 1100);
+      return;
+    }
+
+    this.tone(context, 150, 58, 0.11, "square", 0.032);
+    this.noise(context, 0.08, 0.03, 620);
+  }
+
+  playerHit(): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    this.tone(context, 118, 42, 0.2, "sawtooth", 0.07);
+    this.noise(context, 0.16, 0.055, 430);
+  }
+
+  creatureDeath(): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    this.tone(context, 190, 54, 0.22, "triangle", 0.045);
+    this.noise(context, 0.18, 0.04, 720);
+  }
+
   dispose(): void {
     const context = this.context;
     this.context = null;

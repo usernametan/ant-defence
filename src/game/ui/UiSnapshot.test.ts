@@ -5,7 +5,10 @@ import {
   selectCameraReadout,
   selectDodgeLabel,
   selectDodgeReady,
+  selectEnemiesReadout,
   selectEnergyPercent,
+  selectHealthPercent,
+  selectHostilesReadout,
   selectIsPaused,
   selectIsPlaying,
   selectPhaseLabel,
@@ -146,6 +149,34 @@ describe('UI selectors', () => {
 
     expect(selectDodgeReady(readySnapshot)).toBe(true);
     expect(selectDodgeLabel(readySnapshot)).toBe('Ready');
+  });
+
+  it('derives health, enemy, and combined hostile readouts', () => {
+    const snapshot = createInitialSnapshot();
+
+    expect(selectHealthPercent(snapshot)).toBe(100);
+    expect(selectEnemiesReadout(snapshot)).toBe('0 / 0');
+
+    const engaged = {
+      ...snapshot,
+      player: {
+        ...snapshot.player,
+        health: 35,
+        maxHealth: 100,
+      },
+      combat: {
+        ...snapshot.combat,
+        targetsAlive: 2,
+        enemiesAlive: 4,
+        enemiesTotal: 8,
+        kills: 5,
+      },
+    };
+
+    expect(selectHealthPercent(engaged)).toBe(35);
+    expect(selectEnemiesReadout(engaged)).toBe('4 / 8');
+    expect(selectHostilesReadout(engaged)).toBe('6');
+    expect(engaged.combat.kills).toBe(5);
   });
 
   it('derives weapon, energy, and target readouts', () => {

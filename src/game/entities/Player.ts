@@ -1,3 +1,9 @@
+import type {
+  DamageContext,
+  DamageResult,
+  Damageable,
+  Team,
+} from "../combat/Damage";
 import { lerp } from "../core/math";
 import type { Vec2 } from "../core/types";
 import {
@@ -7,6 +13,7 @@ import {
 
 export interface PlayerConfig {
   radius: number;
+  maxHealth: number;
   moveSpeed: number;
   sprintMultiplier: number;
   acceleration: number;
@@ -23,6 +30,7 @@ export interface PlayerConfig {
 
 export const DEFAULT_PLAYER_CONFIG: PlayerConfig = {
   radius: 18,
+  maxHealth: 100,
   moveSpeed: 220,
   sprintMultiplier: 1.35,
   acceleration: 1800,
@@ -51,15 +59,24 @@ export interface PlayerRenderState {
   maxStamina: number;
   dodgeCooldown: number;
   dodgeCooldownMax: number;
+  health: number;
+  maxHealth: number;
+  alive: boolean;
+  hitFlash: number;
 }
 
-export class Player {
+export class Player implements Damageable {
+  readonly id = "player";
+  readonly team: Team = "player";
+  readonly maxHealth: number;
   private readonly config: PlayerConfig;
   private position: Vec2;
   private previousPosition: Vec2;
   private velocityVector: Vec2 = { x: 0, y: 0 };
   private facing = 0;
   private previousFacing = 0;
+  private currentHealth: number;
+  private flash = 0;
   private stamina: number;
   private staminaRegenDelayRemaining = 0;
   private sprintingNow = false;
@@ -73,8 +90,10 @@ export class Player {
     config: PlayerConfig = DEFAULT_PLAYER_CONFIG,
   ) {
     this.config = config;
+    this.maxHealth = config.maxHealth;
     this.position = { ...spawn };
     this.previousPosition = { ...spawn };
+    this.currentHealth = config.maxHealth;
     this.stamina = config.maxStamina;
   }
 
@@ -110,6 +129,18 @@ export class Player {
     return this.config.maxStamina;
   }
 
+  get health(): number {
+    return this.currentHealth;
+  }
+
+  get alive(): boolean {
+    return this.currentHealth > 0;
+  }
+
+  get hitFlash(): number {
+    return this.flash;
+  }
+
   get isSprinting(): boolean {
     return this.sprintingNow;
   }
@@ -136,6 +167,8 @@ export class Player {
     this.velocityVector = { x: 0, y: 0 };
     this.facing = 0;
     this.previousFacing = 0;
+    this.currentHealth = this.maxHealth;
+    this.flash = 0;
     this.stamina = this.config.maxStamina;
     this.staminaRegenDelayRemaining = 0;
     this.sprintingNow = false;
@@ -143,6 +176,37 @@ export class Player {
     this.dodgeCooldownRemainingSeconds = 0;
     this.invulnerableRemaining = 0;
     this.dodgeDirection = { x: 1, y: 0 };
+  }
+
+  takeDamage(amount: number, _context: DamageContext): DamageResult {
+    if (
+      !this.alive ||
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      this.isInvulnerable
+    ) {
+      return {
+        applied: 0,
+        killed: false,
+        remainingHealth: this.currentHealth,
+      };
+    }
+
+    const applied = Math.min(this.currentHealth, amount);
+    this.currentHealth = Math.max(0, this.currentHealth - amount);
+    this.flash = 1;
+
+    if (this.currentHealth === 0) {
+      this.velocityVector = { x: 0, y: 0 };
+      this.dodgeRemaining = 0;
+      this.invulnerableRemaining = 0;
+    }
+
+    return {
+      applied,
+      killed: this.currentHealth === 0,
+      remainingHealth: this.currentHealth,
+    };
   }
 
   requestDodge(intent: Vec2): boolean {
@@ -176,6 +240,17 @@ export class Player {
     this.previousPosition = { ...this.position };
     this.previousFacing = this.facing;
 
+    if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) {
+      return;
+    }
+
+    this.flash = Math.max(0, this.flash - deltaSeconds * 4);
+
+    if (!this.alive) {
+      this.velocityVector = { x: 0, y: 0 };
+      return;
+    }
+
     if (aimWorld) {
       const aimX = aimWorld.x - this.position.x;
       const aimY = aimWorld.y - this.position.y;
@@ -183,10 +258,6 @@ export class Player {
       if (aimX * aimX + aimY * aimY > 9) {
         this.facing = Math.atan2(aimY, aimX);
       }
-    }
-
-    if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) {
-      return;
     }
 
     const direction = normalizeVector(intent);
@@ -306,6 +377,10 @@ export class Player {
       maxStamina: this.config.maxStamina,
       dodgeCooldown: this.dodgeCooldownRemainingSeconds,
       dodgeCooldownMax: this.config.dodgeCooldown,
+      health: this.currentHealth,
+      maxHealth: this.maxHealth,
+      alive: this.alive,
+      hitFlash: this.flash,
     };
   }
 }

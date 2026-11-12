@@ -2,10 +2,10 @@ export const GAME_IDENTITY = {
   title: "Monster Frontier",
   wordmark: "MONSTER FRONTIER",
   kicker: "PROJECT VERDANT",
-  stage: "Stage 3 — Combat Prototype",
-  version: "0.3.0",
+  stage: "Stage 4 — Creature Foundation",
+  version: "0.4.0",
   tagline:
-    "The frontier is waking. Weapons are online, and the range is live before the creatures arrive.",
+    "The frontier is waking. Three creature archetypes now hunt the range, and the spawn director keeps the pressure on.",
   firstRegion: "Greenreach Wilds",
   regions: [
     "Greenreach Wilds",
@@ -18,10 +18,10 @@ export const GAME_IDENTITY = {
 } as const;
 
 export const PROTOTYPE_CHECKS = [
-  { label: "Weapons", detail: "LMB fire · 3 emitters" },
-  { label: "Projectiles", detail: "Pooled · swept hits" },
-  { label: "Targets", detail: "Dummies · respawn" },
-  { label: "Energy", detail: "Shared cell · regen" },
+  { label: "Creatures", detail: "Crawler · Stalker · Spitter" },
+  { label: "AI", detail: "Chase · flank · ranged" },
+  { label: "Spawns", detail: "Budgeted · timed refill" },
+  { label: "Combat", detail: "Melee · acid projectiles" },
   { label: "Movement", detail: "WASD · sprint · dodge" },
   { label: "Camera", detail: "Damped follow + bounds" },
 ] as const;

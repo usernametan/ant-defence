@@ -3149,7 +3149,9 @@ kbd {
 
 .mf-readout {
   display: flex;
-  gap: 1.2cqw;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5cqw 1.2cqw;
   padding: 0.8cqw 1.1cqw;
   border: 1px solid var(--mf-line);
   background: rgba(3, 16, 13, 0.62);
@@ -3440,6 +3442,21 @@ kbd {
 .mf-weapon-meter .mf-meter-fill {
   background: linear-gradient(90deg, #b27535, var(--mf-amber));
   box-shadow: 0 0 0.8cqw rgba(247, 191, 91, 0.42);
+}
+
+.mf-health-fill {
+  background: linear-gradient(90deg, #8d332e, #ff715c);
+  box-shadow: 0 0 1cqw rgba(255, 113, 92, 0.42);
+}
+
+.mf-health-row.is-downed .mf-meter-fill {
+  background: rgba(255, 113, 92, 0.22);
+  box-shadow: none;
+}
+
+.mf-health-row.is-downed strong,
+.mf-downed-label {
+  color: #ff8b73;
 }
 
 .mf-weapon-slots {

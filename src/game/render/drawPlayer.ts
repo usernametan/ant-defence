@@ -106,5 +106,14 @@ export function drawPlayer(
   context.arc(-radius * 0.42, -radius * 0.42, radius * 0.14, 0, Math.PI * 2);
   context.fill();
 
+  if (player.hitFlash > 0) {
+    context.globalAlpha = player.hitFlash * 0.62;
+    context.fillStyle = "#fff0ec";
+    context.beginPath();
+    context.arc(0, 0, radius, 0, Math.PI * 2);
+    context.fill();
+    context.globalAlpha = 1;
+  }
+
   context.restore();
 }

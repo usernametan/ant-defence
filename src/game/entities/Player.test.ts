@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DamageContext } from '../combat/Damage';
 import type { CollisionWorld } from '../world/Collision';
 import { DEFAULT_PLAYER_CONFIG, Player } from './Player';
 
@@ -113,6 +114,51 @@ describe('Player sprint and stamina', () => {
     simulate(player, 1, { x: 1, y: 0 }, false);
 
     expect(player.currentStamina).toBeGreaterThan(drainedStamina);
+  });
+});
+
+describe('Player health', () => {
+  const CONTEXT: DamageContext = {
+    sourceId: 'crawler-1',
+    weaponId: 'crawler-melee',
+    direction: { x: 1, y: 0 },
+  };
+
+  it('applies damage, flashes, and dies at zero health', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    expect(player.takeDamage(25, CONTEXT)).toEqual({
+      applied: 25,
+      killed: false,
+      remainingHealth: 75,
+    });
+    expect(player.hitFlash).toBe(1);
+
+    expect(player.takeDamage(999, CONTEXT)).toEqual({
+      applied: 75,
+      killed: true,
+      remainingHealth: 0,
+    });
+    expect(player.alive).toBe(false);
+    expect(player.takeDamage(10, CONTEXT).applied).toBe(0);
+  });
+
+  it('ignores damage while dodging and restores health on reset', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    expect(player.requestDodge({ x: 1, y: 0 })).toBe(true);
+    expect(player.takeDamage(20, CONTEXT).applied).toBe(0);
+    expect(player.health).toBe(player.maxHealth);
+
+    simulate(player, 0.3, { x: 0, y: 0 });
+
+    expect(player.takeDamage(20, CONTEXT).applied).toBe(20);
+
+    player.reset({ x: 500, y: 500 });
+
+    expect(player.health).toBe(player.maxHealth);
+    expect(player.alive).toBe(true);
+    expect(player.hitFlash).toBe(0);
   });
 });
 

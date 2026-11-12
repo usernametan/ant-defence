@@ -1,10 +1,12 @@
 import type { ProjectileSystem } from "../combat/ProjectileSystem";
 import { clamp } from "../core/math";
 import type { GameConfig, Vec2 } from "../core/types";
+import type { Creature, CreatureRenderState } from "../entities/Creature";
 import type { PlayerRenderState } from "../entities/Player";
 import type { TargetDummy } from "../entities/TargetDummy";
 import type { ArenaObstacle, TestArena } from "../world/TestArena";
 import type { Camera } from "./Camera";
+import { drawCreature } from "./drawCreature";
 import { drawDebugOverlay, drawWorldDebug } from "./drawDebug";
 import { drawPlayer } from "./drawPlayer";
 import { drawProjectiles } from "./drawProjectiles";
@@ -19,6 +21,11 @@ export interface CombatRenderState {
   projectileCount: number;
   targetsAlive: number;
   targetsTotal: number;
+  enemiesAlive: number;
+  enemiesTotal: number;
+  kills: number;
+  playerHealth: number;
+  playerMaxHealth: number;
 }
 
 export interface RenderState {
@@ -29,6 +36,8 @@ export interface RenderState {
   aim: Vec2 | null;
   projectiles: ProjectileSystem;
   targets: readonly TargetDummy[];
+  creatures: readonly Creature[];
+  creatureStates: readonly CreatureRenderState[];
   effects: ImpactEffects;
   combat: CombatRenderState;
 }
@@ -101,6 +110,10 @@ export class Renderer {
       drawTargetDummy(context, target);
     }
 
+    for (const creature of state.creatureStates) {
+      drawCreature(context, creature, state.timeSeconds);
+    }
+
     drawPlayer(context, state.player, state.timeSeconds);
     drawProjectiles(context, state.projectiles);
     this.drawAimGuide(state.player, state.aim, state.timeSeconds);
@@ -114,6 +127,7 @@ export class Renderer {
         player: state.player,
         aim: state.aim,
         targets: state.targets,
+        creatures: state.creatures,
       });
     }
 

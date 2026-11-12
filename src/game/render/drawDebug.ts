@@ -1,4 +1,5 @@
 import type { GameConfig, Vec2 } from "../core/types";
+import type { Creature } from "../entities/Creature";
 import type { PlayerRenderState } from "../entities/Player";
 import type { TargetDummy } from "../entities/TargetDummy";
 import type { TestArena } from "../world/TestArena";
@@ -12,6 +13,11 @@ export interface DebugCombatState {
   projectileCount: number;
   targetsAlive: number;
   targetsTotal: number;
+  enemiesAlive: number;
+  enemiesTotal: number;
+  kills: number;
+  playerHealth: number;
+  playerMaxHealth: number;
 }
 
 export interface DebugRenderState {
@@ -21,6 +27,7 @@ export interface DebugRenderState {
   player: PlayerRenderState;
   aim: Vec2 | null;
   targets?: readonly TargetDummy[];
+  creatures?: readonly Creature[];
   combat?: DebugCombatState;
 }
 
@@ -28,7 +35,7 @@ export function drawWorldDebug(
   context: CanvasRenderingContext2D,
   state: DebugRenderState,
 ): void {
-  const { player, aim, arena, targets = [] } = state;
+  const { player, aim, arena, targets = [], creatures = [] } = state;
 
   context.save();
   context.strokeStyle = "rgba(247, 191, 91, 0.82)";
@@ -53,6 +60,40 @@ export function drawWorldDebug(
     context.stroke();
   }
 
+  context.setLineDash([2, 4]);
+  context.font = "500 9px 'IBM Plex Mono', monospace";
+  context.textAlign = "center";
+
+  for (const creature of creatures) {
+    if (!creature.alive) {
+      continue;
+    }
+
+    context.strokeStyle = "rgba(255, 113, 92, 0.72)";
+    context.beginPath();
+    context.arc(creature.x, creature.y, creature.radius, 0, Math.PI * 2);
+    context.stroke();
+
+    context.strokeStyle = "rgba(255, 191, 105, 0.24)";
+    context.beginPath();
+    context.arc(
+      creature.x,
+      creature.y,
+      creature.archetype.attack.range,
+      0,
+      Math.PI * 2,
+    );
+    context.stroke();
+
+    context.fillStyle = "rgba(255, 191, 105, 0.88)";
+    context.fillText(
+      `${creature.state.toUpperCase()} ${Math.ceil(creature.health)}`,
+      creature.x,
+      creature.y - creature.radius - 19,
+    );
+  }
+
+  context.setLineDash([]);
   context.strokeStyle = "rgba(117, 245, 203, 0.9)";
   context.beginPath();
   context.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
@@ -106,6 +147,7 @@ export function drawDebugOverlay(
     `VEL ${Math.hypot(player.velocityX, player.velocityY).toFixed(0)}`,
     `DODGE ${player.dodgeCooldown.toFixed(2)}s`,
     `STAMINA ${player.stamina.toFixed(0)} / ${player.maxStamina}`,
+    `HEALTH ${player.health.toFixed(0)} / ${player.maxHealth}`,
     `AIM ${aim ? `${Math.round(aim.x)} / ${Math.round(aim.y)}` : "outside"}`,
   ];
 
@@ -116,6 +158,8 @@ export function drawDebugOverlay(
       `COOLDOWN ${combat.cooldown.toFixed(2)}s`,
       `PROJECTILES ${combat.projectileCount}`,
       `TARGETS ${combat.targetsAlive} / ${combat.targetsTotal}`,
+      `ENEMIES ${combat.enemiesAlive} / ${combat.enemiesTotal}`,
+      `KILLS ${combat.kills}`,
     );
   }
 

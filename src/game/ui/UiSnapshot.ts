@@ -4,6 +4,7 @@ import {
 import { STARTER_WEAPONS } from "../content/equipment";
 import { GAME_IDENTITY } from "../content";
 import type { GamePhase, Size } from "../core/types";
+import { DEFAULT_PLAYER_CONFIG } from "../entities/Player";
 
 export interface WeaponSnapshot {
   id: string;
@@ -28,6 +29,9 @@ export interface CombatSnapshot {
   projectilesMax: number;
   targetsAlive: number;
   targetsTotal: number;
+  enemiesAlive: number;
+  enemiesTotal: number;
+  kills: number;
   weapons: readonly WeaponSnapshot[];
 }
 
@@ -43,6 +47,10 @@ export interface PlayerSnapshot {
   invulnerable: boolean;
   dodgeCooldown: number;
   dodgeCooldownMax: number;
+  health: number;
+  maxHealth: number;
+  alive: boolean;
+  respawnRemaining: number;
 }
 
 export interface UiSnapshot {
@@ -96,6 +104,10 @@ export function createInitialSnapshot(): UiSnapshot {
       invulnerable: false,
       dodgeCooldown: 0,
       dodgeCooldownMax: 0,
+      health: DEFAULT_PLAYER_CONFIG.maxHealth,
+      maxHealth: DEFAULT_PLAYER_CONFIG.maxHealth,
+      alive: true,
+      respawnRemaining: 0,
     },
     combat: {
       weaponId: STARTER_WEAPONS[0].id,
@@ -112,6 +124,9 @@ export function createInitialSnapshot(): UiSnapshot {
       projectilesMax: 0,
       targetsAlive: 3,
       targetsTotal: 3,
+      enemiesAlive: 0,
+      enemiesTotal: 0,
+      kills: 0,
       weapons: STARTER_WEAPONS.map((weapon, index) => ({
         id: weapon.id,
         name: weapon.name,
@@ -220,6 +235,16 @@ export function selectStaminaPercent(snapshot: UiSnapshot): number {
   );
 }
 
+export function selectHealthPercent(snapshot: UiSnapshot): number {
+  if (snapshot.player.maxHealth <= 0) {
+    return 0;
+  }
+
+  return Math.round(
+    (snapshot.player.health / snapshot.player.maxHealth) * 100,
+  );
+}
+
 export function selectDodgeReady(snapshot: UiSnapshot): boolean {
   return snapshot.player.dodgeCooldown <= 0.001;
 }
@@ -254,6 +279,14 @@ export function selectWeaponStatus(snapshot: UiSnapshot): string {
 
 export function selectTargetsReadout(snapshot: UiSnapshot): string {
   return `${snapshot.combat.targetsAlive} / ${snapshot.combat.targetsTotal}`;
+}
+
+export function selectEnemiesReadout(snapshot: UiSnapshot): string {
+  return `${snapshot.combat.enemiesAlive} / ${snapshot.combat.enemiesTotal}`;
+}
+
+export function selectHostilesReadout(snapshot: UiSnapshot): string {
+  return `${snapshot.combat.targetsAlive + snapshot.combat.enemiesAlive}`;
 }
 
 export function selectPhaseLabel(snapshot: UiSnapshot): string {

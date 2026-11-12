@@ -5,7 +5,9 @@ import {
   selectCameraReadout,
   selectDodgeLabel,
   selectDodgeReady,
+  selectEnemiesReadout,
   selectEnergyPercent,
+  selectHealthPercent,
   selectPhaseLabel,
   selectPlayerReadout,
   selectStaminaPercent,
@@ -90,13 +92,13 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <kbd>Enter</kbd>
           </button>
           <p className="mf-action-note">
-            Stage 3 arms the field agent with three fictional energy blasters.
-            Test fire, switch loadouts, and break the training dummies before
-            the creatures arrive.
+            Stage 4 unleashes the first frontier creatures. Three archetypes
+            hunt, flank, and spit from range while the spawn director keeps the
+            test ground dangerous.
           </p>
         </div>
 
-        <ul className="mf-checks" aria-label="Combat prototype systems">
+        <ul className="mf-checks" aria-label="Creature foundation systems">
           {PROTOTYPE_CHECKS.map((check) => (
             <li key={check.label} className="mf-check">
               <span className="mf-check-signal" aria-hidden="true" />
@@ -109,13 +111,13 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
         </ul>
       </div>
 
-      <aside className="mf-briefing" aria-label="Combat prototype briefing">
-        <p className="mf-briefing-label">Weapons hot</p>
+      <aside className="mf-briefing" aria-label="Creature foundation briefing">
+        <p className="mf-briefing-label">Contact expected</p>
         <p className="mf-briefing-region">{snapshot.region}</p>
         <p className="mf-briefing-copy">
-          The frontier is still quiet, but the range is live. Three arcade
-          emitters are online, and the training dummies are waiting for a
-          proper field test.
+          The range is no longer quiet. Crawlers rush the line, Stalkers circle
+          for an opening, and Spitters hold distance with acid volleys. Keep
+          moving and watch the telegraphs.
         </p>
         <dl className="mf-specs">
           <div>
@@ -131,12 +133,12 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <dd>3 Arcade lines</dd>
           </div>
           <div>
-            <dt>Targets</dt>
-            <dd>Live dummies</dd>
+            <dt>Creatures</dt>
+            <dd>3 archetypes</dd>
           </div>
           <div>
-            <dt>Camera</dt>
-            <dd>Damped follow</dd>
+            <dt>Director</dt>
+            <dd>Budgeted spawns</dd>
           </div>
           <div>
             <dt>World</dt>
@@ -156,6 +158,7 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
 
 function Hud({ snapshot }: { snapshot: UiSnapshot }) {
   const stamina = selectStaminaPercent(snapshot);
+  const health = selectHealthPercent(snapshot);
   const dodgeReady = selectDodgeReady(snapshot);
 
   return (
@@ -182,6 +185,12 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
             TGT <strong>{selectTargetsReadout(snapshot)}</strong>
           </span>
           <span>
+            ENEMY <strong>{selectEnemiesReadout(snapshot)}</strong>
+          </span>
+          <span>
+            KILLS <strong>{snapshot.combat.kills}</strong>
+          </span>
+          <span>
             FPS <strong>{Math.round(snapshot.fps || 60)}</strong>
           </span>
         </div>
@@ -197,6 +206,9 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
           <span>CD {snapshot.combat.cooldown.toFixed(2)}s</span>
           <span>PROJ {snapshot.combat.projectilesActive}</span>
           <span>TGT {selectTargetsReadout(snapshot)}</span>
+          <span>ENEMY {selectEnemiesReadout(snapshot)}</span>
+          <span>KILLS {snapshot.combat.kills}</span>
+          <span>HP {health}%</span>
           <span>DODGE {snapshot.player.dodgeCooldown.toFixed(2)}s</span>
           <span>STAM {stamina}%</span>
           <span>FPS {snapshot.fps.toFixed(0)}</span>
@@ -206,9 +218,27 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
       <div className="mf-hud-bottom">
         <div className="mf-status-stack">
           <span className="mf-stage-stamp">
-            {snapshot.stage} // weapons live
+            {snapshot.stage} // creatures live
           </span>
           <div className="mf-player-meters">
+            <div
+              className={`mf-meter-row mf-health-row${snapshot.player.alive ? '' : ' is-downed'}`}
+            >
+              <span>
+                HEALTH <strong>{health}%</strong>
+              </span>
+              <span className="mf-meter" aria-hidden="true">
+                <span
+                  className="mf-meter-fill mf-health-fill"
+                  style={{ width: `${health}%` }}
+                />
+              </span>
+              {!snapshot.player.alive && (
+                <strong className="mf-downed-label">
+                  DOWN {snapshot.player.respawnRemaining.toFixed(1)}s
+                </strong>
+              )}
+            </div>
             <div className="mf-meter-row">
               <span>
                 STAMINA <strong>{stamina}%</strong>
@@ -295,8 +325,8 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
         <p className="mf-kicker">Signal held</p>
         <h2>Expedition paused</h2>
         <p>
-          The {snapshot.region} combat prototype is suspended. Resume when you
-          are ready to continue the weapons test.
+          The {snapshot.region} creature trial is suspended. Resume when you
+          are ready to re-enter the range.
         </p>
         <div className="mf-pause-actions">
           <button
@@ -316,7 +346,7 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
           </button>
         </div>
         <p className="mf-pause-footnote">
-          Stage 3 / Combat Prototype · build {snapshot.version}
+          Stage 4 / Creature Foundation · build {snapshot.version}
         </p>
       </div>
     </div>
