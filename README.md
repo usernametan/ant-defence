@@ -1,30 +1,33 @@
-# ANT DEFENSE
+# MONSTER FRONTIER
 
-A keyboard-driven typing defense game. Hold the pass against waves of word-bearing ants, survive royal assaults, and keep the colony behind the red line.
+A top-down survival action game set on the edge of a transformed frontier.
 
-![ANT DEFENSE](public/og.png)
+This repository is in **Stage 1 — Project Foundation**. The new game shell,
+fixed-step simulation, camera, renderer, input router, and throttled UI bridge
+are in place. Player movement, combat, creatures, missions, and progression are
+planned for later stages.
 
-## Features
+## Current status
 
-- Typing-based targeting with prefix-free words and instant shooting.
-- Five ant types, including armored giants and multi-hit queens.
-- Escalating waves, combos, accuracy tracking, and three abilities.
-- Procedural sunset scenery, vector characters, and synthesized audio.
-- Responsive HUD for desktop and laptop screens.
-- No backend, API keys, or environment variables required.
+- New Monster Frontier app shell and foundation preview.
+- Canvas 2D renderer with a bounded world camera.
+- Fixed 60 Hz simulation loop with catch-up limits.
+- Seedable RNG, typed events, math, and ID utilities.
+- React UI fed by throttled snapshots instead of per-frame state.
+- Vitest coverage for loop stepping, RNG determinism, camera clamping, and
+  snapshot throttling.
+- The old Ant Defence source is retained for reference, but it is no longer
+  imported by the active app.
+
+See [MONSTER_FRONTIER_PLAN.md](MONSTER_FRONTIER_PLAN.md) for the full roadmap.
 
 ## Controls
 
 | Key | Action |
 | --- | --- |
-| `A-Z` | Type the active word; the final letter fires |
-| `Backspace` | Erase the current prefix |
+| `Enter` / `Space` | Enter the foundation preview or resume |
 | `Escape` | Pause or resume |
-| `Enter` | Start, resume, or restart |
-| `1` | Focus: slow the colony |
-| `2` | Aegis: block breaches |
-| `3` | Power: load three piercing rounds |
-| `M` | Mute or unmute while paused |
+| `F3` | Toggle camera and world diagnostics |
 
 ## Development
 
@@ -39,6 +42,7 @@ Open `http://localhost:3000/`.
 
 ```bash
 npm run typecheck
+npm test
 npm run build
 npm run preview
 ```
@@ -64,10 +68,17 @@ npx vercel --prod
 
 ```text
 src/
-  components/   React HUD and overlays
-  game/         Canvas engine, ants, scenery, effects, audio, words
-  utils/        Formatting helpers
-public/         Favicon and social preview image
+  app/            React game host and snapshot hook
+  game/
+    content/      Game identity and content metadata
+    core/         Loop, RNG, math, IDs, events, shared types
+    input/        Input routing and future control bindings
+    render/       Camera and Canvas 2D renderer
+    ui/           UI snapshots, store, and selectors
+  components/     Retained Ant Defence UI, disconnected from the active app
+  game/*          Retained Ant Defence engine modules
+public/           Retained assets and social preview image
 ```
 
-All visual effects and sound are generated at runtime. The game is designed for a physical keyboard and is best played on a desktop or laptop.
+The active route starts at `src/main.tsx` → `src/App.tsx` →
+`src/app/GameHost.tsx`.
