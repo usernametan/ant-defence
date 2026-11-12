@@ -3,6 +3,7 @@ import { CombatSystem } from "./combat/CombatSystem";
 import { applyDamage, type Damageable } from "./combat/Damage";
 import { ProjectileSystem } from "./combat/ProjectileSystem";
 import { GAME_IDENTITY } from "./content";
+import { getEquipmentDef, type EquipmentSlot } from "./content/upgrades";
 import { EventBus } from "./core/EventBus";
 import {
   FixedStepLoop,
@@ -29,6 +30,12 @@ import {
 import { Camera } from "./render/Camera";
 import { ImpactEffects } from "./render/effects";
 import { Renderer } from "./render/Renderer";
+import {
+  InventorySystem,
+  type InventoryAcquireResult,
+  type InventoryItemKind,
+} from "./systems/InventorySystem";
+import { ItemPickupSystem } from "./systems/ItemPickupSystem";
 import { PickupSystem } from "./systems/PickupSystem";
 import { SpawnDirector } from "./systems/SpawnDirector";
 import {
@@ -90,10 +97,12 @@ export class Game {
   private readonly loop: FixedStepLoop;
   private readonly world: LoadedWorld;
   private readonly player: Player;
+  private readonly inventory: InventorySystem;
   private readonly combat: CombatSystem;
   private readonly projectiles: ProjectileSystem;
   private readonly spawnDirector: SpawnDirector;
   private readonly pickups: PickupSystem;
+  private readonly worldItems: ItemPickupSystem;
   private readonly spatialHash = new SpatialHash<Creature>(120);
   private readonly effects = new ImpactEffects();
   private readonly sfx = new CombatSfx();
@@ -110,6 +119,8 @@ export class Game {
   private fps = 0;
   private interpolation = 0;
   private debug = false;
+  private inventoryOpen = false;
+  private fireFeedbackCooldown = 0;
   private lastRenderAt = 0;
   private destroyed = false;
 
@@ -129,11 +140,14 @@ export class Game {
       options.snapshotStore ??
       new SnapshotStore(undefined, this.config.snapshotIntervalMs);
     this.player = new Player(this.world.spawn);
+    this.inventory = new InventorySystem();
     this.combat = new CombatSystem();
     this.projectiles = new ProjectileSystem();
     this.spawnDirector = new SpawnDirector(this.world.creatureSpawns);
     this.pickups = new PickupSystem(this.world.pickups);
+    this.worldItems = new ItemPickupSystem(this.world.items);
     this.targets = createTrainingDummies(this.world.targets);
+    this.applyInventoryModifiers();
     this.camera.moveTo(this.player.x, this.player.y);
     this.input = new InputRouter(window, canvas, {
       onAction: this.handleAction,
@@ -203,6 +217,7 @@ export class Game {
       return;
     }
 
+    this.inventoryOpen = false;
     this.setPhase("paused");
   }
 
@@ -228,17 +243,59 @@ export class Game {
     this.publish(true);
   }
 
+  toggleInventory(): void {
+    if (this.phase !== "playing") {
+      return;
+    }
+
+    this.inventoryOpen = !this.inventoryOpen;
+    this.publish(true);
+  }
+
+  equipInventoryItem(itemId: string): boolean {
+    if (this.phase === "menu" || !this.inventory.equip(itemId)) {
+      return false;
+    }
+
+    this.applyInventoryModifiers();
+    this.showFeedback(
+      `${this.itemLabel("equipment", itemId).toUpperCase()} · EQUIPPED`,
+      "module",
+      1.6,
+    );
+    this.sfx.equip();
+
+    return true;
+  }
+
+  unequipInventorySlot(slot: EquipmentSlot): boolean {
+    if (this.phase === "menu" || !this.inventory.unequip(slot)) {
+      return false;
+    }
+
+    this.applyInventoryModifiers();
+    this.showFeedback("MODULE RELEASED · EFFECT OFFLINE", "module", 1.4);
+    this.sfx.equip();
+
+    return true;
+  }
+
   private resetRun(): void {
+    this.inventory.reset();
     this.player.reset(this.world.spawn);
+    this.applyInventoryModifiers();
     this.camera.moveTo(this.player.x, this.player.y);
     this.combat.reset();
     this.projectiles.clear();
     this.spawnDirector.reset(this.world);
     this.pickups.reset();
+    this.worldItems.reset();
     this.effects.clear();
     this.playerRespawnRemaining = 0;
     this.feedbackText = "";
     this.feedbackRemaining = 0;
+    this.inventoryOpen = false;
+    this.fireFeedbackCooldown = 0;
 
     for (const target of this.targets) {
       target.reset();
@@ -259,7 +316,10 @@ export class Game {
         }
         break;
       case "pause":
-        if (this.phase === "playing") {
+        if (this.phase === "playing" && this.inventoryOpen) {
+          this.inventoryOpen = false;
+          this.publish(true);
+        } else if (this.phase === "playing") {
           this.pause();
         } else if (this.phase === "paused") {
           this.resume();
@@ -267,6 +327,9 @@ export class Game {
         break;
       case "toggleDebug":
         this.toggleDebug();
+        break;
+      case "inventory":
+        this.toggleInventory();
         break;
       case "dodge":
         if (this.phase === "menu") {
@@ -296,7 +359,30 @@ export class Game {
       return;
     }
 
-    if (this.combat.selectWeapon(index)) {
+    const weapon = this.inventory.getWeaponBySlot(index);
+    const combatIndex = weapon
+      ? this.combat.availableWeapons.findIndex(
+          (entry) => entry.id === weapon.id,
+        )
+      : -1;
+
+    if (!weapon || combatIndex < 0) {
+      this.showFeedback(
+        `WEAPON SLOT ${index + 1} OFFLINE · FIND A MODULE`,
+        "energy",
+        1.4,
+      );
+      this.sfx.denied();
+      return;
+    }
+
+    if (this.combat.selectWeapon(combatIndex)) {
+      this.showFeedback(
+        `${index + 1} · ${weapon.name.toUpperCase()}`,
+        "energy",
+        0.9,
+      );
+      this.sfx.weaponSwitch();
       this.publish(true);
     }
   }
@@ -306,8 +392,25 @@ export class Game {
       return;
     }
 
+    if (this.inventoryOpen) {
+      this.feedbackRemaining = Math.max(
+        0,
+        this.feedbackRemaining - stepSeconds,
+      );
+
+      if (this.feedbackRemaining === 0) {
+        this.feedbackText = "";
+      }
+
+      return;
+    }
+
     this.elapsed += stepSeconds;
     this.frame += 1;
+    this.fireFeedbackCooldown = Math.max(
+      0,
+      this.fireFeedbackCooldown - stepSeconds,
+    );
     this.feedbackRemaining = Math.max(
       0,
       this.feedbackRemaining - stepSeconds,
@@ -364,6 +467,7 @@ export class Game {
 
     if (this.player.alive) {
       this.collectPickups();
+      this.collectWorldItems();
 
       const muzzle = this.getMuzzlePosition(aim);
       const shot = this.combat.update(stepSeconds, {
@@ -396,6 +500,8 @@ export class Game {
           projectiles: shot.spawns.length,
         });
         this.sfx.shoot(shot.weapon.category);
+      } else if (this.input.isFiring()) {
+        this.handleFireFailure();
       }
     }
 
@@ -616,6 +722,111 @@ export class Game {
     }
   }
 
+  private collectWorldItems(): void {
+    const results = new Map<string, InventoryAcquireResult>();
+    const collected = this.worldItems.collect(this.player, (item) => {
+      const result = this.inventory.acquire(item.kind, item.itemId);
+      results.set(item.id, result);
+
+      return result.status !== "invalid" && result.status !== "full";
+    });
+
+    if (collected.length === 0) {
+      return;
+    }
+
+    let loadoutChanged = false;
+
+    for (const item of collected) {
+      const result = results.get(item.id);
+
+      if (!result) {
+        continue;
+      }
+
+      const type = this.worldItems.getType(item);
+      const label = this.itemLabel(item.kind, item.itemId).toUpperCase();
+
+      this.effects.spawnImpact(
+        item.x,
+        item.y,
+        type.color,
+        type.coreColor,
+        16,
+      );
+
+      if (result.status === "duplicate") {
+        const armor = result.salvageArmor
+          ? this.player.restoreArmor(result.salvageArmor)
+          : 0;
+        const energy = result.salvageEnergy
+          ? this.combat.restoreEnergy(result.salvageEnergy)
+          : 0;
+        const salvage =
+          armor > 0
+            ? `+${Math.round(armor)} ARMOR`
+            : energy > 0
+              ? `+${Math.round(energy)} CELL`
+              : "RECYCLED";
+
+        this.sfx.item(item.kind);
+        this.showFeedback(
+          `${label} · DUPLICATE ${salvage}`,
+          item.kind === "weapon" ? "energy" : "module",
+          1.8,
+        );
+        continue;
+      }
+
+      loadoutChanged = true;
+      this.sfx.item(item.kind);
+      this.showFeedback(
+        `${label} · ${result.status === "equipped" ? "EQUIPPED" : "STORED"} · I INVENTORY`,
+        item.kind === "weapon" ? "energy" : "module",
+        2.2,
+      );
+    }
+
+    if (loadoutChanged) {
+      this.applyInventoryModifiers();
+    }
+  }
+
+  private handleFireFailure(): void {
+    const failure = this.combat.lastFireFailure;
+
+    if (
+      (failure !== "energy" && failure !== "cooldown") ||
+      this.fireFeedbackCooldown > 0
+    ) {
+      return;
+    }
+
+    this.showFeedback(
+      failure === "energy" ? "CELL DEPLETED · RECHARGING" : "WEAPON CYCLING",
+      "energy",
+      0.8,
+    );
+    this.sfx.denied();
+    this.fireFeedbackCooldown = 0.75;
+  }
+
+  private applyInventoryModifiers(): void {
+    this.player.applyModifiers(this.inventory.playerModifiers);
+    this.combat.applyModifiers(this.inventory.combatModifiers);
+  }
+
+  private itemLabel(kind: InventoryItemKind, itemId: string): string {
+    if (kind === "weapon") {
+      return (
+        this.combat.availableWeapons.find((weapon) => weapon.id === itemId)
+          ?.name ?? itemId
+      );
+    }
+
+    return getEquipmentDef(itemId)?.name ?? itemId;
+  }
+
   private showDamageFeedback(healthDamage: number, armorAbsorbed: number): void {
     if (healthDamage <= 0 && armorAbsorbed <= 0) {
       return;
@@ -633,6 +844,7 @@ export class Game {
       this.playerRespawnRemaining = 1.6;
     }
 
+    this.inventoryOpen = false;
     this.showFeedback("SIGNAL LOST · REDEPLOYING", "death", 2);
   }
 
@@ -722,6 +934,7 @@ export class Game {
         creature.getRenderState(interpolation),
       ),
       pickups: this.pickups,
+      items: this.worldItems,
       effects: this.effects,
       combat: {
         weaponName: this.combat.currentWeapon.name,
@@ -795,6 +1008,20 @@ export class Game {
   }
 
   private publish(force = false): void {
+    const inventorySnapshot = this.inventory.snapshot();
+    const weaponSnapshots = this.combat.availableWeapons.map((weapon) => ({
+      id: weapon.id,
+      name: weapon.name,
+      slot: weapon.slot,
+      energyCost: weapon.energyCost,
+      description: weapon.description,
+      range: weapon.projectile.range,
+      selected: weapon.id === this.combat.currentWeapon.id,
+      owned: inventorySnapshot.weapons.some(
+        (entry) => entry.id === weapon.id && entry.owned,
+      ),
+    }));
+
     this.snapshots.update(
       {
         phase: this.phase,
@@ -848,6 +1075,8 @@ export class Game {
           weaponName: this.combat.currentWeapon.name,
           weaponSlot: this.combat.currentWeapon.slot,
           weaponCount: this.combat.availableWeapons.length,
+          description: this.combat.currentWeapon.description,
+          range: this.combat.currentWeapon.projectile.range,
           energy: this.combat.currentEnergy,
           maxEnergy: this.combat.maxEnergy,
           energyCost: this.combat.currentWeapon.energyCost,
@@ -861,13 +1090,16 @@ export class Game {
           enemiesAlive: this.spawnDirector.aliveCount,
           enemiesTotal: this.spawnDirector.maxAlive,
           kills: this.spawnDirector.defeatedCount,
-          weapons: this.combat.availableWeapons.map((weapon) => ({
-            id: weapon.id,
-            name: weapon.name,
-            slot: weapon.slot,
-            energyCost: weapon.energyCost,
-            selected: weapon.id === this.combat.currentWeapon.id,
-          })),
+          fireFailure: this.combat.lastFireFailure,
+          weapons: weaponSnapshots,
+        },
+        inventory: {
+          open: this.inventoryOpen,
+          capacity: inventorySnapshot.capacity,
+          used: inventorySnapshot.used,
+          weapons: weaponSnapshots,
+          equipped: inventorySnapshot.equipped,
+          stored: inventorySnapshot.stored,
         },
         frame: this.frame,
         elapsed: this.elapsed,

@@ -218,6 +218,68 @@ describe('Player health', () => {
   });
 });
 
+describe('Player equipment modifiers', () => {
+  it('updates caps and keeps resource ratios when the loadout changes', () => {
+    const player = new Player({ x: 500, y: 500 });
+    const CONTEXT: DamageContext = {
+      sourceId: 'crawler-1',
+      weaponId: 'crawler-melee',
+      direction: { x: 1, y: 0 },
+    };
+
+    player.takeDamage(80, CONTEXT);
+    const healthRatio = player.health / player.maxHealth;
+    const armorRatio = player.armor / player.maxArmor;
+
+    player.applyModifiers({
+      maxArmorBonus: 25,
+      armorAbsorbRatioBonus: 0.05,
+      maxStaminaBonus: 10,
+      moveSpeedMultiplier: 1.08,
+    });
+
+    expect(player.maxArmor).toBe(105);
+    expect(player.maxStamina).toBe(110);
+    expect(player.armor / player.maxArmor).toBeCloseTo(armorRatio);
+    expect(player.health / player.maxHealth).toBeCloseTo(healthRatio);
+
+    const moved = new Player({ x: 500, y: 500 });
+    moved.applyModifiers({ moveSpeedMultiplier: 1.08 });
+    simulate(moved, 1, { x: 1, y: 0 });
+    expect(moved.speed).toBeCloseTo(
+      DEFAULT_PLAYER_CONFIG.moveSpeed * 1.08,
+      1,
+    );
+
+    player.applyModifiers();
+    expect(player.maxArmor).toBe(DEFAULT_PLAYER_CONFIG.maxArmor);
+    expect(player.maxStamina).toBe(DEFAULT_PLAYER_CONFIG.maxStamina);
+    expect(player.armor).toBeLessThanOrEqual(player.maxArmor);
+    expect(player.health).toBeLessThanOrEqual(player.maxHealth);
+  });
+
+  it('uses modified health and armor caps on respawn and ignores invalid values', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    player.applyModifiers({
+      maxHealthBonus: 20,
+      maxArmorBonus: -999,
+      moveSpeedMultiplier: Number.NaN,
+      dodgeCooldownMultiplier: -1,
+    });
+
+    expect(player.maxHealth).toBe(120);
+    expect(player.maxArmor).toBe(0);
+    expect(player.health).toBe(120);
+
+    player.respawn({ x: 320, y: 640 });
+
+    expect(player.health).toBe(120);
+    expect(player.armor).toBe(0);
+    expect(player.dodgeCooldownMax).toBeGreaterThan(0);
+  });
+});
+
 describe('Player dodge', () => {
   it('bursts in the requested direction and enforces its cooldown', () => {
     const player = new Player({ x: 500, y: 500 });

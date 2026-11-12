@@ -29,6 +29,16 @@ describe('Greenreach Wilds', () => {
       radius: 14,
       respawnSeconds: 18,
     });
+    expect(world.items).toHaveLength(5);
+    expect(world.items.filter((item) => item.kind === 'weapon')).toHaveLength(2);
+    expect(
+      world.items.filter((item) => item.kind === 'equipment'),
+    ).toHaveLength(3);
+    expect(world.items[0]).toMatchObject({
+      kind: 'weapon',
+      itemId: 'rapid-blaster',
+      radius: 16,
+    });
   });
 
   it('keeps the start entry point clear and on the waystation', () => {
@@ -67,6 +77,7 @@ describe('Greenreach Wilds', () => {
       ...world.creatureSpawns,
       ...world.targets,
       ...world.pickups,
+      ...world.items,
       ...world.pointsOfInterest,
     ].map((item) => item.id);
 
@@ -134,6 +145,44 @@ describe('Greenreach Wilds', () => {
         ],
       }),
     ).toThrow(/pickup.*outside/i);
+  });
+
+  it('rejects items with unknown item ids', () => {
+    const map = createGreenreachMap();
+    const item = (map.items ?? [])[0];
+
+    expect(() =>
+      loadMap({
+        ...map,
+        items: [
+          ...(map.items ?? []),
+          { ...item, id: 'invalid-item-id', itemId: 'missing-item' },
+        ],
+      }),
+    ).toThrow(/item.*unknown/i);
+  });
+
+  it('rejects items that overlap a solid prop', () => {
+    const map = createGreenreachMap();
+    const item = (map.items ?? [])[0];
+
+    expect(() =>
+      loadMap({
+        ...map,
+        props: [
+          ...map.props,
+          {
+            id: 'invalid-item-blocker',
+            kind: 'boulder',
+            x: item.x - 10,
+            y: item.y - 10,
+            width: 20,
+            height: 20,
+            solid: true,
+          },
+        ],
+      }),
+    ).toThrow(/item.*overlap/i);
   });
 
   it('rejects creature spawns that overlap a solid prop', () => {

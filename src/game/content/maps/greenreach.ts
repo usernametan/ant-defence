@@ -1,5 +1,5 @@
 import { hashString, mulberry32 } from "../../core/rng";
-import { GREENREACH_PICKUPS } from "../pickups";
+import { GREENREACH_ITEMS, GREENREACH_PICKUPS } from "../pickups";
 import type { Rect, Vec2 } from "../../core/types";
 import type {
   MapDecorationDef,
@@ -249,6 +249,7 @@ export function createGreenreachMap(): MapDef {
     creatureSpawns: CREATURE_SPAWNS,
     targets: TARGETS,
     pickups: GREENREACH_PICKUPS,
+    items: GREENREACH_ITEMS,
     entryPoints,
     pointsOfInterest: POINTS_OF_INTEREST,
   };

@@ -8,6 +8,8 @@ import {
   selectDodgeReady,
   selectEnemiesReadout,
   selectEnergyPercent,
+  selectEquipmentUsed,
+  selectFireFailureLabel,
   selectHealthPercent,
   selectHostilesReadout,
   selectIsPaused,
@@ -191,6 +193,12 @@ describe('UI selectors', () => {
     expect(snapshot.combat.weaponCount).toBe(3);
     expect(snapshot.combat.weapons).toHaveLength(3);
     expect(snapshot.combat.weapons[0].selected).toBe(true);
+    expect(snapshot.combat.weapons[0].owned).toBe(true);
+    expect(snapshot.inventory.used).toBe(0);
+    expect(snapshot.inventory.capacity).toBe(6);
+    expect(snapshot.inventory.weapons).toHaveLength(3);
+    expect(selectEquipmentUsed(snapshot)).toBe('0 / 6');
+    expect(selectFireFailureLabel(snapshot)).toBeNull();
     expect(selectEnergyPercent(snapshot)).toBe(100);
     expect(selectWeaponStatus(snapshot)).toBe('Ready');
     expect(selectTargetsReadout(snapshot)).toBe('3 / 3');
@@ -221,5 +229,18 @@ describe('UI selectors', () => {
     };
 
     expect(selectWeaponStatus(cooling)).toBe('0.5s');
+
+    expect(
+      selectFireFailureLabel({
+        ...snapshot,
+        combat: { ...snapshot.combat, fireFailure: 'energy' },
+      }),
+    ).toBe('Cell depleted');
+    expect(
+      selectFireFailureLabel({
+        ...snapshot,
+        combat: { ...snapshot.combat, fireFailure: 'cooldown' },
+      }),
+    ).toBe('Recharging');
   });
 });

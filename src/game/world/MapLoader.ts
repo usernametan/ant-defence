@@ -1,11 +1,15 @@
 import { getCreatureArchetype } from "../content/creatures";
-import { getPickupType } from "../content/pickups";
+import { STARTER_WEAPONS } from "../content/equipment";
+import { getItemType, getPickupType } from "../content/pickups";
+import { EQUIPMENT_BY_ID } from "../content/upgrades";
 import type { Vec2 } from "../core/types";
 import { circleIntersectsAabb } from "./Collision";
 import {
+  type LoadedItemDef,
   type LoadedPickupDef,
   type LoadedWorld,
   type MapDef,
+  type MapItemDef,
   type MapPickupDef,
   type MapPropDef,
   type MapPropKind,
@@ -48,6 +52,7 @@ export function loadMap(def: MapDef): LoadedWorld {
   );
   const solidProps = props.filter((prop) => prop.solid);
   const pickups = def.pickups.map((pickup) => normalizePickup(pickup));
+  const items = (def.items ?? []).map((item) => normalizeItem(item));
   const spawn = def.entryPoints.start;
 
   if (!spawn) {
@@ -70,6 +75,7 @@ export function loadMap(def: MapDef): LoadedWorld {
     creatureSpawns: def.creatureSpawns,
     targets: def.targets,
     pickups,
+    items,
     entryPoints: def.entryPoints,
     spawn: { ...spawn },
     pointsOfInterest: def.pointsOfInterest,
@@ -81,6 +87,7 @@ export function loadMap(def: MapDef): LoadedWorld {
   validateCreatureSpawns(world);
   validateTargets(world);
   validatePickups(world);
+  validateItems(world);
 
   return world;
 }
@@ -105,6 +112,15 @@ function normalizePickup(pickup: MapPickupDef): LoadedPickupDef {
     amount: pickup.amount ?? type.amount,
     radius: pickup.radius ?? type.radius,
     respawnSeconds: pickup.respawnSeconds ?? type.respawnSeconds,
+  };
+}
+
+function normalizeItem(item: MapItemDef): LoadedItemDef {
+  const type = getItemType(item.kind);
+
+  return {
+    ...item,
+    radius: item.radius ?? type.radius,
   };
 }
 
@@ -174,6 +190,7 @@ function validateUniqueIds(world: LoadedWorld): void {
     ...world.creatureSpawns,
     ...world.targets,
     ...world.pickups,
+    ...world.items,
     ...world.pointsOfInterest,
   ]) {
     if (ids.has(item.id)) {
@@ -243,6 +260,31 @@ function validatePickups(world: LoadedWorld): void {
 
     if (isCircleBlocked(pickup, pickup.radius, world)) {
       throw new Error(`Pickup "${pickup.id}" overlaps a solid prop`);
+    }
+  }
+}
+
+function validateItems(world: LoadedWorld): void {
+  for (const item of world.items) {
+    const known =
+      item.kind === "weapon"
+        ? STARTER_WEAPONS.some((weapon) => weapon.id === item.itemId)
+        : EQUIPMENT_BY_ID.has(item.itemId);
+
+    if (!item.itemId || !known) {
+      throw new Error(`Item "${item.id}" has an unknown item id`);
+    }
+
+    if (!Number.isFinite(item.radius) || item.radius <= 0) {
+      throw new Error(`Item "${item.id}" has an invalid radius`);
+    }
+
+    if (!isCircleInBounds(item, item.radius, world)) {
+      throw new Error(`Item "${item.id}" is outside the map`);
+    }
+
+    if (isCircleBlocked(item, item.radius, world)) {
+      throw new Error(`Item "${item.id}" overlaps a solid prop`);
     }
   }
 }

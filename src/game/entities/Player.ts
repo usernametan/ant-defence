@@ -4,7 +4,8 @@ import type {
   Damageable,
   Team,
 } from "../combat/Damage";
-import { lerp } from "../core/math";
+import type { PlayerModifiers } from "../content/upgrades";
+import { clamp, lerp } from "../core/math";
 import type { Vec2 } from "../core/types";
 import {
   moveCircleWithCollision,
@@ -76,9 +77,9 @@ export interface PlayerRenderState {
 export class Player implements Damageable {
   readonly id = "player";
   readonly team: Team = "player";
-  readonly maxHealth: number;
-  readonly maxArmor: number;
-  private readonly config: PlayerConfig;
+  private readonly baseConfig: PlayerConfig;
+  private config: PlayerConfig;
+  private modifiers: PlayerModifiers = {};
   private position: Vec2;
   private previousPosition: Vec2;
   private velocityVector: Vec2 = { x: 0, y: 0 };
@@ -99,14 +100,21 @@ export class Player implements Damageable {
     spawn: Vec2,
     config: PlayerConfig = DEFAULT_PLAYER_CONFIG,
   ) {
+    this.baseConfig = config;
     this.config = config;
-    this.maxHealth = config.maxHealth;
-    this.maxArmor = config.maxArmor;
     this.position = { ...spawn };
     this.previousPosition = { ...spawn };
-    this.currentHealth = config.maxHealth;
-    this.currentArmor = config.maxArmor;
-    this.stamina = config.maxStamina;
+    this.currentHealth = this.maxHealth;
+    this.currentArmor = this.maxArmor;
+    this.stamina = this.maxStamina;
+  }
+
+  get maxHealth(): number {
+    return this.config.maxHealth;
+  }
+
+  get maxArmor(): number {
+    return this.config.maxArmor;
   }
 
   get x(): number {
@@ -139,6 +147,10 @@ export class Player implements Damageable {
 
   get maxStamina(): number {
     return this.config.maxStamina;
+  }
+
+  get modifiersActive(): PlayerModifiers {
+    return { ...this.modifiers };
   }
 
   get health(): number {
@@ -186,7 +198,7 @@ export class Player implements Damageable {
     this.currentHealth = this.maxHealth;
     this.currentArmor = this.maxArmor;
     this.flash = 0;
-    this.stamina = this.config.maxStamina;
+    this.stamina = this.maxStamina;
     this.staminaRegenDelayRemaining = 0;
     this.sprintingNow = false;
     this.dodgeRemaining = 0;
@@ -200,6 +212,39 @@ export class Player implements Damageable {
     this.invulnerableRemaining = Math.max(
       0,
       this.config.respawnInvulnerability,
+    );
+  }
+
+  applyModifiers(modifiers: PlayerModifiers = {}): void {
+    const previousMaxHealth = this.maxHealth;
+    const previousMaxArmor = this.maxArmor;
+    const previousMaxStamina = this.maxStamina;
+    const healthRatio =
+      previousMaxHealth > 0
+        ? clamp(this.currentHealth / previousMaxHealth, 0, 1)
+        : 1;
+    const armorRatio =
+      previousMaxArmor > 0
+        ? clamp(this.currentArmor / previousMaxArmor, 0, 1)
+        : 1;
+    const staminaRatio =
+      previousMaxStamina > 0
+        ? clamp(this.stamina / previousMaxStamina, 0, 1)
+        : 1;
+
+    this.modifiers = { ...modifiers };
+    this.config = applyPlayerModifiers(this.baseConfig, modifiers);
+    this.currentHealth = Math.min(
+      this.maxHealth,
+      this.maxHealth * healthRatio,
+    );
+    this.currentArmor = Math.min(
+      this.maxArmor,
+      this.maxArmor * armorRatio,
+    );
+    this.stamina = Math.min(
+      this.maxStamina,
+      this.maxStamina * staminaRatio,
     );
   }
 
@@ -441,6 +486,58 @@ export class Player implements Damageable {
       hitFlash: this.flash,
     };
   }
+}
+
+function applyPlayerModifiers(
+  base: PlayerConfig,
+  modifiers: PlayerModifiers,
+): PlayerConfig {
+  return {
+    ...base,
+    maxHealth: Math.max(
+      1,
+      base.maxHealth + finiteBonus(modifiers.maxHealthBonus),
+    ),
+    maxArmor: Math.max(
+      0,
+      base.maxArmor + finiteBonus(modifiers.maxArmorBonus),
+    ),
+    armorAbsorbRatio: clamp(
+      base.armorAbsorbRatio + finiteBonus(modifiers.armorAbsorbRatioBonus),
+      0,
+      1,
+    ),
+    moveSpeed: Math.max(
+      1,
+      base.moveSpeed * finiteMultiplier(modifiers.moveSpeedMultiplier),
+    ),
+    sprintMultiplier: Math.max(
+      0.1,
+      base.sprintMultiplier * finiteMultiplier(modifiers.sprintMultiplier),
+    ),
+    dodgeCooldown: Math.max(
+      0.05,
+      base.dodgeCooldown *
+        finiteMultiplier(modifiers.dodgeCooldownMultiplier),
+    ),
+    maxStamina: Math.max(
+      0,
+      base.maxStamina + finiteBonus(modifiers.maxStaminaBonus),
+    ),
+    staminaRegenRate: Math.max(
+      0,
+      base.staminaRegenRate *
+        finiteMultiplier(modifiers.staminaRegenRateMultiplier),
+    ),
+  };
+}
+
+function finiteBonus(value: number | undefined): number {
+  return Number.isFinite(value) ? (value ?? 0) : 0;
+}
+
+function finiteMultiplier(value: number | undefined): number {
+  return Number.isFinite(value) ? Math.max(0, value ?? 1) : 1;
 }
 
 function normalizeVector(vector: Vec2): Vec2 {

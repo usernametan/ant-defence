@@ -8,6 +8,8 @@ import {
   selectDodgeReady,
   selectEnemiesReadout,
   selectEnergyPercent,
+  selectEquipmentUsed,
+  selectFireFailureLabel,
   selectHealthPercent,
   selectPhaseLabel,
   selectPlayerReadout,
@@ -51,7 +53,9 @@ export function GameHost() {
         {snapshot.phase === 'menu' && (
           <MenuScreen snapshot={snapshot} game={game} />
         )}
-        {snapshot.phase !== 'menu' && <Hud snapshot={snapshot} />}
+        {snapshot.phase !== 'menu' && (
+          <Hud snapshot={snapshot} game={game} />
+        )}
         {snapshot.phase === 'paused' && (
           <PauseScreen snapshot={snapshot} game={game} />
         )}
@@ -93,9 +97,9 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <kbd>Enter</kbd>
           </button>
           <p className="mf-action-note">
-            Stage 6 hardens the expedition. Read the field, spend armor before
-            health, recover at caches along the roads, and make every trip
-            beyond Waystation Echo count.
+            Stage 7 arms the expedition. Tune three blaster lines with field
+            modules, recover salvage from duplicates, and make every trip beyond
+            Waystation Echo count.
           </p>
         </div>
 
@@ -131,7 +135,7 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
           </div>
           <div>
             <dt>Weapons</dt>
-            <dd>3 Arcade lines</dd>
+            <dd>3 blasters · 3 modules</dd>
           </div>
           <div>
             <dt>Region</dt>
@@ -149,20 +153,27 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
           </div>
         </dl>
         <p className="mf-briefing-footnote">
-          WASD move · Shift sprint · Space dodge · LMB fire · 1–3 weapons · F3
-          diagnostics
+          WASD move · Shift sprint · Space dodge · LMB fire · 1–3 weapons ·
+          I inventory · F3 diagnostics
         </p>
       </aside>
     </section>
   );
 }
 
-function Hud({ snapshot }: { snapshot: UiSnapshot }) {
+function Hud({
+  snapshot,
+  game,
+}: {
+  snapshot: UiSnapshot;
+  game: Game | null;
+}) {
   const stamina = selectStaminaPercent(snapshot);
   const health = selectHealthPercent(snapshot);
   const armor = selectArmorPercent(snapshot);
   const dodgeReady = selectDodgeReady(snapshot);
   const notice = snapshot.survival.notice;
+  const fireFailure = selectFireFailureLabel(snapshot);
 
   return (
     <div className="mf-hud" aria-live="polite">
@@ -194,6 +205,9 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
             KILLS <strong>{snapshot.combat.kills}</strong>
           </span>
           <span>
+            MOD <strong>{selectEquipmentUsed(snapshot)}</strong>
+          </span>
+          <span>
             FPS <strong>{Math.round(snapshot.fps || 60)}</strong>
           </span>
         </div>
@@ -217,6 +231,8 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
             PICKUP {snapshot.survival.pickupsActive}/
             {snapshot.survival.pickupsTotal}
           </span>
+          <span>MODULES {selectEquipmentUsed(snapshot)}</span>
+          <span>FIRE {fireFailure ?? 'READY'}</span>
           <span>DODGE {snapshot.player.dodgeCooldown.toFixed(2)}s</span>
           <span>STAM {stamina}%</span>
           <span>FPS {snapshot.fps.toFixed(0)}</span>
@@ -226,7 +242,7 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
       <div className="mf-hud-bottom">
         <div className="mf-status-stack">
           <span className="mf-stage-stamp">
-            {snapshot.stage} // survival online
+            {snapshot.stage} // loadout online
           </span>
           <div className="mf-player-meters">
             <div
@@ -280,6 +296,8 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
 
         <WeaponPanel snapshot={snapshot} />
 
+        <LoadoutPanel snapshot={snapshot} />
+
         {notice && snapshot.player.alive && (
           <div
             className={`mf-survival-notice is-${notice.tone}`}
@@ -297,10 +315,15 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
           <kbd>Space</kbd> dodge <span aria-hidden="true">·</span>{' '}
           <kbd>LMB</kbd> fire <span aria-hidden="true">·</span>{' '}
           <kbd>1–3</kbd> weapon <span aria-hidden="true">·</span>{' '}
+          <kbd>I</kbd> inventory <span aria-hidden="true">·</span>{' '}
           <kbd>Esc</kbd> pause <span aria-hidden="true">·</span>{' '}
           <kbd>F3</kbd> debug
         </span>
       </div>
+
+      {snapshot.inventory.open && (
+        <InventoryScreen snapshot={snapshot} game={game} />
+      )}
 
       {!snapshot.player.alive && (
         <div className="mf-death-overlay" role="status" aria-live="assertive">
@@ -311,6 +334,181 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+const EQUIPMENT_SLOTS = [
+  { id: 'plating', label: 'Plating' },
+  { id: 'mobility', label: 'Mobility' },
+  { id: 'regulator', label: 'Regulator' },
+] as const;
+
+function LoadoutPanel({ snapshot }: { snapshot: UiSnapshot }) {
+  const equippedBySlot = new Map(
+    snapshot.inventory.equipped.map((item) => [item.slot, item]),
+  );
+
+  return (
+    <div className="mf-loadout-panel" aria-label="Equipped modules">
+      <div className="mf-loadout-heading">
+        <span>LOADOUT</span>
+        <strong>{selectEquipmentUsed(snapshot)}</strong>
+      </div>
+      <div className="mf-loadout-slots">
+        {EQUIPMENT_SLOTS.map((slot) => {
+          const equipped = equippedBySlot.get(slot.id);
+
+          return (
+            <span
+              key={slot.id}
+              className={`mf-loadout-slot${equipped ? ' is-filled' : ''}`}
+              title={equipped?.description}
+            >
+              <small>{slot.label}</small>
+              <strong>{equipped?.name ?? 'Empty'}</strong>
+            </span>
+          );
+        })}
+      </div>
+      <span className="mf-loadout-hint">
+        <kbd>I</kbd> manage inventory
+      </span>
+    </div>
+  );
+}
+
+function InventoryScreen({
+  snapshot,
+  game,
+}: {
+  snapshot: UiSnapshot;
+  game: Game | null;
+}) {
+  const equippedBySlot = new Map(
+    snapshot.inventory.equipped.map((item) => [item.slot, item]),
+  );
+
+  return (
+    <div className="mf-inventory" role="dialog" aria-modal="true" aria-labelledby="mf-inventory-title">
+      <div className="mf-inventory-card">
+        <header className="mf-inventory-header">
+          <div>
+            <p className="mf-kicker">Field loadout</p>
+            <h2 id="mf-inventory-title">Inventory</h2>
+          </div>
+          <button
+            type="button"
+            className="mf-inventory-close"
+            onClick={() => game?.toggleInventory()}
+          >
+            Close <kbd>I</kbd>
+          </button>
+        </header>
+
+        <div className="mf-inventory-grid">
+          <section aria-labelledby="mf-inventory-weapons">
+            <div className="mf-inventory-section-heading">
+              <h3 id="mf-inventory-weapons">Weapons</h3>
+              <span>{snapshot.combat.weaponCount} lines</span>
+            </div>
+            <ul className="mf-inventory-list">
+              {snapshot.inventory.weapons.map((weapon) => (
+                <li
+                  key={weapon.id}
+                  className={`mf-inventory-item${weapon.selected ? ' is-selected' : ''}`}
+                >
+                  <span className="mf-inventory-item-main">
+                    <span className="mf-inventory-item-title">
+                      <kbd>{weapon.slot + 1}</kbd>
+                      <strong>{weapon.name}</strong>
+                      {weapon.selected && <em>Active</em>}
+                      {!weapon.owned && <em>Offline</em>}
+                    </span>
+                    <small>{weapon.description}</small>
+                  </span>
+                  <span className="mf-inventory-stat">
+                    {Math.round(weapon.range)} R
+                    <small>{weapon.energyCost} cell</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section aria-labelledby="mf-inventory-equipment">
+            <div className="mf-inventory-section-heading">
+              <h3 id="mf-inventory-equipment">Modules</h3>
+              <span>{selectEquipmentUsed(snapshot)} stored</span>
+            </div>
+            <div className="mf-inventory-equipped">
+              {EQUIPMENT_SLOTS.map((slot) => {
+                const equipped = equippedBySlot.get(slot.id);
+
+                return (
+                  <div
+                    key={slot.id}
+                    className={`mf-inventory-slot${equipped ? ' is-filled' : ''}`}
+                  >
+                    <span>
+                      <small>{slot.label}</small>
+                      <strong>{equipped?.name ?? 'Empty socket'}</strong>
+                    </span>
+                    {equipped && (
+                      <button
+                        type="button"
+                        className="mf-inventory-action"
+                        onClick={() => game?.unequipInventorySlot(slot.id)}
+                      >
+                        Unequip
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mf-inventory-section-heading mf-inventory-stored-heading">
+              <h3>Stored</h3>
+              <span>{snapshot.inventory.stored.length}</span>
+            </div>
+            {snapshot.inventory.stored.length === 0 ? (
+              <p className="mf-inventory-empty">
+                No spare modules. Recover frontier equipment to expand the
+                loadout.
+              </p>
+            ) : (
+              <ul className="mf-inventory-list">
+                {snapshot.inventory.stored.map((item) => (
+                  <li key={item.id} className="mf-inventory-item">
+                    <span className="mf-inventory-item-main">
+                      <span className="mf-inventory-item-title">
+                        <strong>{item.name}</strong>
+                        <em>{item.slot}</em>
+                      </span>
+                      <small>{item.description}</small>
+                    </span>
+                    <button
+                      type="button"
+                      className="mf-inventory-action"
+                      onClick={() => game?.equipInventoryItem(item.id)}
+                    >
+                      Equip
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <footer className="mf-inventory-footer">
+          <span>One module per socket · equipped effects are live</span>
+          <span>
+            Capacity <strong>{selectEquipmentUsed(snapshot)}</strong>
+          </span>
+        </footer>
+      </div>
     </div>
   );
 }
@@ -386,7 +584,7 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
           </button>
         </div>
         <p className="mf-pause-footnote">
-          Stage 6 / Survival & Damage Systems · build {snapshot.version}
+          Stage 7 / Equipment & Inventory · build {snapshot.version}
         </p>
       </div>
     </div>

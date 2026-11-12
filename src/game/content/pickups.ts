@@ -1,4 +1,9 @@
-import type { MapPickupDef, PickupKind } from "../world/MapDef";
+import type {
+  MapItemDef,
+  MapItemKind,
+  MapPickupDef,
+  PickupKind,
+} from "../world/MapDef";
 
 export type PickupSymbol = "cross" | "shield";
 
@@ -51,6 +56,78 @@ export const GREENREACH_PICKUPS: readonly MapPickupDef[] = [
   { id: "pickup-armor-quiet-glade", kind: "armor", x: 1460, y: 1150 },
 ];
 
+export type WorldItemSymbol = "weapon" | "module";
+
+export interface WorldItemTypeDef {
+  kind: MapItemKind;
+  label: string;
+  radius: number;
+  color: string;
+  coreColor: string;
+  symbol: WorldItemSymbol;
+}
+
+export const ITEM_TYPES: Record<MapItemKind, WorldItemTypeDef> = {
+  weapon: {
+    kind: "weapon",
+    label: "Weapon Module",
+    radius: 16,
+    color: "#f7bf5b",
+    coreColor: "#fff0c4",
+    symbol: "weapon",
+  },
+  equipment: {
+    kind: "equipment",
+    label: "Equipment Module",
+    radius: 16,
+    color: "#8fb7ff",
+    coreColor: "#eef4ff",
+    symbol: "module",
+  },
+};
+
+export const GREENREACH_ITEMS: readonly MapItemDef[] = [
+  {
+    id: "item-weapon-west-road",
+    kind: "weapon",
+    itemId: "rapid-blaster",
+    x: 850,
+    y: 700,
+  },
+  {
+    id: "item-weapon-ruins",
+    kind: "weapon",
+    itemId: "heavy-blaster",
+    x: 1220,
+    y: 805,
+  },
+  {
+    id: "item-equipment-waystation",
+    kind: "equipment",
+    itemId: "reinforced-plating",
+    x: 545,
+    y: 595,
+  },
+  {
+    id: "item-equipment-north-trail",
+    kind: "equipment",
+    itemId: "mobility-module",
+    x: 1440,
+    y: 320,
+  },
+  {
+    id: "item-equipment-ford",
+    kind: "equipment",
+    itemId: "energy-regulator",
+    x: 1730,
+    y: 710,
+  },
+];
+
 export function getPickupType(kind: PickupKind): PickupTypeDef {
   return PICKUP_TYPES[kind];
+}
+
+export function getItemType(kind: MapItemKind): WorldItemTypeDef {
+  return ITEM_TYPES[kind];
 }

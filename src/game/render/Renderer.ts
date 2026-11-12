@@ -4,6 +4,7 @@ import type { GameConfig, Vec2 } from "../core/types";
 import type { Creature, CreatureRenderState } from "../entities/Creature";
 import type { PlayerRenderState } from "../entities/Player";
 import type { TargetDummy } from "../entities/TargetDummy";
+import type { ItemPickupSystem } from "../systems/ItemPickupSystem";
 import type { PickupSystem } from "../systems/PickupSystem";
 import type { LoadedWorld } from "../world/MapDef";
 import type { Camera } from "./Camera";
@@ -11,6 +12,7 @@ import { drawCreature } from "./drawCreature";
 import { drawDebugOverlay, drawWorldDebug } from "./drawDebug";
 import { drawPickup } from "./drawPickups";
 import { drawPlayer } from "./drawPlayer";
+import { drawWorldItem } from "./drawWorldItems";
 import { drawProjectiles } from "./drawProjectiles";
 import { drawTargetDummy } from "./drawTargetDummy";
 import {
@@ -54,6 +56,7 @@ export interface RenderState {
   creatures: readonly Creature[];
   creatureStates: readonly CreatureRenderState[];
   pickups: PickupSystem;
+  items: ItemPickupSystem;
   effects: ImpactEffects;
   combat: CombatRenderState;
 }
@@ -255,6 +258,17 @@ export class Renderer {
       items.push({
         y: pickup.y,
         draw: () => drawPickup(context, pickup, state.timeSeconds),
+      });
+    }
+
+    for (const item of state.items.items) {
+      if (!item.active) {
+        continue;
+      }
+
+      items.push({
+        y: item.y,
+        draw: () => drawWorldItem(context, item, state.timeSeconds),
       });
     }
 

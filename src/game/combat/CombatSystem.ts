@@ -1,7 +1,12 @@
 import { randomRange, type RandomSource } from "../core/rng";
 import type { Vec2 } from "../core/types";
 import { STARTER_WEAPONS } from "../content/equipment";
-import type { ShotSpawn, WeaponDef } from "./WeaponDef";
+import {
+  validateWeaponDefinitions,
+  type CombatFireFailure,
+  type ShotSpawn,
+  type WeaponDef,
+} from "./WeaponDef";
 
 export interface CombatConfig {
   maxEnergy: number;
@@ -14,6 +19,13 @@ export const DEFAULT_COMBAT_CONFIG: CombatConfig = {
   energyRegenRate: 26,
   energyRegenDelay: 0.32,
 };
+
+export interface CombatModifiers {
+  maxEnergyBonus?: number;
+  energyRegenRateMultiplier?: number;
+}
+
+export const EMPTY_COMBAT_MODIFIERS: CombatModifiers = {};
 
 export interface CombatFireInput {
   firing: boolean;
@@ -29,22 +41,23 @@ export interface FireResult {
 export class CombatSystem {
   private readonly weapons: readonly WeaponDef[];
   private readonly cooldowns: number[];
-  private readonly config: CombatConfig;
+  private readonly baseConfig: CombatConfig;
+  private config: CombatConfig;
   private currentIndex = 0;
   private energy: number;
   private energyRegenDelayRemaining = 0;
+  private fireFailure: CombatFireFailure | null = null;
 
   constructor(
     weapons: readonly WeaponDef[] = STARTER_WEAPONS,
     config: CombatConfig = DEFAULT_COMBAT_CONFIG,
     private readonly random: RandomSource = Math.random,
   ) {
-    if (weapons.length === 0) {
-      throw new Error("CombatSystem requires at least one weapon");
-    }
+    validateWeaponDefinitions(weapons);
 
     this.weapons = weapons;
     this.cooldowns = weapons.map(() => 0);
+    this.baseConfig = config;
     this.config = config;
     this.energy = config.maxEnergy;
   }
@@ -84,6 +97,47 @@ export class CombatSystem {
     );
   }
 
+  get lastFireFailure(): CombatFireFailure | null {
+    return this.fireFailure;
+  }
+
+  applyModifiers(modifiers: CombatModifiers = EMPTY_COMBAT_MODIFIERS): void {
+    const previousMax = this.config.maxEnergy;
+    const energyRatio =
+      previousMax > 0 ? Math.min(1, this.energy / previousMax) : 1;
+
+    this.config = {
+      ...this.baseConfig,
+      maxEnergy: Math.max(
+        1,
+        this.baseConfig.maxEnergy + (modifiers.maxEnergyBonus ?? 0),
+      ),
+      energyRegenRate: Math.max(
+        0,
+        this.baseConfig.energyRegenRate *
+          Math.max(0, modifiers.energyRegenRateMultiplier ?? 1),
+      ),
+    };
+    this.energy = Math.min(
+      this.config.maxEnergy,
+      this.config.maxEnergy * energyRatio,
+    );
+  }
+
+  restoreEnergy(amount: number): number {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return 0;
+    }
+
+    const restored = Math.min(
+      this.config.maxEnergy - this.energy,
+      amount,
+    );
+    this.energy += restored;
+
+    return restored;
+  }
+
   selectWeapon(index: number): boolean {
     if (
       !Number.isInteger(index) ||
@@ -102,6 +156,8 @@ export class CombatSystem {
       this.tick(deltaSeconds);
     }
 
+    this.fireFailure = null;
+
     return this.tryFire(input);
   }
 
@@ -109,6 +165,7 @@ export class CombatSystem {
     this.currentIndex = 0;
     this.energy = this.config.maxEnergy;
     this.energyRegenDelayRemaining = 0;
+    this.fireFailure = null;
 
     for (let index = 0; index < this.cooldowns.length; index += 1) {
       this.cooldowns[index] = 0;
@@ -137,7 +194,12 @@ export class CombatSystem {
   }
 
   private tryFire(input: CombatFireInput): FireResult | null {
-    if (!input.firing || !input.aim) {
+    if (!input.firing) {
+      return null;
+    }
+
+    if (!input.aim) {
+      this.fireFailure = "no-aim";
       return null;
     }
 
@@ -146,13 +208,20 @@ export class CombatSystem {
     const distance = Math.hypot(deltaX, deltaY);
 
     if (distance < 4) {
+      this.fireFailure = "range";
       return null;
     }
 
     const weapon = this.currentWeapon;
     const cooldown = this.cooldowns[this.currentIndex];
 
-    if (cooldown > 0 || this.energy < weapon.energyCost) {
+    if (cooldown > 0) {
+      this.fireFailure = "cooldown";
+      return null;
+    }
+
+    if (this.energy < weapon.energyCost) {
+      this.fireFailure = "energy";
       return null;
     }
 
@@ -181,7 +250,10 @@ export class CombatSystem {
         angle: baseAngle + offset,
         damage: weapon.projectile.damage,
         speed: weapon.projectile.speed,
-        life: weapon.projectile.life,
+        life: Math.min(
+          weapon.projectile.life,
+          weapon.projectile.range / weapon.projectile.speed,
+        ),
         radius: weapon.projectile.radius,
         pierce: weapon.projectile.pierce,
         weaponId: weapon.id,
