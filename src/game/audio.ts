@@ -296,4 +296,47 @@ export class AudioEngine {
     if (!ctx) return;
     this.tone(ctx, { from: 540, to: 420, duration: 0.05, type: 'sine', gain: 0.045 });
   }
+
+  mortarLaunch(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.noise(ctx, { duration: 0.18, gain: 0.2, frequency: 400, q: 0.6 });
+    this.tone(ctx, { from: 1400, to: 300, duration: 1.05, type: 'sine', gain: 0.035, delay: 0.05 });
+  }
+
+  mortarBoom(pan?: number): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.noise(ctx, { duration: 0.7, gain: 0.38, frequency: 140, q: 0.4, pan });
+    this.tone(ctx, { from: 120, to: 32, duration: 0.7, type: 'sawtooth', gain: 0.14, pan });
+  }
+
+  zap(pan?: number): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.noise(ctx, { duration: 0.12, gain: 0.12, frequency: 3200, q: 2.2, pan });
+    this.tone(ctx, { from: 1800, to: 600, duration: 0.12, type: 'sawtooth', gain: 0.035, pan });
+  }
+
+  droneShot(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(ctx, { from: 900, to: 400, duration: 0.06, type: 'square', gain: 0.03, pan: -0.5 });
+  }
+
+  overdrive(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    this.tone(ctx, { from: 180, to: 1200, duration: 0.5, type: 'sawtooth', gain: 0.06 });
+    this.tone(ctx, { from: 360, to: 2000, duration: 0.45, type: 'triangle', gain: 0.04, delay: 0.08 });
+    this.noise(ctx, { duration: 0.5, gain: 0.08, frequency: 2600, q: 0.8 });
+  }
+
+  achievement(): void {
+    const ctx = this.ready();
+    if (!ctx) return;
+    [659.3, 830.6, 987.8, 1318.5].forEach((freq, i) => {
+      this.tone(ctx, { from: freq, to: freq, duration: 0.32, type: 'triangle', gain: 0.05, delay: i * 0.07 });
+    });
+  }
 }

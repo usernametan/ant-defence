@@ -178,3 +178,24 @@ export function CrownIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function MortarIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 28 28"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="14" cy="18" r="7" strokeDasharray="3 3" />
+      <circle cx="14" cy="18" r="2.5" fill="currentColor" fillOpacity="0.3" />
+      <path d="M14 3 V12" />
+      <path d="M10.5 9.5 L14 13 L17.5 9.5" />
+    </svg>
+  );
+}

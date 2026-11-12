@@ -1,10 +1,14 @@
 import {
   ABILITIES,
   ANT_TYPES,
+  CHAIN,
   COLOR,
   DIFFICULTY,
+  DRONE,
   LEECH,
   LANES,
+  MORTAR,
+  OVERDRIVE,
   PLAYER,
   POWERUPS,
   POWERUP_DEFS,
@@ -14,6 +18,12 @@ import {
   VIEW_WIDTH,
   WORLD,
 } from './config';
+import {
+  ACHIEVEMENT_DEFS,
+  achievementSnapshots,
+  loadAchievements,
+  saveAchievements,
+} from './achievements';
 import { AudioEngine } from './audio';
 import {
   DIFFICULTY_PRESETS,
@@ -49,6 +59,14 @@ import {
   spawnSpawnDust,
   updateParticles,
 } from './effects';
+import {
+  loadMode,
+  loadMutators,
+  MODE_META,
+  saveMode,
+  saveMutators,
+  scoreMultiplierFor,
+} from './modes';
 import { Player } from './player';
 import { Scenery, waveToBiome } from './scenery';
 import {
@@ -61,6 +79,16 @@ import {
   type SceneryMode,
   type WordPackId,
 } from './settings';
+import {
+  drawArcs,
+  drawBlackout,
+  drawDrone,
+  drawMortarShells,
+  drawOverdriveTint,
+  makeArcPoints,
+  spawnMortarBlast,
+  updateArcs,
+} from './tactical';
 import {
   addRun,
   loadLeaderboard,
@@ -77,17 +105,24 @@ import {
 import type {
   AbilityId,
   AbilitySnapshot,
+  AchievementId,
   AcidGlob,
   Ant,
   AntKind,
   BannerSnapshot,
   Bullet,
+  DroneState,
   FloatingText,
+  GameMode,
   GamePhase,
   HudSnapshot,
+  LightningArc,
+  MortarShell,
+  MutatorId,
   Particle,
   Pickup,
   PowerupType,
+  ToastSnapshot,
   UpgradeId,
   UpgradeOption,
   WpmSample,
@@ -104,7 +139,7 @@ type WaveState = {
   bossSpawned: boolean;
 };
 
-const ABILITY_IDS: AbilityId[] = ['focus', 'aegis', 'power'];
+const ABILITY_IDS: AbilityId[] = ['focus', 'aegis', 'power', 'mortar'];
 const ALL_UPGRADE_IDS: UpgradeId[] = [
   'ricochet',
   'wire',
@@ -112,6 +147,8 @@ const ALL_UPGRADE_IDS: UpgradeId[] = [
   'hollow',
   'medic',
   'mag',
+  'chain',
+  'drone',
 ];
 
 const WPM_SAMPLE_INTERVAL = 2.5;
@@ -205,6 +242,7 @@ export class GameEngine {
     focus: 0,
     aegis: 0,
     power: 0,
+    mortar: 0,
   };
 
   private slowUntil = 0;
@@ -212,6 +250,42 @@ export class GameEngine {
   private shieldUntil = 0;
 
   private powerCharges = 0;
+
+  private mode: GameMode = loadMode();
+
+  private mutators: MutatorId[] = loadMutators();
+
+  private mortarShells: MortarShell[] = [];
+
+  private nextMortarId = 1;
+
+  private lightningArcs: LightningArc[] = [];
+
+  private drone: DroneState = {
+    x: WORLD.playerX + 46,
+    y: WORLD.playerFeetY - 166,
+    timer: DRONE.baseInterval,
+    phase: 0,
+    flash: 0,
+  };
+
+  private overdrive = 0;
+
+  private overdriveUntil = 0;
+
+  private waveMistakesAtStart = 0;
+
+  private unlockedAchievements: Set<AchievementId> = loadAchievements();
+
+  private runAchievements: AchievementId[] = [];
+
+  private toasts: ToastSnapshot[] = [];
+
+  private nextToastId = 1;
+
+  private streakPop: { key: number; value: number; until: number } | null = null;
+
+  private nextStreakPopKey = 1;
 
   private pickups: Pickup[] = [];
 
@@ -407,6 +481,73 @@ export class GameEngine {
     this.emit();
   }
 
+  setMode(mode: GameMode): void {
+    if (this.phase !== 'menu') return;
+    if (this.mode === mode) return;
+    this.mode = mode;
+    saveMode(mode);
+    this.emit();
+  }
+
+  toggleMutator(id: MutatorId): void {
+    if (this.phase !== 'menu') return;
+    const index = this.mutators.indexOf(id);
+    if (index >= 0) {
+      this.mutators = this.mutators.filter((m) => m !== id);
+    } else {
+      this.mutators = [...this.mutators, id];
+    }
+    saveMutators(this.mutators);
+    this.emit();
+  }
+
+  finishZenRun(): void {
+    if (this.phase !== 'paused' && this.phase !== 'playing') return;
+    this.endGame();
+  }
+
+  private hasMutator(id: MutatorId): boolean {
+    return this.mutators.includes(id);
+  }
+
+  private unlockAchievement(id: AchievementId): void {
+    if (!this.runAchievements.includes(id)) {
+      this.runAchievements.push(id);
+    }
+    if (this.unlockedAchievements.has(id)) return;
+    this.unlockedAchievements.add(id);
+    saveAchievements(this.unlockedAchievements);
+    const meta = ACHIEVEMENT_DEFS[id];
+    this.toasts.push({
+      key: this.nextToastId,
+      title: meta.name,
+      subtitle: meta.description,
+      icon: meta.icon,
+      until: this.visualTime + 4.2,
+    });
+    this.nextToastId += 1;
+    this.audio.achievement();
+  }
+
+  private addOverdrive(amount: number): void {
+    if (this.elapsed < this.overdriveUntil) return;
+    this.overdrive = clamp(this.overdrive + amount, 0, 1);
+    if (this.overdrive >= 1) {
+      this.overdrive = 0;
+      this.overdriveUntil = this.elapsed + OVERDRIVE.duration;
+      this.audio.overdrive();
+      this.shake = Math.max(this.shake, 11);
+      this.floater(
+        this.player.x + 36,
+        this.player.y - 168,
+        'OVERDRIVE ENGAGED!',
+        '#6ce5ff',
+        22,
+      );
+      this.unlockAchievement('overdrive');
+    }
+  }
+
   private get difficulty(): DifficultyPreset {
     return DIFFICULTY_PRESETS[this.difficultyId];
   }
@@ -428,6 +569,8 @@ export class GameEngine {
         POWERUPS.maxPowerCharges,
         this.powerCharges + 2,
       );
+    } else if (id === 'drone') {
+      this.drone.timer = 0.8;
     }
     this.audio.pickupCollect();
     this.phase = 'playing';
@@ -449,18 +592,72 @@ export class GameEngine {
       this.slowUntil = this.elapsed + ABILITIES.focus.duration;
       this.readyAt.focus = this.elapsed + ABILITIES.focus.cooldown * cdScale;
       this.floater(this.player.x + 30, this.player.y - 156, 'FOCUS', COLOR.blue, 21);
+      this.audio.ability();
     } else if (id === 'aegis') {
       this.shieldUntil = this.elapsed + ABILITIES.aegis.duration;
       this.readyAt.aegis = this.elapsed + ABILITIES.aegis.cooldown * cdScale;
       this.floater(this.player.x + 30, this.player.y - 156, 'AEGIS', COLOR.blue, 21);
-    } else {
+      this.audio.ability();
+    } else if (id === 'power') {
       const bonusCharges = this.hasUpgrade('mag') ? 2 : 0;
       this.powerCharges = ABILITIES.power.charges + bonusCharges;
       this.readyAt.power = this.elapsed + ABILITIES.power.cooldown * cdScale;
       this.floater(this.player.x + 30, this.player.y - 156, 'POWER ROUNDS', COLOR.gold, 20);
+      this.audio.ability();
+    } else if (id === 'mortar') {
+      this.readyAt.mortar = this.elapsed + ABILITIES.mortar.cooldown * cdScale;
+      this.launchMortar();
     }
-    this.audio.ability();
     this.emit();
+  }
+
+  private launchMortar(): void {
+    const aliveAnts = this.ants.filter(
+      (ant) => ant.alive && !ant.burrowed && ant.x <= VIEW_WIDTH - 40,
+    );
+    let targetX = 1040;
+    let targetY: number = LANES[1].y;
+    if (aliveAnts.length > 0) {
+      let bestAnt = aliveAnts[0];
+      let bestCluster = -1;
+      for (const candidate of aliveAnts) {
+        const count = aliveAnts.filter(
+          (other) =>
+            Math.hypot(other.x - candidate.x, other.y - candidate.y) <=
+            MORTAR.radius,
+        ).length;
+        if (
+          count > bestCluster ||
+          (count === bestCluster && candidate.x < bestAnt.x)
+        ) {
+          bestCluster = count;
+          bestAnt = candidate;
+        }
+      }
+      targetX = clamp(
+        bestAnt.x - bestAnt.speed * MORTAR.fuse * 0.65,
+        WORLD.lineX + 120,
+        VIEW_WIDTH - 90,
+      );
+      targetY = bestAnt.y;
+    }
+    this.mortarShells.push({
+      id: this.nextMortarId,
+      x: targetX,
+      y: targetY,
+      timer: MORTAR.fuse,
+      maxTimer: MORTAR.fuse,
+      radius: MORTAR.radius,
+    });
+    this.nextMortarId += 1;
+    this.floater(
+      this.player.x + 36,
+      this.player.y - 156,
+      'MORTAR INBOUND',
+      '#ff9b6a',
+      20,
+    );
+    this.audio.mortarLaunch();
   }
 
   getSnapshot(): HudSnapshot {
@@ -468,8 +665,11 @@ export class GameEngine {
   }
 
   private resetRun(): void {
-    this.health = WORLD.health;
-    this.maxHealth = WORLD.health;
+    const startHp = this.hasMutator('glass')
+      ? Math.round(WORLD.health * 0.5)
+      : WORLD.health;
+    this.health = startHp;
+    this.maxHealth = startHp;
     this.wave = 1;
     this.elapsed = 0;
     this.eliminated = 0;
@@ -492,10 +692,24 @@ export class GameEngine {
     this.inputError = 0;
     this.breachFlash = 0;
     this.shake = 0;
-    this.readyAt = { focus: 0, aegis: 0, power: 0 };
+    this.readyAt = { focus: 0, aegis: 0, power: 0, mortar: 0 };
     this.slowUntil = 0;
     this.shieldUntil = 0;
     this.powerCharges = 0;
+    this.mortarShells = [];
+    this.lightningArcs = [];
+    this.overdrive = 0;
+    this.overdriveUntil = 0;
+    this.waveMistakesAtStart = 0;
+    this.runAchievements = [];
+    this.streakPop = null;
+    this.drone = {
+      x: WORLD.playerX + 46,
+      y: WORLD.playerFeetY - 166,
+      timer: DRONE.baseInterval,
+      phase: 0,
+      flash: 0,
+    };
     this.pickups = [];
     this.targetPickupId = null;
     this.scoreSurgeUntil = 0;
@@ -515,8 +729,22 @@ export class GameEngine {
     this.startWave();
   }
 
+  private isBossWave(): boolean {
+    if (this.mode === 'bossrush') return true;
+    if (this.mode === 'zen') return false;
+    return this.wave % DIFFICULTY.bossEvery === 0;
+  }
+
   private startWave(): void {
-    const bossWave = this.wave % DIFFICULTY.bossEvery === 0;
+    const bossWave = this.isBossWave();
+    this.waveMistakesAtStart = this.mistakes;
+    if (this.wave >= 10) this.unlockAchievement('wave_10');
+    if (this.wave >= 5 && this.mutators.length >= 2) {
+      this.unlockAchievement('mutated');
+    }
+    if (this.wave >= 5 && this.mode === 'blackout') {
+      this.unlockAchievement('blackout_5');
+    }
     const quota = bossWave
       ? 6 + Math.floor(this.wave * 0.8)
       : Math.min(
@@ -536,7 +764,9 @@ export class GameEngine {
     };
     const subtitle = bossWave
       ? `ROYAL ASSAULT — THE QUEEN APPROACHES`
-      : waveTitle(this.wave);
+      : this.mode === 'zen'
+        ? `ZEN DRILL — ENDLESS PRACTICE`
+        : waveTitle(this.wave);
     this.setBanner(`WAVE ${this.wave}`, subtitle, DIFFICULTY.waveBannerTime);
     if (bossWave) {
       this.audio.boss();
@@ -572,6 +802,7 @@ export class GameEngine {
     ) {
       this.player.update(dt, null, false);
       updateParticles(this.particles, dt);
+      updateArcs(this.lightningArcs, dt);
       this.updateFloaters(dt);
       this.breachFlash = Math.max(0, this.breachFlash - dt * 2);
       this.shake = Math.max(0, this.shake - dt * 50);
@@ -593,7 +824,12 @@ export class GameEngine {
     this.wpmSampleTimer += dt;
     if (this.wpmSampleTimer >= WPM_SAMPLE_INTERVAL) {
       this.wpmSampleTimer -= WPM_SAMPLE_INTERVAL;
-      this.wpmHistory.push({ t: this.elapsed, wpm: this.currentWpm() });
+      const wpm = this.currentWpm();
+      this.wpmHistory.push({ t: this.elapsed, wpm });
+      if (this.elapsed >= 30) {
+        if (wpm >= 60) this.unlockAchievement('speed_60');
+        if (wpm >= 90) this.unlockAchievement('speed_90');
+      }
     }
 
     const targetAnt = this.ants.find(
@@ -743,13 +979,16 @@ export class GameEngine {
     );
     this.updateAcidGlobs(dt, speedScale);
     this.updatePickups(dt);
+    this.updateMortarShells(dt);
+    this.updateDrone(dt);
 
     this.updateBullets(dt);
     updateParticles(this.particles, dt);
+    updateArcs(this.lightningArcs, dt);
     this.updateFloaters(dt);
     this.updateWave(dt, speedScale);
 
-    if (this.health <= 30) {
+    if (this.health <= 30 && this.mode !== 'zen') {
       this.heartbeatTimer -= dt;
       if (this.heartbeatTimer <= 0) {
         this.heartbeatTimer = 1.4;
@@ -759,9 +998,89 @@ export class GameEngine {
       this.heartbeatTimer = 0;
     }
 
-    if (this.health <= 0) {
+    if (this.health <= 0 && this.mode !== 'zen') {
       this.endGame();
     }
+  }
+
+  private updateMortarShells(dt: number): void {
+    for (let i = this.mortarShells.length - 1; i >= 0; i -= 1) {
+      const shell = this.mortarShells[i];
+      shell.timer -= dt;
+      if (shell.timer <= 0) {
+        this.mortarShells.splice(i, 1);
+        spawnMortarBlast(this.particles, shell.x, shell.y, shell.radius);
+        this.audio.mortarBoom(this.xToPan(shell.x));
+        this.shake = Math.max(this.shake, 15);
+        const victims = this.ants.filter(
+          (ant) =>
+            ant.alive &&
+            !ant.burrowed &&
+            Math.hypot(ant.x - shell.x, ant.y - shell.y) <= shell.radius,
+        );
+        let kills = 0;
+        for (const victim of victims) {
+          victim.x = Math.min(WORLD.spawnX, victim.x + MORTAR.knockback);
+          const wasAlive = victim.alive;
+          this.hitAnt(victim, MORTAR.damage, true);
+          if (wasAlive && !victim.alive) kills += 1;
+        }
+        if (kills >= 3) {
+          this.unlockAchievement('mortar_triple');
+        }
+        this.floater(
+          shell.x,
+          shell.y - 54,
+          kills > 0 ? `MORTAR ×${kills}` : 'MORTAR IMPACT',
+          '#ffaf78',
+          20,
+        );
+      }
+    }
+  }
+
+  private updateDrone(dt: number): void {
+    if (!this.hasUpgrade('drone')) return;
+    this.drone.phase += dt * 2.8;
+    this.drone.flash = Math.max(0, this.drone.flash - dt * 4);
+    this.drone.x = WORLD.playerX + 46 + Math.cos(this.drone.phase * 0.7) * 8;
+    this.drone.y = WORLD.playerFeetY - 166 + Math.sin(this.drone.phase) * 7;
+
+    const overdriveActive = this.elapsed < this.overdriveUntil;
+    const rateBoost = overdriveActive ? 1.55 : 1;
+    this.drone.timer -= dt * rateBoost;
+    if (this.drone.timer > 0) return;
+
+    const candidates = this.ants.filter((ant) => this.isTargetable(ant));
+    if (candidates.length === 0) {
+      this.drone.timer = 0.4;
+      return;
+    }
+    const lead = candidates.reduce((best, ant) =>
+      ant.x < best.x ? ant : best,
+    );
+    const point = antBodyCenter(lead);
+    this.drone.flash = 1;
+    const interval = Math.max(
+      DRONE.minInterval,
+      DRONE.baseInterval - this.combo * DRONE.comboSpeedup,
+    );
+    this.drone.timer = interval;
+    this.lightningArcs.push({
+      points: makeArcPoints(
+        { x: this.drone.x + 6, y: this.drone.y },
+        point,
+        6,
+        10,
+      ),
+      life: 0.22,
+      maxLife: 0.22,
+      color: overdriveActive ? '#6ce5ff' : '#ffd88a',
+      width: 1.8,
+    });
+    this.audio.droneShot();
+    this.floater(point.x, point.y - 38, 'DRONE -1', '#ffe3a0', 13);
+    this.hitAnt(lead, DRONE.damage, false);
   }
 
   private allActiveWords(excludeAntId?: number): string[] {
@@ -815,12 +1134,22 @@ export class GameEngine {
           this.targetAcidId = null;
           this.typed = '';
         }
-        const shielded = this.elapsed < this.shieldUntil;
+        const shielded = this.elapsed < this.shieldUntil || this.mode === 'zen';
         if (shielded) {
-          this.floater(WORLD.lineX + 24, glob.y, 'AEGIS BLOCK', COLOR.blue, 16);
+          this.floater(
+            WORLD.lineX + 24,
+            glob.y,
+            this.mode === 'zen' ? 'ZEN WARD' : 'AEGIS BLOCK',
+            COLOR.blue,
+            16,
+          );
           this.audio.hit();
         } else {
           this.health = Math.max(0, this.health - glob.damage);
+          this.overdrive = Math.max(
+            0,
+            this.overdrive - OVERDRIVE.breachPenalty,
+          );
           this.breachFlash = Math.max(this.breachFlash, 0.65);
           this.shake = Math.max(this.shake, 9);
           spawnBreachBurst(this.particles, WORLD.lineX, glob.y);
@@ -916,7 +1245,7 @@ export class GameEngine {
       return;
     }
 
-    const bossWave = this.wave % DIFFICULTY.bossEvery === 0;
+    const bossWave = this.isBossWave();
     const maxActive = this.currentMaxActive();
     const livingCount = this.ants.filter((ant) => ant.alive).length;
 
@@ -944,8 +1273,19 @@ export class GameEngine {
         this.waveState.spawnTimer = interval;
       }
     } else if (livingCount === 0 && this.acidGlobs.length === 0) {
-      const bonus = 60 * this.wave;
+      const modeMult = scoreMultiplierFor(this.mode, this.mutators);
+      const bonus = Math.round(60 * this.wave * modeMult);
       this.score += bonus;
+      if (this.mistakes === this.waveMistakesAtStart) {
+        this.unlockAchievement('clean_wave');
+      }
+      if (
+        this.wave >= 5 &&
+        this.health >= this.maxHealth &&
+        this.mode !== 'zen'
+      ) {
+        this.unlockAchievement('untouched');
+      }
       this.setBanner(
         'WAVE CLEARED',
         `+${bonus} SCORE — HOLD THE LINE`,
@@ -958,6 +1298,7 @@ export class GameEngine {
   }
 
   private shouldOfferUpgrade(): boolean {
+    if (this.mode === 'bossrush') return true;
     if (this.wave % 3 !== 0 && this.wave % 5 !== 0) return false;
     const remaining = ALL_UPGRADE_IDS.filter(
       (id) => !this.activeUpgrades.includes(id),
@@ -990,6 +1331,9 @@ export class GameEngine {
   }
 
   private chooseKind(bossWave: boolean): AntKind {
+    if (this.hasMutator('heavy') && this.rng() < 0.36) {
+      return this.rng() < 0.65 ? 'armored' : 'giant';
+    }
     if (this.wave <= 1) return 'normal';
     const roll = this.rng();
     if (this.wave === 2) return roll < 0.72 ? 'normal' : 'fast';
@@ -1064,11 +1408,14 @@ export class GameEngine {
       this.rng,
       this.wordPack,
     );
+    const mutatorSpeed = this.hasMutator('swift') ? 1.25 : 1;
     const speedMultiplier =
       Math.min(
         DIFFICULTY.maxSpeedMultiplier,
         1 + (this.wave - 1) * DIFFICULTY.speedPerWave,
-      ) * this.difficulty.antSpeedScale;
+      ) *
+      this.difficulty.antSpeedScale *
+      mutatorSpeed;
     const jitter = 0.92 + this.rng() * 0.16;
     const isCritical =
       kind !== 'queen' &&
@@ -1180,6 +1527,7 @@ export class GameEngine {
     const point = antBodyCenter(ant);
     spawnDeathBurst(this.particles, point.x, point.y, ant.boss);
     this.eliminated += 1;
+    this.unlockAchievement('first_blood');
 
     if (this.elapsed - this.lastKillAt <= PLAYER.comboWindow) {
       this.combo += 1;
@@ -1188,19 +1536,38 @@ export class GameEngine {
     }
     this.lastKillAt = this.elapsed;
     this.bestCombo = Math.max(this.bestCombo, this.combo);
+    if (this.combo >= 10) this.unlockAchievement('combo_10');
+    if (this.combo >= 25) this.unlockAchievement('combo_25');
+    if (this.combo >= 5 && this.combo % 5 === 0) {
+      this.streakPop = {
+        key: this.nextStreakPopKey,
+        value: this.combo,
+        until: this.visualTime + 1.6,
+      };
+      this.nextStreakPopKey += 1;
+    }
+
     const multiplier = 1 + Math.min(2.2, (this.combo - 1) * 0.14);
     const surgeActive = this.elapsed < this.scoreSurgeUntil;
+    const overdriveActive = this.elapsed < this.overdriveUntil;
+    const modeMult = scoreMultiplierFor(this.mode, this.mutators);
     const gained = Math.round(
       ANT_TYPES[ant.kind].score *
         multiplier *
-        (surgeActive ? POWERUPS.surgeMultiplier : 1),
+        modeMult *
+        (surgeActive ? POWERUPS.surgeMultiplier : 1) *
+        (overdriveActive ? OVERDRIVE.scoreMultiplier : 1),
     );
     this.score += gained;
     this.floater(
       point.x,
       point.y - 36,
-      surgeActive ? `+${gained} x2` : `+${gained}`,
-      COLOR.goldBright,
+      overdriveActive
+        ? `+${gained} OVERDRIVE`
+        : surgeActive
+          ? `+${gained} x2`
+          : `+${gained}`,
+      overdriveActive ? '#6ce5ff' : COLOR.goldBright,
       ant.boss ? 30 : 20,
     );
     if (this.combo >= 3) {
@@ -1225,11 +1592,11 @@ export class GameEngine {
         SPECIAL_ANTS.criticalBlastRadius * (hollow ? 1.5 : 1);
       const blastDmg = hollow ? 2 : 1;
       spawnCritBlast(this.particles, point.x, point.y, blastRadius);
-      this.score += SPECIAL_ANTS.criticalBonusScore;
+      this.score += Math.round(SPECIAL_ANTS.criticalBonusScore * modeMult);
       this.floater(
         point.x,
         point.y - 84,
-        `CRIT BLAST +${SPECIAL_ANTS.criticalBonusScore}`,
+        `CRIT BLAST +${Math.round(SPECIAL_ANTS.criticalBonusScore * modeMult)}`,
         COLOR.goldBright,
         18,
       );
@@ -1244,6 +1611,51 @@ export class GameEngine {
       for (const victim of victims) {
         victim.x = Math.min(WORLD.spawnX, victim.x + 36);
         this.hitAnt(victim, blastDmg, true);
+      }
+    }
+
+    // Chain Lightning upgrade: jump to ants sharing the first letter
+    if (this.hasUpgrade('chain') && ant.word.length > 0) {
+      const firstChar = ant.word[0];
+      const matches = this.ants
+        .filter(
+          (other) =>
+            other.alive &&
+            !other.burrowed &&
+            other.id !== ant.id &&
+            other.word.startsWith(firstChar),
+        )
+        .sort(
+          (a, b) =>
+            Math.hypot(a.x - ant.x, a.y - ant.y) -
+            Math.hypot(b.x - ant.x, b.y - ant.y),
+        )
+        .slice(0, CHAIN.maxTargets);
+      if (matches.length >= 3) {
+        this.unlockAchievement('chain_master');
+      }
+      let prevPoint = point;
+      for (const target of matches) {
+        const nextPoint = antBodyCenter(target);
+        this.lightningArcs.push({
+          points: makeArcPoints(prevPoint, nextPoint, 8, 18),
+          life: 0.34,
+          maxLife: 0.34,
+          color: '#76e4ff',
+          width: 2.3,
+        });
+        prevPoint = nextPoint;
+        this.floater(
+          nextPoint.x,
+          nextPoint.y - 44,
+          `CHAIN [${firstChar}]`,
+          '#76e4ff',
+          14,
+        );
+        this.hitAnt(target, CHAIN.damage, false);
+      }
+      if (matches.length > 0) {
+        this.audio.zap(this.xToPan(point.x));
       }
     }
 
@@ -1282,7 +1694,8 @@ export class GameEngine {
     this.maybeDropPickup(point);
 
     if (ant.boss) {
-      this.score += 1000;
+      this.score += Math.round(1000 * modeMult);
+      this.unlockAchievement('queen_slayer');
       this.setBanner('QUEEN SLAIN', '+1000 BONUS — THE COLONY RECOILS', 3.2);
       this.audio.boss();
       if (!this.reducedMotion) this.scenery.triggerLightning();
@@ -1294,10 +1707,10 @@ export class GameEngine {
   private breachAnt(ant: Ant): void {
     if (!ant.alive) return;
     ant.alive = false;
-    const shielded = this.elapsed < this.shieldUntil;
+    const shielded = this.elapsed < this.shieldUntil || this.mode === 'zen';
     const damage = shielded ? 0 : ANT_TYPES[ant.kind].damage;
-    this.breachFlash = 1;
-    this.shake = Math.max(this.shake, 16);
+    this.breachFlash = this.mode === 'zen' ? 0.25 : 1;
+    this.shake = Math.max(this.shake, this.mode === 'zen' ? 5 : 16);
     spawnBreachBurst(this.particles, WORLD.lineX, ant.y - 26);
     this.combo = 0;
 
@@ -1307,10 +1720,17 @@ export class GameEngine {
     }
 
     if (shielded) {
-      this.floater(WORLD.lineX + 32, ant.y - 64, 'AEGIS ABSORB', COLOR.blue, 18);
+      this.floater(
+        WORLD.lineX + 32,
+        ant.y - 64,
+        this.mode === 'zen' ? 'ZEN WARD' : 'AEGIS ABSORB',
+        COLOR.blue,
+        18,
+      );
       this.audio.hit();
     } else {
       this.health = Math.max(0, this.health - damage);
+      this.overdrive = Math.max(0, this.overdrive - OVERDRIVE.breachPenalty);
       this.floater(
         WORLD.lineX + 32,
         ant.y - 64,
@@ -1324,8 +1744,20 @@ export class GameEngine {
     this.emit();
   }
 
+  private revealRadiusX(): number | undefined {
+    if (this.mode !== 'blackout') return undefined;
+    const slowActive = this.elapsed < this.slowUntil;
+    const overdriveActive = this.elapsed < this.overdriveUntil;
+    return WORLD.lineX + 470 + (slowActive ? 170 : 0) + (overdriveActive ? 180 : 0);
+  }
+
   private isTargetable(ant: Ant): boolean {
-    return ant.alive && !ant.burrowed && ant.x <= VIEW_WIDTH - 8;
+    if (!ant.alive || ant.burrowed || ant.x > VIEW_WIDTH - 8) return false;
+    const revealX = this.revealRadiusX();
+    if (revealX !== undefined && ant.x > revealX && ant.id !== this.targetId) {
+      return false;
+    }
+    return true;
   }
 
   private typeCharacter(char: string): void {
@@ -1342,6 +1774,7 @@ export class GameEngine {
 
     if (acidCandidate && antCandidates.length === 0) {
       this.correctKeys += 1;
+      this.addOverdrive(OVERDRIVE.perKey);
       this.typed = next;
       this.targetId = null;
       this.targetPickupId = null;
@@ -1361,6 +1794,7 @@ export class GameEngine {
         this.targetMistakeMade = false;
       }
       this.correctKeys += 1;
+      this.addOverdrive(OVERDRIVE.perKey);
       this.typed = next;
       this.targetPickupId = null;
       this.targetAcidId = null;
@@ -1381,6 +1815,7 @@ export class GameEngine {
 
     if (acidCandidate) {
       this.correctKeys += 1;
+      this.addOverdrive(OVERDRIVE.perKey);
       this.typed = next;
       this.targetId = null;
       this.targetPickupId = null;
@@ -1398,6 +1833,7 @@ export class GameEngine {
     const pickup = this.pickups.find((item) => item.word.startsWith(next));
     if (pickup) {
       this.correctKeys += 1;
+      this.addOverdrive(OVERDRIVE.perKey);
       this.typed = next;
       this.targetId = null;
       this.targetAcidId = null;
@@ -1415,6 +1851,7 @@ export class GameEngine {
 
     this.mistakes += 1;
     this.targetMistakeMade = true;
+    this.overdrive = Math.max(0, this.overdrive - OVERDRIVE.mistakePenalty);
     this.inputError = 0.22;
     this.audio.error();
     this.emit();
@@ -1517,10 +1954,19 @@ export class GameEngine {
   private fireAt(ant: Ant): void {
     const point = antBodyCenter(ant);
     const powered = this.powerCharges > 0;
+    const overdriveActive = this.elapsed < this.overdriveUntil;
     if (powered) this.powerCharges -= 1;
 
+    if (!this.targetMistakeMade) {
+      this.addOverdrive(OVERDRIVE.cleanWordBonus);
+    }
+
     this.player.shoot(point);
-    const muzzle = this.player.getMuzzle(this.combo, powered);
+    const muzzle = this.player.getMuzzle(
+      this.combo,
+      powered || overdriveActive,
+    );
+    const baseDmg = powered ? PLAYER.poweredDamage : PLAYER.baseDamage;
     this.bullets.push({
       id: this.nextBulletId,
       x: muzzle.x,
@@ -1528,11 +1974,11 @@ export class GameEngine {
       targetId: ant.id,
       targetX: point.x,
       targetY: point.y,
-      damage: powered ? PLAYER.poweredDamage : PLAYER.baseDamage,
+      damage: baseDmg + (overdriveActive ? OVERDRIVE.bonusDamage : 0),
       speed: PLAYER.bulletSpeed,
       trail: [],
       life: PLAYER.bulletLife,
-      powered,
+      powered: powered || overdriveActive,
     });
     this.nextBulletId += 1;
 
@@ -1553,12 +1999,15 @@ export class GameEngine {
     }
 
     this.correctWords += 1;
+    if (this.mode === 'zen' && this.correctWords >= 100) {
+      this.unlockAchievement('zen_100');
+    }
     this.typed = '';
     this.targetId = null;
     this.lastAimTarget = point;
     this.lastAimUntil = this.elapsed + PLAYER.aimHoldTime;
-    this.shake = Math.max(this.shake, powered ? 7 : 3);
-    this.audio.shoot(powered);
+    this.shake = Math.max(this.shake, powered || overdriveActive ? 7 : 3);
+    this.audio.shoot(powered || overdriveActive);
   }
 
   private floater(
@@ -1599,6 +2048,7 @@ export class GameEngine {
   private recordCurrentRun(): void {
     if (this.runRecorded) return;
     this.runRecorded = true;
+    if (!MODE_META[this.mode].records) return;
     const run: RunSummary = {
       score: this.score,
       wpm: this.currentWpm(),
@@ -1697,6 +2147,12 @@ export class GameEngine {
 
     if (event.key === 'Backspace') {
       event.preventDefault();
+      if (this.hasMutator('nobackspace')) {
+        this.inputError = 0.16;
+        this.audio.error();
+        this.emit();
+        return;
+      }
       if (this.typed.length > 0) {
         this.typed = this.typed.slice(0, -1);
         if (this.typed.length === 0) {
@@ -1763,6 +2219,11 @@ export class GameEngine {
       this.activateAbility('power');
       return;
     }
+    if (event.code === 'Digit4') {
+      event.preventDefault();
+      this.activateAbility('mortar');
+      return;
+    }
 
     if (event.repeat) return;
     if (/^[a-zA-Z]$/.test(event.key)) {
@@ -1801,14 +2262,19 @@ export class GameEngine {
       (ant) => ant.id === this.targetId && ant.alive && !ant.burrowed,
     );
     const lockedPoint = lockedAnt ? antBodyCenter(lockedAnt) : null;
+    const overdriveRemaining = Math.max(0, this.overdriveUntil - this.elapsed);
+    const overdriveActive = overdriveRemaining > 0;
     this.player.draw(
       ctx,
       shieldActive,
       this.combo,
-      this.powerCharges > 0,
+      this.powerCharges > 0 || overdriveActive,
       biome,
       lockedPoint,
     );
+    if (this.hasUpgrade('drone') && this.phase !== 'menu') {
+      drawDrone(ctx, this.drone, this.visualTime, overdriveActive);
+    }
     drawPickupBodies(ctx, this.pickups);
 
     const sortedAnts = this.ants
@@ -1820,6 +2286,8 @@ export class GameEngine {
     }
 
     drawAcidGlobs(ctx, this.acidGlobs, this.visualTime);
+    drawMortarShells(ctx, this.mortarShells, this.visualTime);
+    drawArcs(ctx, this.lightningArcs);
 
     for (const pickup of this.pickups) {
       if (pickup.id === this.targetPickupId) {
@@ -1837,11 +2305,28 @@ export class GameEngine {
       drawBullet(ctx, bullet);
     }
     drawParticles(ctx, this.particles);
+
+    const revealX = this.revealRadiusX();
+    if (revealX !== undefined && this.phase !== 'menu') {
+      const muzzle = this.player.getMuzzle(
+        this.combo,
+        this.powerCharges > 0 || overdriveActive,
+      );
+      drawBlackout(
+        ctx,
+        muzzle,
+        this.player.aimAngle,
+        revealX,
+        this.visualTime,
+      );
+    }
+
     drawAntLabels(
       ctx,
       sortedAnts,
       this.phase === 'playing' || this.phase === 'paused' ? this.typed : '',
       this.targetId,
+      revealX,
     );
     drawAcidLabels(
       ctx,
@@ -1859,8 +2344,23 @@ export class GameEngine {
 
     ctx.restore();
 
+    if (overdriveRemaining > 0 && !this.reducedMotion) {
+      drawOverdriveTint(
+        ctx,
+        this.visualTime,
+        Math.min(1, overdriveRemaining / 1.5),
+      );
+    }
     drawVignette(ctx);
     drawBreachFlash(ctx, this.reducedMotion ? 0 : this.breachFlash);
+  }
+
+  private computeGrade(accuracy: number, wpm: number): string {
+    if (accuracy >= 96 && wpm >= 70 && this.wave >= 7) return 'S+';
+    if (accuracy >= 93 && wpm >= 55 && this.wave >= 5) return 'S';
+    if (accuracy >= 88 && wpm >= 40) return 'A';
+    if (accuracy >= 78) return 'B';
+    return 'C';
   }
 
   private currentAccuracy(): number {
@@ -1892,20 +2392,34 @@ export class GameEngine {
       this.ants.some(
         (ant) => ant.alive && ant.kind === 'leech' && ant.x < LEECH.drainZoneX,
       );
+    const cdScale = this.hasUpgrade('overclock') ? 0.72 : 1;
 
     const abilities = ABILITY_IDS.map((id): AbilitySnapshot => {
       const config = ABILITIES[id];
       let active = 0;
-      if (id === 'focus') active = Math.max(0, this.slowUntil - this.elapsed);
-      if (id === 'aegis') active = Math.max(0, this.shieldUntil - this.elapsed);
-      if (id === 'power') active = this.powerCharges;
+      let maxActive = 0;
+      if (id === 'focus') {
+        active = Math.max(0, this.slowUntil - this.elapsed);
+        maxActive = ABILITIES.focus.duration;
+      } else if (id === 'aegis') {
+        active = Math.max(0, this.shieldUntil - this.elapsed);
+        maxActive = ABILITIES.aegis.duration;
+      } else if (id === 'power') {
+        active = this.powerCharges;
+        maxActive = ABILITIES.power.charges + (this.hasUpgrade('mag') ? 2 : 0);
+      } else if (id === 'mortar') {
+        active = this.mortarShells.length > 0 ? this.mortarShells[0].timer : 0;
+        maxActive = MORTAR.fuse;
+      }
       return {
         id,
         key: config.key,
         name: config.name,
         description: config.description,
         cooldown: Math.max(0, this.readyAt[id] - this.elapsed),
+        maxCooldown: config.cooldown * cdScale,
         active,
+        maxActive,
         charges: id === 'power' ? this.powerCharges : 0,
       };
     });
@@ -1914,6 +2428,12 @@ export class GameEngine {
       this.banner && this.visualTime < this.banner.until
         ? { ...this.banner }
         : null;
+    this.toasts = this.toasts.filter((t) => this.visualTime < t.until);
+    const streakPop =
+      this.streakPop && this.visualTime < this.streakPop.until
+        ? { key: this.streakPop.key, value: this.streakPop.value }
+        : null;
+    const overdriveSeconds = Math.max(0, this.overdriveUntil - this.elapsed);
 
     return {
       phase: this.phase,
@@ -1956,6 +2476,18 @@ export class GameEngine {
       records: { ...this.progress },
       newRecords: { ...this.newRecords },
       difficulty: this.difficultyId,
+      mode: this.mode,
+      mutators: [...this.mutators],
+      scoreMultiplier: scoreMultiplierFor(this.mode, this.mutators),
+      overdrive: overdriveSeconds > 0 ? 1 : this.overdrive,
+      overdriveSeconds,
+      hasDrone: this.hasUpgrade('drone'),
+      bossWave: this.isBossWave(),
+      achievements: achievementSnapshots(this.unlockedAchievements),
+      runAchievements: [...this.runAchievements],
+      toasts: this.toasts.map((t) => ({ ...t })),
+      streakPop,
+      grade: this.computeGrade(accuracy, wpm),
       inputError: this.inputError > 0,
       breached: this.breachFlash > 0.16,
       waveProgress:

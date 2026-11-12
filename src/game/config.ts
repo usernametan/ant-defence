@@ -206,7 +206,48 @@ export const UPGRADE_DEFS: Record<UpgradeId, UpgradeOption> = {
     description: 'Power ability and Overcharge drops grant +2 extra rounds.',
     badge: 'ORDNANCE',
   },
+  chain: {
+    id: 'chain',
+    name: 'CHAIN LIGHTNING',
+    description: 'Kills arc 1 damage to up to 3 ants whose words share the same first letter.',
+    badge: 'STORM',
+  },
+  drone: {
+    id: 'drone',
+    name: 'DRONE WINGMAN',
+    description: 'A hovering drone snipes the lead ant. Fires faster as your streak grows.',
+    badge: 'SUPPORT',
+  },
 };
+
+export const CHAIN = {
+  maxTargets: 3,
+  damage: 1,
+} as const;
+
+export const DRONE = {
+  baseInterval: 4,
+  minInterval: 1.5,
+  comboSpeedup: 0.12,
+  damage: 1,
+} as const;
+
+export const MORTAR = {
+  fuse: 1.15,
+  radius: 150,
+  damage: 2,
+  knockback: 34,
+} as const;
+
+export const OVERDRIVE = {
+  perKey: 0.013,
+  cleanWordBonus: 0.03,
+  mistakePenalty: 0.22,
+  breachPenalty: 0.3,
+  duration: 8,
+  scoreMultiplier: 2,
+  bonusDamage: 1,
+} as const;
 
 export const POWERUPS = {
   minWave: 3,
@@ -248,6 +289,12 @@ export const ABILITIES = {
     description: 'Piercing rounds',
     charges: 3,
     cooldown: 24,
+  },
+  mortar: {
+    key: '4',
+    name: 'MORTAR',
+    description: 'Shells the densest cluster',
+    cooldown: 30,
   },
 } as const;
 

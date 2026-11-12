@@ -27,7 +27,28 @@ export type AntKind =
 
 export type PowerupType = 'med' | 'amp' | 'gold';
 
-export type AbilityId = 'focus' | 'aegis' | 'power';
+export type AbilityId = 'focus' | 'aegis' | 'power' | 'mortar';
+
+export type GameMode = 'classic' | 'zen' | 'bossrush' | 'blackout';
+
+export type MutatorId = 'nobackspace' | 'glass' | 'swift' | 'heavy';
+
+export type AchievementId =
+  | 'first_blood'
+  | 'combo_10'
+  | 'combo_25'
+  | 'queen_slayer'
+  | 'wave_10'
+  | 'clean_wave'
+  | 'speed_60'
+  | 'speed_90'
+  | 'overdrive'
+  | 'mortar_triple'
+  | 'chain_master'
+  | 'untouched'
+  | 'mutated'
+  | 'blackout_5'
+  | 'zen_100';
 
 export type UpgradeId =
   | 'ricochet'
@@ -35,7 +56,9 @@ export type UpgradeId =
   | 'overclock'
   | 'hollow'
   | 'medic'
-  | 'mag';
+  | 'mag'
+  | 'chain'
+  | 'drone';
 
 export interface UpgradeOption {
   id: UpgradeId;
@@ -144,13 +167,56 @@ export interface FloatingText {
   size: number;
 }
 
+export interface MortarShell {
+  id: number;
+  x: number;
+  y: number;
+  timer: number;
+  maxTimer: number;
+  radius: number;
+}
+
+export interface LightningArc {
+  points: Array<{ x: number; y: number }>;
+  life: number;
+  maxLife: number;
+  color: string;
+  width: number;
+}
+
+export interface DroneState {
+  x: number;
+  y: number;
+  timer: number;
+  phase: number;
+  flash: number;
+}
+
+export interface AchievementSnapshot {
+  id: AchievementId;
+  name: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+}
+
+export interface ToastSnapshot {
+  key: number;
+  title: string;
+  subtitle: string;
+  icon: string;
+  until: number;
+}
+
 export interface AbilitySnapshot {
   id: AbilityId;
   key: string;
   name: string;
   description: string;
   cooldown: number;
+  maxCooldown: number;
   active: number;
+  maxActive: number;
   charges: number;
 }
 
@@ -200,6 +266,18 @@ export interface HudSnapshot {
   records: PlayerProgress;
   newRecords: NewRecords;
   difficulty: DifficultyId;
+  mode: GameMode;
+  mutators: MutatorId[];
+  scoreMultiplier: number;
+  overdrive: number;
+  overdriveSeconds: number;
+  hasDrone: boolean;
+  bossWave: boolean;
+  achievements: AchievementSnapshot[];
+  runAchievements: AchievementId[];
+  toasts: ToastSnapshot[];
+  streakPop: { key: number; value: number } | null;
+  grade: string;
   inputError: boolean;
   breached: boolean;
   waveProgress: number;

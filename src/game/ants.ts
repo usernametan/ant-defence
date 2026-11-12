@@ -616,6 +616,7 @@ export function drawAntLabels(
   ants: Ant[],
   typed: string,
   targetId: number | null,
+  revealX?: number,
 ): void {
   ctx.save();
   ctx.textBaseline = 'middle';
@@ -640,7 +641,10 @@ export function drawAntLabels(
     const boss = ant.boss;
     const font = boss ? LABEL_FONT_BOSS : LABEL_FONT;
     ctx.font = font;
-    const metrics = ctx.measureText(ant.word);
+    const hidden =
+      revealX !== undefined && ant.x > revealX && ant.id !== targetId;
+    const shownWord = hidden ? '?'.repeat(Math.min(5, ant.word.length)) : ant.word;
+    const metrics = ctx.measureText(shownWord);
     const padX = boss ? 15 : 13;
     const width = Math.max(boss ? 96 : 66, metrics.width + padX * 2);
     const height = boss ? 36 : 31;
@@ -694,6 +698,7 @@ export function drawAntLabels(
     }
 
     ctx.save();
+    if (hidden) ctx.globalAlpha = 0.45;
     if (isTarget) {
       ctx.shadowColor = 'rgba(255, 196, 82, 0.85)';
       ctx.shadowBlur = 18;
@@ -722,6 +727,13 @@ export function drawAntLabels(
     ctx.restore();
 
     const textY = y + height / 2 + (ant.maxHp > 1 ? -3 : 0);
+    if (hidden) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      drawWordText(ctx, shownWord, '', x + padX, textY, font);
+      ctx.restore();
+      continue;
+    }
     drawWordText(ctx, ant.word, isTarget ? typed : '', x + padX, textY, font);
 
     if (ant.maxHp > 1) {
