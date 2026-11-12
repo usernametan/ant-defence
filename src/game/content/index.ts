@@ -2,8 +2,8 @@ export const GAME_IDENTITY = {
   title: "Monster Frontier",
   wordmark: "MONSTER FRONTIER",
   kicker: "PROJECT VERDANT",
-  stage: "Stage 1 — Project Foundation",
-  version: "0.1.0",
+  stage: "Stage 2 — Player Prototype",
+  version: "0.2.0",
   tagline:
     "The frontier is waking. A new expedition is being assembled beyond the last safe light.",
   firstRegion: "Greenreach Wilds",
@@ -17,9 +17,9 @@ export const GAME_IDENTITY = {
   ],
 } as const;
 
-export const FOUNDATION_CHECKS = [
-  { label: "Renderer", detail: "Canvas 2D online" },
-  { label: "Simulation", detail: "Fixed 60 Hz step" },
-  { label: "Camera", detail: "World bounds locked" },
-  { label: "UI bridge", detail: "Snapshots throttled" },
+export const PROTOTYPE_CHECKS = [
+  { label: "Movement", detail: "WASD · 8-way · sprint" },
+  { label: "Collision", detail: "Circle vs arena solids" },
+  { label: "Camera", detail: "Damped follow + bounds" },
+  { label: "Dodge", detail: "Space · cooldown" },
 ] as const;

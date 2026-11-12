@@ -9,11 +9,18 @@ import {
   DEFAULT_GAME_CONFIG,
   type GameConfig,
   type GamePhase,
+  type Vec2,
 } from "./core/types";
-import { InputRouter, type InputAction } from "./input/InputRouter";
+import { Player } from "./entities/Player";
+import {
+  InputRouter,
+  type InputAction,
+  type PointerState,
+} from "./input/InputRouter";
 import { Camera } from "./render/Camera";
 import { Renderer } from "./render/Renderer";
 import { SnapshotStore } from "./ui/UiSnapshot";
+import { createTestArena, type TestArena } from "./world/TestArena";
 
 type GameEvents = {
   "game:phase-changed": {
@@ -37,6 +44,8 @@ export class Game {
   private readonly renderer: Renderer;
   private readonly input: InputRouter;
   private readonly loop: FixedStepLoop;
+  private readonly arena: TestArena;
+  private readonly player: Player;
   private readonly events = new EventBus<GameEvents>();
   private phase: GamePhase = "menu";
   private frame = 0;
@@ -59,6 +68,13 @@ export class Game {
     this.snapshots =
       options.snapshotStore ??
       new SnapshotStore(undefined, this.config.snapshotIntervalMs);
+    this.arena = createTestArena(
+      this.config.worldWidth,
+      this.config.worldHeight,
+      this.config.tileSize,
+    );
+    this.player = new Player(this.arena.spawn);
+    this.camera.moveTo(this.player.x, this.player.y);
     this.input = new InputRouter(window, canvas, {
       onAction: this.handleAction,
       onBlur: this.handleBlur,
@@ -114,6 +130,11 @@ export class Game {
       return;
     }
 
+    if (this.phase === "menu") {
+      this.player.reset(this.arena.spawn);
+      this.camera.moveTo(this.player.x, this.player.y);
+    }
+
     this.setPhase("playing");
   }
 
@@ -138,6 +159,8 @@ export class Game {
       return;
     }
 
+    this.player.reset(this.arena.spawn);
+    this.camera.moveTo(this.player.x, this.player.y);
     this.setPhase("menu");
   }
 
@@ -165,6 +188,17 @@ export class Game {
       case "toggleDebug":
         this.toggleDebug();
         break;
+      case "dodge":
+        if (this.phase === "menu") {
+          this.enterPreview();
+        } else if (this.phase === "paused") {
+          this.resume();
+        } else if (
+          this.player.requestDodge(this.input.getMovementIntent())
+        ) {
+          this.publish(true);
+        }
+        break;
     }
   };
 
@@ -175,6 +209,15 @@ export class Game {
 
     this.elapsed += stepSeconds;
     this.frame += 1;
+
+    const pointer = this.input.getPointer();
+    this.player.update(
+      stepSeconds,
+      this.input.getMovementIntent(),
+      this.input.isSprinting(),
+      this.arena,
+      this.getAimWorld(pointer),
+    );
   };
 
   private readonly render = (interpolation: number): void => {
@@ -193,13 +236,52 @@ export class Game {
       this.visualTime += Math.min(deltaSeconds, this.config.maxFrameDelta);
     }
 
+    const pointer = this.input.getPointer();
+    const playerPosition = this.player.getRenderPosition(interpolation);
+    let aim = this.getAimWorld(pointer);
+
+    if (this.phase === "playing") {
+      const lookAhead = aim
+        ? {
+            x: aim.x - playerPosition.x,
+            y: aim.y - playerPosition.y,
+          }
+        : undefined;
+
+      this.camera.follow(
+        playerPosition,
+        Math.min(deltaSeconds, this.config.maxFrameDelta),
+        {
+          deadzone: 30,
+          smoothing: 9,
+          lookAhead,
+          maxLookAhead: 90,
+        },
+      );
+      aim = this.getAimWorld(pointer);
+    }
+
     this.interpolation = interpolation;
     this.renderer.render({
       timeSeconds: this.visualTime,
       debug: this.debug,
+      arena: this.arena,
+      player: this.player.getRenderState(interpolation),
+      aim,
     });
     this.publish();
   };
+
+  private getAimWorld(pointer: PointerState): Vec2 | null {
+    if (!pointer.inside) {
+      return null;
+    }
+
+    return this.camera.screenToWorld({
+      x: pointer.normalizedX * this.config.viewportWidth,
+      y: pointer.normalizedY * this.config.viewportHeight,
+    });
+  }
 
   private setPhase(nextPhase: GamePhase): void {
     if (this.phase === nextPhase) {
@@ -233,6 +315,19 @@ export class Game {
           y: this.camera.y,
           viewportWidth: this.camera.width,
           viewportHeight: this.camera.height,
+        },
+        player: {
+          x: this.player.x,
+          y: this.player.y,
+          facing: this.player.facingAngle,
+          speed: this.player.speed,
+          stamina: this.player.currentStamina,
+          maxStamina: this.player.maxStamina,
+          sprinting: this.player.isSprinting,
+          dodging: this.player.isDodging,
+          invulnerable: this.player.isInvulnerable,
+          dodgeCooldown: this.player.dodgeCooldownRemaining,
+          dodgeCooldownMax: this.player.dodgeCooldownMax,
         },
         frame: this.frame,
         elapsed: this.elapsed,

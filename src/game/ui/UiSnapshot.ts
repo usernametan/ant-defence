@@ -1,6 +1,20 @@
 import { GAME_IDENTITY } from "../content";
 import type { GamePhase, Size } from "../core/types";
 
+export interface PlayerSnapshot {
+  x: number;
+  y: number;
+  facing: number;
+  speed: number;
+  stamina: number;
+  maxStamina: number;
+  sprinting: boolean;
+  dodging: boolean;
+  invulnerable: boolean;
+  dodgeCooldown: number;
+  dodgeCooldownMax: number;
+}
+
 export interface UiSnapshot {
   phase: GamePhase;
   title: string;
@@ -15,6 +29,7 @@ export interface UiSnapshot {
     viewportWidth: number;
     viewportHeight: number;
   };
+  player: PlayerSnapshot;
   frame: number;
   elapsed: number;
   fps: number;
@@ -37,6 +52,19 @@ export function createInitialSnapshot(): UiSnapshot {
       y: 0,
       viewportWidth: 0,
       viewportHeight: 0,
+    },
+    player: {
+      x: 0,
+      y: 0,
+      facing: 0,
+      speed: 0,
+      stamina: 0,
+      maxStamina: 0,
+      sprinting: false,
+      dodging: false,
+      invulnerable: false,
+      dodgeCooldown: 0,
+      dodgeCooldownMax: 0,
     },
     frame: 0,
     elapsed: 0,
@@ -124,12 +152,36 @@ export function selectCameraReadout(snapshot: UiSnapshot): string {
   return `${Math.round(snapshot.camera.x)} / ${Math.round(snapshot.camera.y)}`;
 }
 
+export function selectPlayerReadout(snapshot: UiSnapshot): string {
+  return `${Math.round(snapshot.player.x)} / ${Math.round(snapshot.player.y)}`;
+}
+
+export function selectStaminaPercent(snapshot: UiSnapshot): number {
+  if (snapshot.player.maxStamina <= 0) {
+    return 0;
+  }
+
+  return Math.round(
+    (snapshot.player.stamina / snapshot.player.maxStamina) * 100,
+  );
+}
+
+export function selectDodgeReady(snapshot: UiSnapshot): boolean {
+  return snapshot.player.dodgeCooldown <= 0.001;
+}
+
+export function selectDodgeLabel(snapshot: UiSnapshot): string {
+  return selectDodgeReady(snapshot)
+    ? "Ready"
+    : `${snapshot.player.dodgeCooldown.toFixed(1)}s`;
+}
+
 export function selectPhaseLabel(snapshot: UiSnapshot): string {
   switch (snapshot.phase) {
     case "menu":
       return "Awaiting expedition";
     case "playing":
-      return "Foundation preview";
+      return "Test arena online";
     case "paused":
       return "Expedition paused";
   }

@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { FOUNDATION_CHECKS, GAME_IDENTITY } from '../game/content';
+import { GAME_IDENTITY, PROTOTYPE_CHECKS } from '../game/content';
 import { Game } from '../game/Game';
 import {
   selectCameraReadout,
+  selectDodgeLabel,
+  selectDodgeReady,
   selectPhaseLabel,
+  selectPlayerReadout,
+  selectStaminaPercent,
   type UiSnapshot,
 } from '../game/ui/UiSnapshot';
 import { useGameSnapshot } from './useGameSnapshot';
@@ -36,7 +40,7 @@ export function GameHost() {
         <canvas
           ref={canvasRef}
           className="game-canvas"
-          aria-label="Monster Frontier foundation preview"
+          aria-label="Monster Frontier test arena"
         />
         {snapshot.phase === 'menu' && (
           <MenuScreen snapshot={snapshot} game={game} />
@@ -79,17 +83,17 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             onClick={() => game?.enterPreview()}
             disabled={!game}
           >
-            Enter Foundation Preview
+            Enter Test Arena
             <kbd>Enter</kbd>
           </button>
           <p className="mf-action-note">
-            Stage 1 establishes the simulation shell. Field agents, creatures,
-            combat, and missions arrive in later stages.
+            Stage 2 puts a field agent in the Greenreach test grounds. Move,
+            sprint, dodge, and aim with the mouse. Combat comes later.
           </p>
         </div>
 
-        <ul className="mf-checks" aria-label="Foundation systems">
-          {FOUNDATION_CHECKS.map((check) => (
+        <ul className="mf-checks" aria-label="Player prototype systems">
+          {PROTOTYPE_CHECKS.map((check) => (
             <li key={check.label} className="mf-check">
               <span className="mf-check-signal" aria-hidden="true" />
               <span>
@@ -101,12 +105,12 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
         </ul>
       </div>
 
-      <aside className="mf-briefing" aria-label="Foundation briefing">
-        <p className="mf-briefing-label">First deployment</p>
+      <aside className="mf-briefing" aria-label="Player prototype briefing">
+        <p className="mf-briefing-label">Deployment ready</p>
         <p className="mf-briefing-region">{snapshot.region}</p>
         <p className="mf-briefing-copy">
-          The old line held long enough to open the frontier. Beyond it, the
-          Bloom is changing everything it touches.
+          The old line held long enough to open the frontier. The test grounds
+          are live, and the first field agent is ready to move.
         </p>
         <dl className="mf-specs">
           <div>
@@ -118,18 +122,26 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <dd>60 Hz</dd>
           </div>
           <div>
+            <dt>Player</dt>
+            <dd>Circle / 18u</dd>
+          </div>
+          <div>
+            <dt>Collision</dt>
+            <dd>Slide response</dd>
+          </div>
+          <div>
+            <dt>Camera</dt>
+            <dd>Damped follow</dd>
+          </div>
+          <div>
             <dt>World</dt>
             <dd>
               {snapshot.world.width} × {snapshot.world.height}
             </dd>
           </div>
-          <div>
-            <dt>Bridge</dt>
-            <dd>Snapshot</dd>
-          </div>
         </dl>
         <p className="mf-briefing-footnote">
-          F3 exposes camera and world diagnostics during preview.
+          WASD move · Shift sprint · Space dodge · F3 diagnostics
         </p>
       </aside>
     </section>
@@ -137,6 +149,9 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
 }
 
 function Hud({ snapshot }: { snapshot: UiSnapshot }) {
+  const stamina = selectStaminaPercent(snapshot);
+  const dodgeReady = selectDodgeReady(snapshot);
+
   return (
     <div className="mf-hud" aria-live="polite">
       <div className="mf-hud-top">
@@ -152,6 +167,9 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
             CAM <strong>{selectCameraReadout(snapshot)}</strong>
           </span>
           <span>
+            POS <strong>{selectPlayerReadout(snapshot)}</strong>
+          </span>
+          <span>
             FPS <strong>{Math.round(snapshot.fps || 60)}</strong>
           </span>
         </div>
@@ -161,20 +179,42 @@ function Hud({ snapshot }: { snapshot: UiSnapshot }) {
         <div className="mf-debug-panel">
           <span>FRAME {snapshot.frame}</span>
           <span>SIM {snapshot.elapsed.toFixed(1)}s</span>
-          <span>ALPHA {snapshot.interpolation.toFixed(2)}</span>
+          <span>VEL {snapshot.player.speed.toFixed(0)}</span>
+          <span>DODGE {snapshot.player.dodgeCooldown.toFixed(2)}s</span>
+          <span>STAM {stamina}%</span>
           <span>FPS {snapshot.fps.toFixed(0)}</span>
-          <span>
-            VIEW {snapshot.camera.viewportWidth} ×{' '}
-            {snapshot.camera.viewportHeight}
-          </span>
         </div>
       )}
 
       <div className="mf-hud-bottom">
-        <span className="mf-stage-stamp">
-          {snapshot.stage} // no field agent assigned
-        </span>
+        <div className="mf-status-stack">
+          <span className="mf-stage-stamp">
+            {snapshot.stage} // field agent active
+          </span>
+          <div className="mf-player-meters">
+            <div className="mf-meter-row">
+              <span>
+                STAMINA <strong>{stamina}%</strong>
+              </span>
+              <span className="mf-meter" aria-hidden="true">
+                <span
+                  className="mf-meter-fill"
+                  style={{ width: `${stamina}%` }}
+                />
+              </span>
+            </div>
+            <div
+              className={`mf-dodge-chip${dodgeReady ? ' is-ready' : ''}`}
+            >
+              <span>DODGE</span>
+              <strong>{selectDodgeLabel(snapshot)}</strong>
+            </div>
+          </div>
+        </div>
         <span className="mf-hud-controls">
+          <kbd>WASD</kbd> move <span aria-hidden="true">·</span>{' '}
+          <kbd>Shift</kbd> sprint <span aria-hidden="true">·</span>{' '}
+          <kbd>Space</kbd> dodge <span aria-hidden="true">·</span>{' '}
           <kbd>Esc</kbd> pause <span aria-hidden="true">·</span>{' '}
           <kbd>F3</kbd> debug
         </span>
@@ -190,8 +230,8 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
         <p className="mf-kicker">Signal held</p>
         <h2>Expedition paused</h2>
         <p>
-          The {snapshot.region} simulation is suspended. Resume when you are
-          ready to inspect the foundation shell.
+          The {snapshot.region} test arena is suspended. Resume when you are
+          ready to continue the movement prototype.
         </p>
         <div className="mf-pause-actions">
           <button
@@ -211,7 +251,7 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
           </button>
         </div>
         <p className="mf-pause-footnote">
-          Stage 1 / Project Foundation · build {snapshot.version}
+          Stage 2 / Player Prototype · build {snapshot.version}
         </p>
       </div>
     </div>

@@ -2,20 +2,26 @@
 
 A top-down survival action game set on the edge of a transformed frontier.
 
-This repository is in **Stage 1 — Project Foundation**. The new game shell,
-fixed-step simulation, camera, renderer, input router, and throttled UI bridge
-are in place. Player movement, combat, creatures, missions, and progression are
-planned for later stages.
+This repository is in **Stage 2 — Player Movement and Controls**. The new game
+shell, fixed-step simulation, camera, renderer, input router, and throttled UI
+bridge are in place, along with a playable player prototype in the Greenreach
+test arena. Combat, creatures, weapons, missions, and progression are planned
+for later stages.
 
 ## Current status
 
-- New Monster Frontier app shell and foundation preview.
-- Canvas 2D renderer with a bounded world camera.
+- Stage 2 player prototype in a bounded 2048 × 1280 test arena.
+- Frame-rate-independent 8-direction movement with acceleration and sliding
+  collision against walls and world bounds.
+- Sprint with stamina drain and recovery, plus a dodge burst with cooldown and
+  brief invulnerability.
+- Mouse-facing aim, deadzone camera follow, and capped look-ahead.
+- Canvas 2D renderer with arena, obstacles, player, and aim reticle.
 - Fixed 60 Hz simulation loop with catch-up limits.
 - Seedable RNG, typed events, math, and ID utilities.
 - React UI fed by throttled snapshots instead of per-frame state.
-- Vitest coverage for loop stepping, RNG determinism, camera clamping, and
-  snapshot throttling.
+- Vitest coverage for movement, sprint, dodge, collision, input state, camera
+  follow, loop stepping, RNG determinism, and snapshot throttling.
 - The old Ant Defence source is retained for reference, but it is no longer
   imported by the active app.
 
@@ -25,9 +31,13 @@ See [MONSTER_FRONTIER_PLAN.md](MONSTER_FRONTIER_PLAN.md) for the full roadmap.
 
 | Key | Action |
 | --- | --- |
-| `Enter` / `Space` | Enter the foundation preview or resume |
+| `WASD` / arrow keys | Move |
+| `Shift` | Sprint while stamina remains |
+| `Space` | Dodge / roll |
+| `Mouse` | Face the aim reticle |
+| `Enter` | Enter the test arena or resume |
 | `Escape` | Pause or resume |
-| `F3` | Toggle camera and world diagnostics |
+| `F3` | Toggle collision and diagnostic overlays |
 
 ## Development
 
@@ -72,9 +82,11 @@ src/
   game/
     content/      Game identity and content metadata
     core/         Loop, RNG, math, IDs, events, shared types
-    input/        Input routing and future control bindings
-    render/       Camera and Canvas 2D renderer
+    entities/     Player movement, stamina, dodge, and render state
+    input/        Input routing, held-key state, and pointer state
+    render/       Camera, Canvas 2D renderer, and player/debug drawing
     ui/           UI snapshots, store, and selectors
+    world/        Collision response and the test arena
   components/     Retained Ant Defence UI, disconnected from the active app
   game/*          Retained Ant Defence engine modules
 public/           Retained assets and social preview image

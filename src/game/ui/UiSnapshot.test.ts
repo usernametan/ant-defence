@@ -3,9 +3,13 @@ import {
   SnapshotStore,
   createInitialSnapshot,
   selectCameraReadout,
+  selectDodgeLabel,
+  selectDodgeReady,
   selectIsPaused,
   selectIsPlaying,
   selectPhaseLabel,
+  selectPlayerReadout,
+  selectStaminaPercent,
 } from './UiSnapshot';
 
 describe('SnapshotStore', () => {
@@ -108,5 +112,36 @@ describe('UI selectors', () => {
     expect(selectIsPlaying(snapshot)).toBe(false);
     expect(selectCameraReadout(snapshot)).toBe('812 / 434');
     expect(selectPhaseLabel(snapshot)).toBe('Expedition paused');
+  });
+
+  it('derives player, stamina, and dodge labels', () => {
+    const snapshot = {
+      ...createInitialSnapshot(),
+      phase: 'playing' as const,
+      player: {
+        ...createInitialSnapshot().player,
+        x: 512.4,
+        y: 639.6,
+        stamina: 42,
+        maxStamina: 100,
+        dodgeCooldown: 0.44,
+        dodgeCooldownMax: 0.8,
+      },
+    };
+
+    expect(selectIsPlaying(snapshot)).toBe(true);
+    expect(selectPhaseLabel(snapshot)).toBe('Test arena online');
+    expect(selectPlayerReadout(snapshot)).toBe('512 / 640');
+    expect(selectStaminaPercent(snapshot)).toBe(42);
+    expect(selectDodgeReady(snapshot)).toBe(false);
+    expect(selectDodgeLabel(snapshot)).toBe('0.4s');
+
+    const readySnapshot = {
+      ...snapshot,
+      player: { ...snapshot.player, dodgeCooldown: 0 },
+    };
+
+    expect(selectDodgeReady(readySnapshot)).toBe(true);
+    expect(selectDodgeLabel(readySnapshot)).toBe('Ready');
   });
 });

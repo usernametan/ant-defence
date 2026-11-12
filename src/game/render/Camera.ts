@@ -1,4 +1,4 @@
-import { clamp } from "../core/math";
+import { clamp, damp } from "../core/math";
 import type { Rect, Vec2 } from "../core/types";
 
 export interface CameraConfig {
@@ -6,6 +6,13 @@ export interface CameraConfig {
   viewportHeight: number;
   worldWidth: number;
   worldHeight: number;
+}
+
+export interface CameraFollowOptions {
+  smoothing?: number;
+  deadzone?: number;
+  lookAhead?: Vec2;
+  maxLookAhead?: number;
 }
 
 export class Camera {
@@ -80,6 +87,35 @@ export class Camera {
     this.moveTo(this.centerX + deltaX, this.centerY + deltaY);
   }
 
+  follow(
+    target: Vec2,
+    deltaSeconds: number,
+    options: CameraFollowOptions = {},
+  ): void {
+    if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) {
+      return;
+    }
+
+    const smoothing = options.smoothing ?? 8;
+    const deadzone = Math.max(0, options.deadzone ?? 28);
+    const maxLookAhead = Math.max(0, options.maxLookAhead ?? 90);
+    const lookAhead = options.lookAhead ?? { x: 0, y: 0 };
+    const lookAheadLength = Math.hypot(lookAhead.x, lookAhead.y);
+    const lookAheadScale =
+      lookAheadLength > maxLookAhead && lookAheadLength > 0
+        ? maxLookAhead / lookAheadLength
+        : 1;
+    const desiredX = target.x + lookAhead.x * lookAheadScale;
+    const desiredY = target.y + lookAhead.y * lookAheadScale;
+    const followX = this.applyDeadzone(desiredX, this.centerX, deadzone);
+    const followY = this.applyDeadzone(desiredY, this.centerY, deadzone);
+
+    this.moveTo(
+      damp(this.centerX, followX, smoothing, deltaSeconds),
+      damp(this.centerY, followY, smoothing, deltaSeconds),
+    );
+  }
+
   worldToScreen(point: Vec2): Vec2 {
     return {
       x: point.x - this.left,
@@ -128,5 +164,23 @@ export class Camera {
 
     const halfViewport = viewport / 2;
     return clamp(value, halfViewport, world - halfViewport);
+  }
+
+  private applyDeadzone(
+    desired: number,
+    current: number,
+    deadzone: number,
+  ): number {
+    if (deadzone <= 0) {
+      return desired;
+    }
+
+    const delta = desired - current;
+
+    if (Math.abs(delta) <= deadzone) {
+      return current;
+    }
+
+    return desired - Math.sign(delta) * deadzone;
   }
 }

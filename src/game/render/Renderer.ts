@@ -1,14 +1,21 @@
 import { clamp } from "../core/math";
-import type { GameConfig } from "../core/types";
+import type { GameConfig, Vec2 } from "../core/types";
+import type { PlayerRenderState } from "../entities/Player";
+import type { ArenaObstacle, TestArena } from "../world/TestArena";
 import type { Camera } from "./Camera";
+import { drawDebugOverlay, drawWorldDebug } from "./drawDebug";
+import { drawPlayer } from "./drawPlayer";
 
 export interface RenderState {
   timeSeconds: number;
   debug: boolean;
+  arena: TestArena;
+  player: PlayerRenderState;
+  aim: Vec2 | null;
 }
 
-const GRID_COLOR = "rgba(117, 245, 203, 0.08)";
-const MAJOR_GRID_COLOR = "rgba(117, 245, 203, 0.17)";
+const GRID_COLOR = "rgba(117, 245, 203, 0.07)";
+const MAJOR_GRID_COLOR = "rgba(117, 245, 203, 0.16)";
 const WORLD_EDGE_COLOR = "rgba(247, 191, 91, 0.48)";
 
 export class Renderer {
@@ -66,10 +73,34 @@ export class Renderer {
     context.clearRect(0, 0, viewportWidth, viewportHeight);
 
     this.drawBackdrop(state.timeSeconds);
-    this.drawWorld(state.timeSeconds);
+
+    context.save();
+    context.translate(-this.camera.left, -this.camera.top);
+    this.drawArena(state.arena, state.timeSeconds);
+    drawPlayer(context, state.player, state.timeSeconds);
+    this.drawAimGuide(state.player, state.aim, state.timeSeconds);
 
     if (state.debug) {
-      this.drawDebug();
+      drawWorldDebug(context, {
+        camera: this.camera,
+        config: this.config,
+        arena: state.arena,
+        player: state.player,
+        aim: state.aim,
+      });
+    }
+
+    context.restore();
+
+    if (state.debug) {
+      context.setTransform(this.scaleX, 0, 0, this.scaleY, 0, 0);
+      drawDebugOverlay(context, {
+        camera: this.camera,
+        config: this.config,
+        arena: state.arena,
+        player: state.player,
+        aim: state.aim,
+      });
     }
 
     this.drawVignette();
@@ -105,31 +136,41 @@ export class Renderer {
     context.fillRect(0, 0, viewportWidth, viewportHeight);
   }
 
-  private drawWorld(timeSeconds: number): void {
+  private drawArena(arena: TestArena, timeSeconds: number): void {
     const context = this.context;
-    const { worldWidth, worldHeight, tileSize } = this.config;
     const camera = this.camera;
 
-    context.save();
-    context.translate(-camera.left, -camera.top);
-
     context.fillStyle = "#0a241e";
-    context.fillRect(0, 0, worldWidth, worldHeight);
+    context.fillRect(0, 0, arena.width, arena.height);
 
-    const viewLeft = clamp(camera.left, 0, worldWidth);
-    const viewTop = clamp(camera.top, 0, worldHeight);
-    const viewRight = clamp(camera.right, 0, worldWidth);
-    const viewBottom = clamp(camera.bottom, 0, worldHeight);
+    const viewLeft = clamp(camera.left, 0, arena.width);
+    const viewTop = clamp(camera.top, 0, arena.height);
+    const viewRight = clamp(camera.right, 0, arena.width);
+    const viewBottom = clamp(camera.bottom, 0, arena.height);
 
-    this.drawGrid(viewLeft, viewTop, viewRight, viewBottom, tileSize);
-    this.drawContours(timeSeconds);
-    this.drawWorldMarkers(timeSeconds);
+    this.drawGrid(
+      viewLeft,
+      viewTop,
+      viewRight,
+      viewBottom,
+      arena.tileSize,
+    );
+    this.drawGroundContours(arena, timeSeconds);
+    this.drawSpawnPad(arena);
+    this.drawObstacles(arena.obstacles);
 
     context.strokeStyle = WORLD_EDGE_COLOR;
     context.lineWidth = 3;
-    context.strokeRect(1.5, 1.5, worldWidth - 3, worldHeight - 3);
+    context.strokeRect(1.5, 1.5, arena.width - 3, arena.height - 3);
 
-    context.restore();
+    context.fillStyle = "rgba(226, 255, 245, 0.26)";
+    context.font = "500 11px 'IBM Plex Mono', monospace";
+    context.textAlign = "left";
+    context.fillText(
+      `${arena.name.toUpperCase()} // ${arena.obstacles.length} SOLIDS`,
+      52,
+      arena.height - 42,
+    );
   }
 
   private drawGrid(
@@ -164,25 +205,24 @@ export class Renderer {
     }
   }
 
-  private drawContours(timeSeconds: number): void {
+  private drawGroundContours(arena: TestArena, timeSeconds: number): void {
     const context = this.context;
-    const { worldWidth, worldHeight } = this.config;
-    const centerX = worldWidth / 2;
-    const centerY = worldHeight / 2;
+    const centerX = arena.width / 2;
+    const centerY = arena.height / 2;
     const drift = Math.sin(timeSeconds * 0.12) * 8;
 
     context.save();
-    context.strokeStyle = "rgba(117, 245, 203, 0.09)";
+    context.strokeStyle = "rgba(117, 245, 203, 0.075)";
     context.lineWidth = 1;
 
-    for (let radius = 180; radius <= 620; radius += 110) {
+    for (let radius = 240; radius <= 720; radius += 120) {
       context.beginPath();
       context.ellipse(
         centerX + drift,
         centerY,
-        radius * 1.18,
-        radius * 0.58,
-        -0.18,
+        radius * 1.2,
+        radius * 0.56,
+        -0.16,
         0,
         Math.PI * 2,
       );
@@ -192,91 +232,166 @@ export class Renderer {
     context.restore();
   }
 
-  private drawWorldMarkers(timeSeconds: number): void {
+  private drawSpawnPad(arena: TestArena): void {
     const context = this.context;
-    const { worldWidth, worldHeight, tileSize } = this.config;
-    const centerX = worldWidth / 2;
-    const centerY = worldHeight / 2;
-    const pulse = 0.5 + Math.sin(timeSeconds * 1.4) * 0.5;
+    const { x, y } = arena.spawn;
+    const time = performance.now() / 1000;
+    const pulse = 0.5 + Math.sin(time * 2.2) * 0.5;
 
     context.save();
-    context.strokeStyle = `rgba(247, 191, 91, ${0.45 + pulse * 0.25})`;
-    context.lineWidth = 2;
+    context.strokeStyle = `rgba(247, 191, 91, ${0.3 + pulse * 0.25})`;
+    context.lineWidth = 1.5;
+    context.setLineDash([7, 6]);
     context.beginPath();
-    context.arc(centerX, centerY, 42 + pulse * 5, 0, Math.PI * 2);
+    context.arc(x, y, 52, 0, Math.PI * 2);
+    context.stroke();
+    context.setLineDash([]);
+
+    context.strokeStyle = "rgba(247, 191, 91, 0.24)";
+    context.beginPath();
+    context.moveTo(x - 68, y);
+    context.lineTo(x + 68, y);
+    context.moveTo(x, y - 68);
+    context.lineTo(x, y + 68);
     context.stroke();
 
-    context.strokeStyle = "rgba(247, 191, 91, 0.32)";
-    context.lineWidth = 1;
-    context.beginPath();
-    context.moveTo(centerX - 68, centerY);
-    context.lineTo(centerX + 68, centerY);
-    context.moveTo(centerX, centerY - 68);
-    context.lineTo(centerX, centerY + 68);
-    context.stroke();
-
-    context.fillStyle = "rgba(202, 255, 236, 0.52)";
-    context.font = "500 11px 'IBM Plex Mono', monospace";
+    context.fillStyle = "rgba(247, 191, 91, 0.58)";
+    context.font = "500 10px 'IBM Plex Mono', monospace";
     context.textAlign = "center";
-    context.fillText("FOUNDATION GRID", centerX, centerY + 70);
-
-    context.font = "400 10px 'IBM Plex Mono', monospace";
-    context.fillStyle = "rgba(202, 255, 236, 0.28)";
-
-    for (let x = tileSize * 4; x < worldWidth; x += tileSize * 8) {
-      for (let y = tileSize * 4; y < worldHeight; y += tileSize * 8) {
-        if (Math.abs(x - centerX) < 180 && Math.abs(y - centerY) < 180) {
-          continue;
-        }
-
-        context.fillText(
-          `${String(x).padStart(4, "0")}:${String(y).padStart(4, "0")}`,
-          x,
-          y,
-        );
-      }
-    }
-
+    context.fillText("INSERTION", x, y + 72);
     context.restore();
   }
 
-  private drawDebug(): void {
+  private drawObstacles(obstacles: readonly ArenaObstacle[]): void {
     const context = this.context;
-    const { viewportWidth, viewportHeight, worldWidth, worldHeight } =
-      this.config;
-    const camera = this.camera;
+
+    for (const obstacle of obstacles) {
+      context.fillStyle = "rgba(0, 0, 0, 0.34)";
+      context.fillRect(
+        obstacle.x + 9,
+        obstacle.y + 11,
+        obstacle.width,
+        obstacle.height,
+      );
+    }
+
+    for (const obstacle of obstacles) {
+      const palette = this.getObstaclePalette(obstacle.kind);
+      context.fillStyle = palette.fill;
+      context.fillRect(
+        obstacle.x,
+        obstacle.y,
+        obstacle.width,
+        obstacle.height,
+      );
+
+      context.fillStyle = palette.top;
+      context.fillRect(
+        obstacle.x,
+        obstacle.y,
+        obstacle.width,
+        Math.min(8, obstacle.height),
+      );
+
+      context.strokeStyle = palette.edge;
+      context.lineWidth = 1.5;
+      context.strokeRect(
+        obstacle.x + 0.75,
+        obstacle.y + 0.75,
+        obstacle.width - 1.5,
+        obstacle.height - 1.5,
+      );
+
+      if (obstacle.kind === "wall") {
+        context.strokeStyle = "rgba(226, 255, 245, 0.07)";
+        context.lineWidth = 1;
+
+        for (let offset = 22; offset < obstacle.width; offset += 28) {
+          context.beginPath();
+          context.moveTo(obstacle.x + offset, obstacle.y + 8);
+          context.lineTo(obstacle.x + offset, obstacle.y + obstacle.height);
+          context.stroke();
+        }
+      }
+    }
+  }
+
+  private getObstaclePalette(kind: ArenaObstacle["kind"]): {
+    fill: string;
+    top: string;
+    edge: string;
+  } {
+    switch (kind) {
+      case "crate":
+        return {
+          fill: "#5a4729",
+          top: "rgba(255, 228, 174, 0.22)",
+          edge: "rgba(247, 191, 91, 0.48)",
+        };
+      case "rock":
+        return {
+          fill: "#263a34",
+          top: "rgba(139, 202, 183, 0.16)",
+          edge: "rgba(139, 202, 183, 0.36)",
+        };
+      case "wall":
+        return {
+          fill: "#123b33",
+          top: "rgba(117, 245, 203, 0.13)",
+          edge: "rgba(117, 245, 203, 0.34)",
+        };
+    }
+  }
+
+  private drawAimGuide(
+    player: PlayerRenderState,
+    aim: Vec2 | null,
+    timeSeconds: number,
+  ): void {
+    if (!aim) {
+      return;
+    }
+
+    const context = this.context;
+    const deltaX = aim.x - player.x;
+    const deltaY = aim.y - player.y;
+    const distance = Math.hypot(deltaX, deltaY);
+
+    if (distance > player.radius + 12) {
+      const startX = player.x + (deltaX / distance) * (player.radius + 7);
+      const startY = player.y + (deltaY / distance) * (player.radius + 7);
+
+      context.strokeStyle = "rgba(226, 255, 245, 0.18)";
+      context.lineWidth = 1;
+      context.setLineDash([3, 6]);
+      context.beginPath();
+      context.moveTo(startX, startY);
+      context.lineTo(aim.x, aim.y);
+      context.stroke();
+      context.setLineDash([]);
+    }
 
     context.save();
-    context.setTransform(this.scaleX, 0, 0, this.scaleY, 0, 0);
-    context.strokeStyle = "rgba(247, 191, 91, 0.8)";
-    context.lineWidth = 1;
-    context.setLineDash([6, 5]);
-    context.strokeRect(12.5, 12.5, viewportWidth - 25, viewportHeight - 25);
-    context.setLineDash([]);
+    context.translate(aim.x, aim.y);
+    context.rotate(timeSeconds * 0.6);
+    context.strokeStyle = "rgba(247, 191, 91, 0.9)";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.arc(0, 0, 10, 0, Math.PI * 2);
+    context.stroke();
 
-    context.fillStyle = "rgba(4, 14, 12, 0.78)";
-    context.fillRect(18, viewportHeight - 92, 300, 72);
-    context.strokeStyle = "rgba(117, 245, 203, 0.28)";
-    context.strokeRect(18.5, viewportHeight - 91.5, 299, 71);
+    for (let index = 0; index < 4; index += 1) {
+      context.rotate(Math.PI / 2);
+      context.beginPath();
+      context.moveTo(13, 0);
+      context.lineTo(20, 0);
+      context.stroke();
+    }
 
-    context.fillStyle = "rgba(202, 255, 236, 0.86)";
-    context.font = "500 11px 'IBM Plex Mono', monospace";
-    context.textAlign = "left";
-    context.fillText(
-      `CAM ${Math.round(camera.x)} / ${Math.round(camera.y)}`,
-      32,
-      viewportHeight - 64,
-    );
-    context.fillText(
-      `VIEW ${camera.width} x ${camera.height}`,
-      32,
-      viewportHeight - 46,
-    );
-    context.fillText(
-      `WORLD ${worldWidth} x ${worldHeight}`,
-      32,
-      viewportHeight - 28,
-    );
+    context.fillStyle = "rgba(247, 191, 91, 0.9)";
+    context.beginPath();
+    context.arc(0, 0, 1.6, 0, Math.PI * 2);
+    context.fill();
     context.restore();
   }
 

@@ -1,8 +1,12 @@
-export type InputAction = "start" | "pause" | "toggleDebug";
+import { InputState, MOVEMENT_BINDINGS } from "./InputState";
+
+export type InputAction = "start" | "pause" | "toggleDebug" | "dodge";
 
 export interface PointerState {
   x: number;
   y: number;
+  normalizedX: number;
+  normalizedY: number;
   inside: boolean;
 }
 
@@ -13,11 +17,15 @@ export interface InputHandlers {
 }
 
 export const DEFAULT_BINDINGS: Record<InputAction, readonly string[]> = {
-  start: ["Enter", "Space"],
+  start: ["Enter"],
   pause: ["Escape"],
   toggleDebug: ["F3"],
+  dodge: ["Space"],
 };
 
+const MOVEMENT_KEYS = new Set<string>(
+  Object.values(MOVEMENT_BINDINGS).flat(),
+);
 const ACTION_BY_CODE = new Map<string, InputAction>();
 
 for (const [action, codes] of Object.entries(DEFAULT_BINDINGS)) {
@@ -27,8 +35,7 @@ for (const [action, codes] of Object.entries(DEFAULT_BINDINGS)) {
 }
 
 export class InputRouter {
-  private readonly downKeys = new Set<string>();
-  private pointer: PointerState = { x: 0, y: 0, inside: false };
+  private readonly state = new InputState();
   private attached = false;
 
   constructor(
@@ -63,54 +70,62 @@ export class InputRouter {
     this.canvas.removeEventListener("pointermove", this.handlePointerMove);
     this.canvas.removeEventListener("pointerenter", this.handlePointerMove);
     this.canvas.removeEventListener("pointerleave", this.handlePointerLeave);
-    this.downKeys.clear();
+    this.state.clear();
   }
 
   isKeyDown(code: string): boolean {
-    return this.downKeys.has(code);
+    return this.state.isKeyDown(code);
+  }
+
+  getMovementIntent() {
+    return this.state.getMovementIntent();
+  }
+
+  isSprinting(): boolean {
+    return this.state.isSprinting();
   }
 
   getPointer(): PointerState {
-    return { ...this.pointer };
+    return this.state.getPointer();
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    this.downKeys.add(event.code);
+    this.state.press(event.code);
 
     const action = ACTION_BY_CODE.get(event.code);
 
-    if (!action) {
+    if (action || MOVEMENT_KEYS.has(event.code)) {
+      event.preventDefault();
+    }
+
+    if (!action || event.repeat) {
       return;
     }
 
-    event.preventDefault();
     this.handlers.onAction(action);
   };
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
-    this.downKeys.delete(event.code);
+    this.state.release(event.code);
   };
 
   private readonly handleBlur = (): void => {
-    this.downKeys.clear();
+    this.state.clear();
+    this.state.setPointerInside(false);
     this.handlers.onBlur?.();
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
     const rect = this.canvas.getBoundingClientRect();
-    this.pointer = {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-      inside: true,
-    };
-    this.handlers.onPointerMove?.(this.getPointer());
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    this.state.setPointer(x, y, rect.width, rect.height, true);
+    this.handlers.onPointerMove?.(this.state.getPointer());
   };
 
   private readonly handlePointerLeave = (): void => {
-    this.pointer = {
-      ...this.pointer,
-      inside: false,
-    };
-    this.handlers.onPointerMove?.(this.getPointer());
+    this.state.setPointerInside(false);
+    this.handlers.onPointerMove?.(this.state.getPointer());
   };
 }
