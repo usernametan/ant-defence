@@ -78,6 +78,10 @@ export class TriggerSystem {
     };
   }
 
+  findNearby(target: TriggerTarget): InteractableState | null {
+    return this.findNearbyInteractable(target);
+  }
+
   activateNearby(target: TriggerTarget): InteractableState | null {
     const interactable = this.findNearbyInteractable(target);
 

@@ -3,6 +3,8 @@ export type MissionObjectiveType =
   | "collect"
   | "reach"
   | "interact"
+  | "destroy"
+  | "secure"
   | "clear-area";
 
 export interface MissionObjectiveDef {
@@ -90,16 +92,38 @@ export const GREENREACH_MISSIONS: readonly MissionDef[] = [
         optional: true,
       },
       {
+        id: "destroy-nest",
+        type: "destroy",
+        title: "Burn out the Bloom Nest",
+        description: "Destroy the three Bloom Nodes inside the watchpost.",
+        targetId: "nest-bloom-watchpost",
+        count: 3,
+      },
+      {
+        id: "secure-watchpost",
+        type: "secure",
+        title: "Secure the watchpost territory",
+        description: "Clear the nest, then hold the watchpost until it is secured.",
+        targetId: "territory-watchpost",
+        requires: ["destroy-nest"],
+      },
+      {
         id: "restore-relay",
         type: "interact",
         title: "Restore the watchpost relay",
         description: "Get close to the field relay and activate it with E.",
         targetId: "relay-watchpost",
-        requires: ["reach-watchpost"],
+        requires: ["secure-watchpost"],
       },
     ],
     completion: {
-      objectiveIds: ["break-the-pack", "reach-watchpost", "restore-relay"],
+      objectiveIds: [
+        "break-the-pack",
+        "reach-watchpost",
+        "destroy-nest",
+        "secure-watchpost",
+        "restore-relay",
+      ],
     },
     rewards: {
       armor: 20,

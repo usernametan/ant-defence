@@ -2,29 +2,46 @@
 
 A top-down survival action game set on the edge of a transformed frontier.
 
-This repository is in **Stage 8 — Missions & Objectives**. The combat prototype
-takes place in **Greenreach Wilds**, an authored 2048 × 1280 explorable region
-with waystation roads, ruins, a stream crossing, forest pockets, rocky ground,
-and creature-held terrain. Players now manage health and armor, recover from
-field caches, tune a small loadout of blasters and modules, take the Reclaim the
-Greenreach field order, track its objectives, restore the watchpost relay, and
-redeploy at Waystation Echo after death. Nests, territory capture, bosses,
-checkpoints, and campaign progression remain planned for later stages.
+This repository is in **Stage 9 — Nests & Territory Control**. The combat
+prototype takes place in **Greenreach Wilds**, an authored 2048 × 1280
+explorable region with waystation roads, ruins, a stream crossing, forest
+pockets, rocky ground, and creature-held terrain. Players now manage health and
+armor, recover from field caches, tune a small loadout of blasters and modules,
+take the Reclaim the Greenreach field order, destroy the Bloom Nest, secure the
+watchpost territory, restore its relay, and redeploy at the unlocked safe zone
+after death. Bosses, checkpoints, and campaign progression remain planned for
+later stages.
 
 ## Current status
 
+- Stage 9 territory layer: data-driven nest and territory definitions, a
+  validated runtime state machine, reusable content, territory capture,
+  safe-zone activation, and spawn suppression.
+- The Moss-Eaten Watchpost territory starts hostile and becomes contested when
+  entered. Its Bloom Nest activates nearby, wakes a Bloom Guardian, spawns
+  within the global creature budget, and exposes three destructible Bloom Nodes.
+- Destroying all Bloom Nodes clears the nest once, stops its spawns, grants a
+  reward, and opens territory capture. Holding the watchpost through capture
+  secures it, activates Watchpost Haven, suppresses ambient spawns, and grants a
+  second reward.
+- Territory HUD panel with state, cleared nest and node counts, capture
+  progress, safe-zone status, and contextual control guidance.
+- World and minimap visuals for territory boundaries, nest state, node health,
+  and safe-zone activation, plus dedicated destruction, weakening, clearing,
+  and securing feedback.
 - Stage 8 mission layer: data-driven mission and objective definitions, a
   validated runtime state machine, prerequisite gating, progress tracking,
   optional objectives, markers, rewards, failure state, and one-time completion.
 - “Reclaim the Greenreach”: eliminate creatures, reach the Moss-Eaten
-  Watchpost, restore its field relay with `E`, and optionally recover supplies
-  or clear the watchpost perimeter.
+  Watchpost, destroy the Bloom Nest, secure the territory, restore its field
+  relay with `E`, and optionally recover supplies or clear the watchpost
+  perimeter.
 - Mission tracker HUD with per-objective progress, world and minimap markers,
   proximity interaction prompts, menu briefing, and a victory screen with a
   rewarded new-expedition or return-to-menu flow.
-- The Greenreach map now includes a validated relay interactable and POI entry
-  triggers. Mission progress and interaction state reset with each expedition;
-  persistence is planned for Stage 11.
+- The Greenreach map now includes validated relay, nest, node, spawn, and
+  territory content. Mission, interaction, nest, and capture state reset with
+  each expedition; persistence is planned for Stage 11.
 - Stage 7 loadout layer: data-driven weapon definitions and three equipment
   lines with capped, non-stacking effects.
 - Reinforced Plating improves maximum armor and absorption, Mobility Module
@@ -49,7 +66,8 @@ checkpoints, and campaign progression remain planned for later stages.
   impact effects, synthesized audio, hit flashes, low-health screen feedback,
   and a temporary post-respawn shield.
 - Death enters a readable signal-loss overlay with a countdown, then returns the
-  player to Waystation Echo with health and armor restored.
+  player to Waystation Echo or the active territory safe zone with health and
+  armor restored.
 - Stage 5 Greenreach Wilds map: 2048 × 1280 world, 32 px tiles, 64 × 40 terrain
   grid, eight surface types, and deterministic terrain decoration.
 - Authored landmarks, roads, and props: Waystation Echo, Moss-Eaten Watchpost,
@@ -58,8 +76,9 @@ checkpoints, and campaign progression remain planned for later stages.
   boulders, ruin walls, crates, barrels, tents, carts, signs, logs, fences, and
   a walkable bridge across the stream.
 - Map loading validates bounds, terrain size, unique ids, entry points, creature
-  spawn points, target placement, recovery-cache, item, and interactable
-  placement, known item ids, and solid-prop overlaps.
+  spawn points, target placement, recovery-cache, item, interactable, nest,
+  node, nest-spawn, guardian, safe-zone, and territory placement, known item
+  and creature ids, and solid-prop overlaps.
 - Crawlers chase directly and gain a small pack-speed bonus, Stalkers strafe for
   an opening, and Spitters hold range with telegraphed acid projectiles.
 - Creatures acquire targets by detection range and line of sight, lose hidden or
@@ -85,8 +104,8 @@ checkpoints, and campaign progression remain planned for later stages.
   health, hit flash, death, and timed respawn.
 - Canvas 2D renderer with cached terrain, sorted props, tree canopies, player,
   aim reticle, projectiles, dummies, three creature silhouettes, health bars,
-  attack telegraphs, hit effects, world items, a Greenreach minimap, and combat
-  diagnostics.
+  attack telegraphs, hit effects, world items, territory and nest overlays,
+  safe-zone rings, a Greenreach minimap, and combat diagnostics.
 - F3 world diagnostics include map dimensions, tile grid, camera and player
   coordinates, health and armor, recovery-cache placement and counts, loadout
   state, respawn state, nearby solids, nearby spawns, combat state, and world
@@ -108,7 +127,9 @@ checkpoints, and campaign progression remain planned for later stages.
   healing caps, pickup collection/respawn, one-shot item collection, inventory
   equip/unequip/duplicate/capacity rules, respawn protection, mission objective
   transitions, event counting, optional progress, prerequisite gating, failure
-  rules, completion-once behavior, trigger entry and interaction state, line of
+  rules, completion-once behavior, nest activation and spawn budgets, node
+  destruction and clear-once rewards, territory capture and safe-zone
+  activation, spawn suppression, trigger entry and interaction state, line of
   sight, swept projectile hits, weapon range and failure feedback,
   damage/respawn, cooldowns, creature targeting/behaviors/death, spatial
   hashing, camera follow and aim offsets, input state, loop stepping, RNG

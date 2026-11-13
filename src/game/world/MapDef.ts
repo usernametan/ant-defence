@@ -1,5 +1,6 @@
 import type { Vec2 } from "../core/types";
 import type { CreatureArchetypeId } from "../content/creatures";
+import type { NestDef, TerritoryDef } from "../content/territories";
 import type { CollisionWorld } from "./Collision";
 
 export type TerrainKind =
@@ -154,6 +155,8 @@ export interface MapDef {
   pickups: readonly MapPickupDef[];
   items?: readonly MapItemDef[];
   interactables?: readonly MapInteractableDef[];
+  nests?: readonly NestDef[];
+  territories?: readonly TerritoryDef[];
   entryPoints: Record<string, Vec2>;
   pointsOfInterest: readonly MapPointOfInterestDef[];
 }
@@ -173,6 +176,8 @@ export interface LoadedWorld extends CollisionWorld {
   pickups: readonly LoadedPickupDef[];
   items: readonly LoadedItemDef[];
   interactables: readonly LoadedInteractableDef[];
+  nests: readonly NestDef[];
+  territories: readonly TerritoryDef[];
   entryPoints: Record<string, Vec2>;
   spawn: Vec2;
   pointsOfInterest: readonly MapPointOfInterestDef[];

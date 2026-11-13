@@ -1,6 +1,10 @@
 import { getCreatureArchetype } from "../content/creatures";
 import { STARTER_WEAPONS } from "../content/equipment";
 import { getItemType, getPickupType } from "../content/pickups";
+import {
+  type NestSpawnPointDef,
+  validateTerritoryDefinitions,
+} from "../content/territories";
 import { EQUIPMENT_BY_ID } from "../content/upgrades";
 import type { Vec2 } from "../core/types";
 import { circleIntersectsAabb } from "./Collision";
@@ -58,6 +62,8 @@ export function loadMap(def: MapDef): LoadedWorld {
   const interactables = (def.interactables ?? []).map((interactable) =>
     normalizeInteractable(interactable),
   );
+  const nests = def.nests ?? [];
+  const territories = def.territories ?? [];
   const spawn = def.entryPoints.start;
 
   if (!spawn) {
@@ -82,6 +88,8 @@ export function loadMap(def: MapDef): LoadedWorld {
     pickups,
     items,
     interactables,
+    nests,
+    territories,
     entryPoints: def.entryPoints,
     spawn: { ...spawn },
     pointsOfInterest: def.pointsOfInterest,
@@ -95,6 +103,8 @@ export function loadMap(def: MapDef): LoadedWorld {
   validatePickups(world);
   validateItems(world);
   validateInteractables(world);
+  validateTerritoryDefinitions(territories, nests);
+  validateTerritories(world);
 
   return world;
 }
@@ -216,6 +226,14 @@ function validateUniqueIds(world: LoadedWorld): void {
     ...world.items,
     ...world.interactables,
     ...world.pointsOfInterest,
+    ...world.territories,
+    ...world.territories.map((territory) => territory.safeZone),
+    ...world.nests,
+    ...world.nests.flatMap((nest) => nest.nodes),
+    ...world.nests.flatMap((nest) => nest.spawn.points),
+    ...world.nests.flatMap((nest) =>
+      nest.guardian ? [nest.guardian] : [],
+    ),
   ]) {
     if (ids.has(item.id)) {
       throw new Error(`Map "${world.id}" has duplicate id "${item.id}"`);
@@ -331,6 +349,71 @@ function validateInteractables(world: LoadedWorld): void {
         `Interactable "${interactable.id}" overlaps a solid prop`,
       );
     }
+  }
+}
+
+function validateTerritories(world: LoadedWorld): void {
+  for (const territory of world.territories) {
+    if (!isCircleInBounds(territory, territory.radius, world)) {
+      throw new Error(`Territory "${territory.id}" is outside the map`);
+    }
+
+    if (
+      !isCircleInBounds(
+        territory.safeZone,
+        PLAYER_RADIUS,
+        world,
+      ) ||
+      isCircleBlocked(territory.safeZone, PLAYER_RADIUS, world)
+    ) {
+      throw new Error(
+        `Territory "${territory.id}" safe zone is blocked or outside the map`,
+      );
+    }
+  }
+
+  for (const nest of world.nests) {
+    if (!isPointInBounds(nest, world)) {
+      throw new Error(`Nest "${nest.id}" is outside the map`);
+    }
+
+    for (const node of nest.nodes) {
+      const radius = node.radius ?? 15;
+
+      if (!isCircleInBounds(node, radius, world)) {
+        throw new Error(`Nest node "${node.id}" is outside the map`);
+      }
+
+      if (isCircleBlocked(node, radius, world)) {
+        throw new Error(
+          `Nest node "${node.id}" overlaps a solid prop`,
+        );
+      }
+    }
+
+    for (const point of nest.spawn.points) {
+      validateNestSpawnPoint(point, world, "Nest spawn");
+    }
+
+    if (nest.guardian) {
+      validateNestSpawnPoint(nest.guardian, world, "Nest guardian");
+    }
+  }
+}
+
+function validateNestSpawnPoint(
+  point: NestSpawnPointDef,
+  world: LoadedWorld,
+  label: string,
+): void {
+  const archetype = getCreatureArchetype(point.archetypeId);
+
+  if (!isCircleInBounds(point, archetype.radius, world)) {
+    throw new Error(`${label} "${point.id}" is outside the map`);
+  }
+
+  if (isCircleBlocked(point, archetype.radius, world)) {
+    throw new Error(`${label} "${point.id}" overlaps a solid prop`);
   }
 }
 

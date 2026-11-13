@@ -71,6 +71,65 @@ describe('SpawnDirector', () => {
     expect(director.totalSpawned).toBe(3);
   });
 
+  it('spawns tagged nest creatures and releases their source on death', () => {
+    const director = new SpawnDirector(POINTS, {
+      maxAlive: 3,
+      initialSpawnCount: 0,
+      respawnDelay: 1,
+    });
+
+    director.reset(WORLD);
+
+    expect(director.spawnNestCreature(POINTS[0], WORLD, 'nest-test')).toBe(
+      true,
+    );
+    expect(director.aliveCountForSource('nest-test')).toBe(1);
+    expect(director.aliveCountForSource('other')).toBe(0);
+
+    const creature = director.creatures[0];
+    creature.takeDamage(999, DAMAGE_CONTEXT);
+    director.update(0.1, WORLD);
+
+    expect(director.aliveCountForSource('nest-test')).toBe(0);
+    expect(director.creatures).toHaveLength(0);
+  });
+
+  it('respects the alive budget for nest spawns', () => {
+    const director = new SpawnDirector(POINTS, {
+      maxAlive: 1,
+      initialSpawnCount: 0,
+      respawnDelay: 1,
+    });
+
+    director.reset(WORLD);
+
+    expect(director.spawnNestCreature(POINTS[0], WORLD, 'nest-test')).toBe(
+      true,
+    );
+    expect(director.spawnNestCreature(POINTS[1], WORLD, 'nest-test')).toBe(
+      false,
+    );
+    expect(director.creatures).toHaveLength(1);
+  });
+
+  it('suppresses ambient spawns inside secured safe zones', () => {
+    const director = new SpawnDirector(POINTS, {
+      maxAlive: 3,
+      initialSpawnCount: 3,
+      respawnDelay: 1,
+    });
+
+    director.setSuppressionZones([{ x: 100, y: 100, radius: 80 }]);
+    director.reset(WORLD);
+
+    expect(director.creatures).toHaveLength(2);
+    expect(
+      director.creatures.some((creature) =>
+        creature.id.startsWith('crawler'),
+      ),
+    ).toBe(false);
+  });
+
   it('skips spawn points blocked by solids', () => {
     const blockedWorld: CollisionWorld = {
       ...WORLD,

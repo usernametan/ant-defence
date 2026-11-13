@@ -37,6 +37,25 @@ describe('Greenreach Wilds', () => {
       radius: 44,
       prompt: 'Restore the watchpost relay',
     });
+    expect(world.territories).toHaveLength(1);
+    expect(world.territories[0]).toMatchObject({
+      id: 'territory-watchpost',
+      nestIds: ['nest-bloom-watchpost'],
+      captureSeconds: 5.5,
+    });
+    expect(world.nests).toHaveLength(1);
+    expect(world.nests[0]).toMatchObject({
+      id: 'nest-bloom-watchpost',
+      territoryId: 'territory-watchpost',
+      activationRadius: 260,
+    });
+    expect(world.nests[0].nodes).toHaveLength(3);
+    expect(world.nests[0].spawn.points).toHaveLength(4);
+    expect(world.nests[0].guardian).toMatchObject({
+      id: 'nest-guardian-watchpost',
+      name: 'Bloom Guardian',
+      archetypeId: 'stalker',
+    });
     expect(world.items).toHaveLength(5);
     expect(world.items.filter((item) => item.kind === 'weapon')).toHaveLength(2);
     expect(
@@ -88,6 +107,11 @@ describe('Greenreach Wilds', () => {
       ...world.items,
       ...world.interactables,
       ...world.pointsOfInterest,
+      ...world.territories,
+      ...world.territories.map((territory) => territory.safeZone),
+      ...world.nests,
+      ...world.nests.flatMap((nest) => nest.nodes),
+      ...world.nests.flatMap((nest) => nest.spawn.points),
     ].map((item) => item.id);
 
     expect(new Set(ids).size).toBe(ids.length);
@@ -253,5 +277,58 @@ describe('Greenreach Wilds', () => {
         ],
       }),
     ).toThrow(/spawn/i);
+  });
+
+  it('rejects territories outside the map', () => {
+    const map = createGreenreachMap();
+    const territories = (map.territories ?? []).map((territory) => ({
+      ...territory,
+      x: -300,
+    }));
+
+    expect(() =>
+      loadMap({
+        ...map,
+        territories,
+      }),
+    ).toThrow(/territory.*outside/i);
+  });
+
+  it('rejects nest nodes that overlap a solid prop', () => {
+    const map = createGreenreachMap();
+    const node = map.nests![0].nodes[0];
+
+    expect(() =>
+      loadMap({
+        ...map,
+        props: [
+          ...map.props,
+          {
+            id: 'invalid-nest-node-blocker',
+            kind: 'boulder',
+            x: node.x - 15,
+            y: node.y - 15,
+            width: 30,
+            height: 30,
+            solid: true,
+          },
+        ],
+      }),
+    ).toThrow(/nest node.*overlap/i);
+  });
+
+  it('rejects nests that reference an unknown territory', () => {
+    const map = createGreenreachMap();
+    const nests = (map.nests ?? []).map((nest) => ({
+      ...nest,
+      territoryId: 'missing-territory',
+    }));
+
+    expect(() =>
+      loadMap({
+        ...map,
+        nests,
+      }),
+    ).toThrow(/unknown territory/i);
   });
 });

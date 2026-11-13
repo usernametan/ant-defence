@@ -199,11 +199,14 @@ describe('UI selectors', () => {
 
     expect(mission?.title).toBe('Reclaim the Greenreach');
     expect(mission?.status).toBe('active');
-    expect(mission?.objectives).toHaveLength(5);
+    expect(mission?.objectives).toHaveLength(7);
     expect(
       mission?.objectives.filter((objective) => objective.optional),
     ).toHaveLength(2);
     expect(snapshot.interaction).toBeNull();
+    expect(snapshot.territories.territories).toHaveLength(1);
+    expect(snapshot.territories.territories[0].state).toBe('hostile');
+    expect(snapshot.territories.nests[0].state).toBe('inactive');
   });
 
   it('derives weapon, energy, and target readouts', () => {

@@ -3,6 +3,7 @@ import {
   getCreatureArchetype,
   type CreatureSpawnPoint,
 } from "../content/creatures";
+import type { Vec2 } from "../core/types";
 import { circleIntersectsAabb } from "../world/Collision";
 import { Creature } from "../entities/Creature";
 import type { CollisionWorld } from "../world/Collision";
@@ -11,6 +12,10 @@ export interface SpawnDirectorConfig {
   maxAlive: number;
   initialSpawnCount: number;
   respawnDelay: number;
+}
+
+export interface SpawnSuppressionZone extends Vec2 {
+  radius: number;
 }
 
 export const DEFAULT_SPAWN_CONFIG: SpawnDirectorConfig = {
@@ -23,6 +28,8 @@ export class SpawnDirector {
   private readonly config: SpawnDirectorConfig;
   private readonly spawnPoints: readonly CreatureSpawnPoint[];
   private readonly creaturesList: Creature[] = [];
+  private readonly sourceTags = new Map<string, string>();
+  private suppressionZones: readonly SpawnSuppressionZone[] = [];
   private nextPointIndex = 0;
   private serial = 0;
   private spawnTimer = 0;
@@ -63,8 +70,52 @@ export class SpawnDirector {
     return this.spawnedTotal;
   }
 
+  setSuppressionZones(zones: readonly SpawnSuppressionZone[]): void {
+    this.suppressionZones = zones.map((zone) => ({ ...zone }));
+  }
+
+  aliveCountForSource(sourceId: string): number {
+    let alive = 0;
+
+    for (const creature of this.creaturesList) {
+      if (
+        creature.alive &&
+        this.sourceTags.get(creature.id) === sourceId
+      ) {
+        alive += 1;
+      }
+    }
+
+    return alive;
+  }
+
+  spawnNestCreature(
+    point: CreatureSpawnPoint,
+    world: CollisionWorld,
+    sourceId: string,
+  ): boolean {
+    if (
+      this.creaturesList.length >= this.config.maxAlive ||
+      !this.canSpawnAt(point, world, true)
+    ) {
+      return false;
+    }
+
+    const creature = this.createCreature(point, sourceId);
+
+    if (!creature) {
+      return false;
+    }
+
+    this.creaturesList.push(creature);
+    this.spawnedTotal += 1;
+
+    return true;
+  }
+
   reset(world: CollisionWorld): void {
     this.creaturesList.length = 0;
+    this.sourceTags.clear();
     this.nextPointIndex = 0;
     this.serial = 0;
     this.spawnTimer = this.config.respawnDelay;
@@ -89,7 +140,10 @@ export class SpawnDirector {
     const before = this.creaturesList.length;
 
     for (let index = this.creaturesList.length - 1; index >= 0; index -= 1) {
-      if (!this.creaturesList[index].alive) {
+      const creature = this.creaturesList[index];
+
+      if (!creature.alive) {
+        this.sourceTags.delete(creature.id);
         this.creaturesList.splice(index, 1);
       }
     }
@@ -125,14 +179,12 @@ export class SpawnDirector {
         continue;
       }
 
-      const archetype = getCreatureArchetype(point.archetypeId);
-      const creature = new Creature(
-        `${archetype.id}-${this.serial + 1}`,
-        archetype,
-        point,
-      );
+      const creature = this.createCreature(point);
 
-      this.serial += 1;
+      if (!creature) {
+        continue;
+      }
+
       this.creaturesList.push(creature);
       this.spawnedTotal += 1;
 
@@ -142,11 +194,46 @@ export class SpawnDirector {
     return null;
   }
 
+  private createCreature(
+    point: CreatureSpawnPoint,
+    sourceId?: string,
+  ): Creature | null {
+    if (this.creaturesList.length >= this.config.maxAlive) {
+      return null;
+    }
+
+    const archetype = getCreatureArchetype(point.archetypeId);
+    const creature = new Creature(
+      `${archetype.id}-${this.serial + 1}`,
+      archetype,
+      point,
+    );
+
+    this.serial += 1;
+
+    if (sourceId) {
+      this.sourceTags.set(creature.id, sourceId);
+    }
+
+    return creature;
+  }
+
   private canSpawnAt(
     point: CreatureSpawnPoint,
     world: CollisionWorld,
+    ignoreSuppression = false,
   ): boolean {
     const archetype = getCreatureArchetype(point.archetypeId);
+
+    if (
+      !ignoreSuppression &&
+      this.suppressionZones.some(
+        (zone) =>
+          Math.hypot(point.x - zone.x, point.y - zone.y) <= zone.radius,
+      )
+    ) {
+      return false;
+    }
 
     for (const obstacle of world.obstacles) {
       if (circleIntersectsAabb(point, archetype.radius, obstacle)) {

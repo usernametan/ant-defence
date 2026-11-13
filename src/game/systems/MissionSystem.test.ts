@@ -29,6 +29,24 @@ const INTERACTABLES = [
   },
 ];
 
+const NESTS = [
+  {
+    id: 'nest-bloom-watchpost',
+    x: 100,
+    y: 100,
+    radius: 80,
+  },
+];
+
+const TERRITORIES = [
+  {
+    id: 'territory-watchpost',
+    x: 100,
+    y: 100,
+    radius: 120,
+  },
+];
+
 function createSystem(
   definitions: readonly MissionDef[] = GREENREACH_MISSIONS,
   options: MissionSystemOptions = {},
@@ -36,6 +54,8 @@ function createSystem(
   return new MissionSystem(definitions, {
     pointsOfInterest: AREAS,
     interactables: INTERACTABLES,
+    nests: NESTS,
+    territories: TERRITORIES,
     ...options,
   });
 }
@@ -83,17 +103,33 @@ describe('MissionSystem', () => {
     expect(mission?.status).toBe('active');
     expect(findObjective(system, 'break-the-pack')?.status).toBe('active');
     expect(findObjective(system, 'reach-watchpost')?.status).toBe('active');
+    expect(findObjective(system, 'destroy-nest')?.status).toBe('active');
+    expect(findObjective(system, 'secure-watchpost')?.status).toBe('locked');
     expect(findObjective(system, 'restore-relay')?.status).toBe('locked');
     expect(system.snapshot().markers.map((marker) => marker.objectiveId)).toContain(
-      'reach-watchpost',
+      'destroy-nest',
     );
 
     system.recordInteract('relay-watchpost');
+    expect(system.canInteract('relay-watchpost')).toBe(false);
     expect(findObjective(system, 'restore-relay')?.progress).toBe(0);
 
     system.recordReach('poi-watchpost');
     expect(findObjective(system, 'reach-watchpost')?.status).toBe('completed');
+    expect(findObjective(system, 'restore-relay')?.status).toBe('locked');
+
+    for (let index = 0; index < 3; index += 1) {
+      system.recordDestroy('nest-bloom-watchpost');
+    }
+
+    expect(findObjective(system, 'destroy-nest')?.status).toBe('completed');
+    expect(findObjective(system, 'secure-watchpost')?.status).toBe('active');
+    expect(system.canInteract('relay-watchpost')).toBe(false);
+
+    system.recordSecure('territory-watchpost');
+    expect(findObjective(system, 'secure-watchpost')?.status).toBe('completed');
     expect(findObjective(system, 'restore-relay')?.status).toBe('active');
+    expect(system.canInteract('relay-watchpost')).toBe(true);
     expect(system.snapshot().markers.map((marker) => marker.objectiveId)).toContain(
       'restore-relay',
     );
@@ -109,6 +145,12 @@ describe('MissionSystem', () => {
     expect(findObjective(system, 'break-the-pack')?.status).toBe('completed');
 
     system.recordReach('poi-watchpost');
+
+    for (let index = 0; index < 3; index += 1) {
+      system.recordDestroy('nest-bloom-watchpost');
+    }
+
+    system.recordSecure('territory-watchpost');
     system.recordInteract('relay-watchpost');
 
     const mission = findMission(system);
@@ -123,6 +165,8 @@ describe('MissionSystem', () => {
 
     system.recordCreatureKill('crawler', 0, 0);
     system.recordReach('poi-watchpost');
+    system.recordDestroy('nest-bloom-watchpost');
+    system.recordSecure('territory-watchpost');
     system.recordInteract('relay-watchpost');
 
     expect(findMission(system)?.status).toBe('completed');

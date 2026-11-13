@@ -7,6 +7,7 @@ import type { TargetDummy } from "../entities/TargetDummy";
 import type { ItemPickupSystem } from "../systems/ItemPickupSystem";
 import type { PickupSystem } from "../systems/PickupSystem";
 import type { MissionMarkerSnapshot } from "../systems/MissionSystem";
+import type { TerritoriesSnapshot } from "../systems/TerritorySystem";
 import type { LoadedWorld } from "../world/MapDef";
 import type { InteractableState } from "../world/Triggers";
 import type { Camera } from "./Camera";
@@ -18,7 +19,9 @@ import { drawPickup } from "./drawPickups";
 import { drawPlayer } from "./drawPlayer";
 import { drawWorldItem } from "./drawWorldItems";
 import { drawProjectiles } from "./drawProjectiles";
+import { drawNestNode } from "./drawNest";
 import { drawTargetDummy } from "./drawTargetDummy";
+import { drawTerritoryGround } from "./drawTerritories";
 import {
   drawWorldGroundProp,
   drawWorldPropBase,
@@ -63,6 +66,7 @@ export interface RenderState {
   items: ItemPickupSystem;
   interactables: readonly InteractableState[];
   missionMarkers: readonly MissionMarkerSnapshot[];
+  territories: TerritoriesSnapshot;
   effects: ImpactEffects;
   combat: CombatRenderState;
 }
@@ -188,6 +192,7 @@ export class Renderer {
         state.creatures,
         state.targets,
         state.missionMarkers,
+        state.territories,
         viewportWidth,
       );
     }
@@ -218,6 +223,7 @@ export class Renderer {
     }
 
     this.drawSpawnPad(world.spawn, timeSeconds);
+    drawTerritoryGround(context, state.territories, timeSeconds);
     this.drawScene(state);
 
     for (const prop of world.props) {
@@ -285,6 +291,15 @@ export class Renderer {
         y: item.y,
         draw: () => drawWorldItem(context, item, state.timeSeconds),
       });
+    }
+
+    for (const nest of state.territories.nests) {
+      for (const node of nest.nodes) {
+        items.push({
+          y: node.y,
+          draw: () => drawNestNode(context, node, state.timeSeconds),
+        });
+      }
     }
 
     for (const creature of state.creatureStates) {

@@ -1,5 +1,9 @@
 import { hashString, mulberry32 } from "../../core/rng";
 import { GREENREACH_ITEMS, GREENREACH_PICKUPS } from "../pickups";
+import {
+  GREENREACH_NESTS,
+  GREENREACH_TERRITORIES,
+} from "../territories";
 import type { Rect, Vec2 } from "../../core/types";
 import type {
   MapDecorationDef,
@@ -234,6 +238,32 @@ export function createGreenreachMap(): MapDef {
       y: target.y,
       radius: 62,
     })),
+    ...GREENREACH_NESTS.flatMap((nest) => [
+      {
+        x: nest.x,
+        y: nest.y,
+        radius: nest.activationRadius * 0.55,
+      },
+      ...nest.nodes.map((node) => ({
+        x: node.x,
+        y: node.y,
+        radius: 54,
+      })),
+      ...nest.spawn.points.map((point) => ({
+        x: point.x,
+        y: point.y,
+        radius: 46,
+      })),
+      ...(nest.guardian
+        ? [
+            {
+              x: nest.guardian.x,
+              y: nest.guardian.y,
+              radius: 58,
+            },
+          ]
+        : []),
+    ]),
     {
       x: entryPoints.start.x,
       y: entryPoints.start.y,
@@ -264,6 +294,8 @@ export function createGreenreachMap(): MapDef {
     pickups: GREENREACH_PICKUPS,
     items: GREENREACH_ITEMS,
     interactables: INTERACTABLES,
+    nests: GREENREACH_NESTS,
+    territories: GREENREACH_TERRITORIES,
     entryPoints,
     pointsOfInterest: POINTS_OF_INTEREST,
   };

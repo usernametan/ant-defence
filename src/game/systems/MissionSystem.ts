@@ -37,6 +37,8 @@ export interface MissionInteractableDef {
 export interface MissionSystemOptions {
   pointsOfInterest?: readonly MissionAreaDef[];
   interactables?: readonly MissionInteractableDef[];
+  nests?: readonly MissionAreaDef[];
+  territories?: readonly MissionAreaDef[];
   completedMissionIds?: readonly string[];
   autoActivate?: boolean;
 }
@@ -131,6 +133,8 @@ export class MissionSystem {
   private readonly definitions: readonly MissionDef[];
   private readonly pointsOfInterest: ReadonlyMap<string, MissionAreaDef>;
   private readonly interactables: ReadonlyMap<string, MissionInteractableDef>;
+  private readonly nests: ReadonlyMap<string, MissionAreaDef>;
+  private readonly territories: ReadonlyMap<string, MissionAreaDef>;
   private readonly initialCompletedIds: readonly string[];
   private readonly autoActivate: boolean;
   private readonly states = new Map<string, MissionRuntime>();
@@ -149,6 +153,12 @@ export class MissionSystem {
     );
     this.interactables = new Map(
       (options.interactables ?? []).map((entry) => [entry.id, entry]),
+    );
+    this.nests = new Map(
+      (options.nests ?? []).map((entry) => [entry.id, entry]),
+    );
+    this.territories = new Map(
+      (options.territories ?? []).map((entry) => [entry.id, entry]),
     );
     this.initialCompletedIds = options.completedMissionIds ?? [];
     this.autoActivate = options.autoActivate ?? true;
@@ -321,6 +331,34 @@ export class MissionSystem {
     this.recordTargetEvent("interact", interactableId);
   }
 
+  recordDestroy(targetId: string): void {
+    this.recordTargetEvent("destroy", targetId);
+  }
+
+  recordSecure(territoryId: string): void {
+    this.recordTargetEvent("secure", territoryId);
+  }
+
+  canInteract(interactableId: string): boolean {
+    for (const runtime of this.states.values()) {
+      if (runtime.status !== "active") {
+        continue;
+      }
+
+      for (const objective of runtime.objectives.values()) {
+        if (
+          objective.status === "active" &&
+          objective.def.type === "interact" &&
+          objective.def.targetId === interactableId
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   drainEvents(): MissionEvent[] {
     const events = this.events;
     this.events = [];
@@ -345,7 +383,7 @@ export class MissionSystem {
   }
 
   private recordTargetEvent(
-    type: "reach" | "interact",
+    type: "reach" | "interact" | "destroy" | "secure",
     targetId: string,
   ): void {
     for (const runtime of this.states.values()) {
@@ -565,6 +603,17 @@ export class MissionSystem {
         : null;
     }
 
+    if (objective.type === "destroy" || objective.type === "secure") {
+      const area =
+        objective.type === "destroy"
+          ? this.nests.get(objective.targetId)
+          : this.territories.get(objective.targetId);
+
+      return area
+        ? { x: area.x, y: area.y, radius: objective.radius ?? area.radius }
+        : null;
+    }
+
     return null;
   }
 
@@ -658,6 +707,8 @@ export function validateMissionDefinitions(
       if (
         (objective.type === "reach" ||
           objective.type === "interact" ||
+          objective.type === "destroy" ||
+          objective.type === "secure" ||
           objective.type === "clear-area") &&
         !objective.targetId
       ) {

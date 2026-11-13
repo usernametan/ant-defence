@@ -40,6 +40,10 @@ import { MissionSystem } from "./systems/MissionSystem";
 import { PickupSystem } from "./systems/PickupSystem";
 import { SpawnDirector } from "./systems/SpawnDirector";
 import {
+  TerritorySystem,
+  type TerritoryEvent,
+} from "./systems/TerritorySystem";
+import {
   SnapshotStore,
   type SurvivalNoticeTone,
 } from "./ui/UiSnapshot";
@@ -107,6 +111,7 @@ export class Game {
   private readonly worldItems: ItemPickupSystem;
   private readonly triggers: TriggerSystem;
   private readonly missions: MissionSystem;
+  private readonly territories: TerritorySystem;
   private readonly spatialHash = new SpatialHash<Creature>(120);
   private readonly effects = new ImpactEffects();
   private readonly sfx = new CombatSfx();
@@ -154,9 +159,25 @@ export class Game {
       this.world.pointsOfInterest,
       this.world.interactables,
     );
+    this.territories = new TerritorySystem(
+      this.world.territories,
+      this.world.nests,
+    );
     this.missions = new MissionSystem(undefined, {
       pointsOfInterest: this.world.pointsOfInterest,
       interactables: this.world.interactables,
+      nests: this.world.nests.map((nest) => ({
+        id: nest.id,
+        x: nest.x,
+        y: nest.y,
+        radius: nest.activationRadius,
+      })),
+      territories: this.world.territories.map((territory) => ({
+        id: territory.id,
+        x: territory.x,
+        y: territory.y,
+        radius: territory.radius,
+      })),
     });
     this.targets = createTrainingDummies(this.world.targets);
     this.applyInventoryModifiers();
@@ -309,9 +330,12 @@ export class Game {
     this.combat.reset();
     this.projectiles.clear();
     this.spawnDirector.reset(this.world);
+    this.spawnDirector.setSuppressionZones([]);
     this.pickups.reset();
     this.worldItems.reset();
     this.triggers.reset();
+    this.territories.reset();
+    this.territories.drainEvents();
     this.missions.reset();
     this.missions.drainEvents();
     this.effects.clear();
@@ -471,7 +495,10 @@ export class Game {
       );
 
       if (this.playerRespawnRemaining <= 0) {
-        this.player.respawn(this.world.spawn);
+        const respawn = this.getRespawnPoint();
+        const safeZone = this.territories.activeSafeZone;
+
+        this.player.respawn(respawn);
         this.camera.moveTo(this.player.x, this.player.y);
         this.effects.spawnImpact(
           this.player.x,
@@ -481,7 +508,11 @@ export class Game {
           14,
         );
         this.sfx.pickup("health");
-        this.showFeedback("WAYSTATION RELINK · SHIELD ACTIVE", "respawn", 2.2);
+        this.showFeedback(
+          `${safeZone?.name.toUpperCase() ?? "WAYSTATION"} RELINK · SHIELD ACTIVE`,
+          "respawn",
+          2.2,
+        );
       }
     } else {
       this.player.update(
@@ -620,6 +651,13 @@ export class Game {
     }
 
     this.spawnDirector.update(stepSeconds, this.world);
+    this.territories.update(
+      stepSeconds,
+      this.player,
+      this.world,
+      this.spawnDirector,
+    );
+    this.processTerritoryEvents();
     this.effects.update(stepSeconds);
     this.processMissionEvents();
   };
@@ -845,14 +883,31 @@ export class Game {
       return;
     }
 
-    const interactable = this.triggers.activateNearby(this.player);
+    const nearby = this.triggers.findNearby(this.player);
 
-    if (!interactable) {
+    if (!nearby) {
       this.showFeedback(
         "NO FIELD INTERFACE IN RANGE",
         "energy",
         0.9,
       );
+      this.sfx.denied();
+      return;
+    }
+
+    if (!this.missions.canInteract(nearby.id)) {
+      this.showFeedback(
+        "FIELD INTERFACE LOCKED · COMPLETE THE CURRENT OBJECTIVE",
+        "energy",
+        1.2,
+      );
+      this.sfx.denied();
+      return;
+    }
+
+    const interactable = this.triggers.activateNearby(this.player);
+
+    if (!interactable) {
       this.sfx.denied();
       return;
     }
@@ -918,6 +973,111 @@ export class Game {
           );
           break;
       }
+    }
+  }
+
+  private processTerritoryEvents(): void {
+    for (const event of this.territories.drainEvents()) {
+      this.handleTerritoryEvent(event);
+    }
+  }
+
+  private handleTerritoryEvent(event: TerritoryEvent): void {
+    switch (event.type) {
+      case "nest-node-destroyed":
+        this.missions.recordDestroy(event.nestId);
+        this.showFeedback(
+          `BLOOM NODE DESTROYED · ${event.remainingNodes} / ${event.totalNodes} REMAIN`,
+          "respawn",
+          1.5,
+        );
+        break;
+      case "nest-weakened":
+        this.showFeedback(
+          `${event.nestName.toUpperCase()} · WEAKENED`,
+          "damage",
+          1.7,
+        );
+        this.sfx.hit(true);
+        break;
+      case "nest-cleared":
+        if (event.reward) {
+          if (event.reward.armor) {
+            this.player.restoreArmor(event.reward.armor);
+          }
+
+          if (event.reward.energy) {
+            this.combat.restoreEnergy(event.reward.energy);
+          }
+        }
+
+        this.effects.spawnImpact(
+          event.x,
+          event.y,
+          "#ff9466",
+          "#fff0c4",
+          22,
+        );
+        this.sfx.creatureDeath();
+        this.showFeedback(
+          event.reward?.summary.toUpperCase() ??
+            `${event.nestName.toUpperCase()} · CLEARED`,
+          "respawn",
+          2.5,
+        );
+        break;
+      case "nest-guardian-spawned":
+        this.showFeedback(
+          `${event.guardianName.toUpperCase()} AWAKENS · ${event.nestName.toUpperCase()}`,
+          "damage",
+          2.4,
+        );
+        this.sfx.hit(true);
+        break;
+      case "territory-contested":
+        this.showFeedback(
+          `TERRITORY CONTESTED · ${event.name.toUpperCase()}`,
+          "damage",
+          1.8,
+        );
+        break;
+      case "territory-securing":
+        this.showFeedback(
+          `${event.name.toUpperCase()} · SECURING · HOLD POSITION`,
+          "respawn",
+          2.2,
+        );
+        break;
+      case "territory-secured":
+        this.missions.recordSecure(event.territoryId);
+        if (event.reward) {
+          if (event.reward.armor) {
+            this.player.restoreArmor(event.reward.armor);
+          }
+
+          if (event.reward.energy) {
+            this.combat.restoreEnergy(event.reward.energy);
+          }
+        }
+
+        this.spawnDirector.setSuppressionZones(
+          this.territories.suppressionZones(),
+        );
+        this.effects.spawnImpact(
+          event.x,
+          event.y,
+          "#75f5cb",
+          "#e9fff8",
+          30,
+        );
+        this.sfx.equip();
+        this.showFeedback(
+          event.reward?.summary.toUpperCase() ??
+            `${event.name.toUpperCase()} · SECURED · ${event.safeZoneName.toUpperCase()} ONLINE`,
+          "respawn",
+          3,
+        );
+        break;
     }
   }
 
@@ -1023,6 +1183,7 @@ export class Game {
       this.player,
       ...this.spawnDirector.creatures,
       ...this.targets,
+      ...this.territories.damageTargets,
     ];
   }
 
@@ -1097,6 +1258,7 @@ export class Game {
       items: this.worldItems,
       interactables: this.triggers.interactables,
       missionMarkers: missionSnapshot.markers,
+      territories: this.territories.snapshot(),
       effects: this.effects,
       combat: {
         weaponName: this.combat.currentWeapon.name,
@@ -1129,6 +1291,14 @@ export class Game {
       x: pointer.normalizedX * this.config.viewportWidth,
       y: pointer.normalizedY * this.config.viewportHeight,
     });
+  }
+
+  private getRespawnPoint(): Vec2 {
+    const safeZone = this.territories.activeSafeZone;
+
+    return safeZone
+      ? { x: safeZone.x, y: safeZone.y }
+      : this.world.spawn;
   }
 
   private getMuzzlePosition(aim: Vec2 | null): Vec2 {
@@ -1222,11 +1392,16 @@ export class Game {
           respawnRemaining: this.playerRespawnRemaining,
         },
         missions: this.missions.snapshot(),
+        territories: this.territories.snapshot(),
         interaction: this.triggers.nearbyInteractable
           ? {
               id: this.triggers.nearbyInteractable.id,
               name: this.triggers.nearbyInteractable.name,
-              prompt: this.triggers.nearbyInteractable.prompt,
+              prompt: this.missions.canInteract(
+                this.triggers.nearbyInteractable.id,
+              )
+                ? this.triggers.nearbyInteractable.prompt
+                : "Interface locked · complete the current objective",
             }
           : null,
         survival: {

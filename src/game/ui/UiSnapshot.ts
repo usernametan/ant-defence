@@ -11,6 +11,10 @@ import {
   MissionSystem,
   type MissionsSnapshot,
 } from "../systems/MissionSystem";
+import {
+  TerritorySystem,
+  type TerritoriesSnapshot,
+} from "../systems/TerritorySystem";
 
 export interface WeaponSnapshot {
   id: string;
@@ -129,6 +133,7 @@ export interface UiSnapshot {
   combat: CombatSnapshot;
   inventory: InventorySnapshot;
   missions: MissionsSnapshot;
+  territories: TerritoriesSnapshot;
   interaction: InteractionSnapshot | null;
   survival: SurvivalSnapshot;
   frame: number;
@@ -141,6 +146,7 @@ export interface UiSnapshot {
 
 const INITIAL_INVENTORY = new InventorySystem().snapshot();
 const INITIAL_MISSIONS = new MissionSystem().snapshot();
+const INITIAL_TERRITORIES = new TerritorySystem().snapshot();
 
 function initialWeapons(): readonly WeaponSnapshot[] {
   return STARTER_WEAPONS.map((weapon, index) => ({
@@ -213,6 +219,7 @@ export function createInitialSnapshot(): UiSnapshot {
       weapons: initialWeapons(),
     },
     missions: INITIAL_MISSIONS,
+    territories: INITIAL_TERRITORIES,
     interaction: null,
     inventory: {
       open: false,

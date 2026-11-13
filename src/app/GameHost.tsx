@@ -19,6 +19,7 @@ import {
   type UiSnapshot,
 } from '../game/ui/UiSnapshot';
 import { MissionTracker } from '../components/hud/MissionTracker';
+import { TerritoryPanel } from '../components/hud/TerritoryPanel';
 import { MissionsScreen } from '../components/menus/MissionsScreen';
 import { useGameSnapshot } from './useGameSnapshot';
 
@@ -104,9 +105,9 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <kbd>Enter</kbd>
           </button>
           <p className="mf-action-note">
-            Stage 8 links the expedition to Waystation command. Reclaim the
-            Greenreach, restore the watchpost relay, and complete optional field
-            objectives while holding the frontier road.
+            Stage 9 pushes into contested ground. Burn out the Bloom Nest,
+            secure the watchpost territory, and bring its safe zone online
+            before restoring the frontier relay.
           </p>
         </div>
 
@@ -138,11 +139,18 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
           </div>
           <div>
             <dt>Mission</dt>
-            <dd>1 field order</dd>
+            <dd>5 field orders</dd>
           </div>
           <div>
             <dt>Region</dt>
             <dd>Greenreach</dd>
+          </div>
+          <div>
+            <dt>Territory</dt>
+            <dd>
+              {snapshot.territories.securedCount}/
+              {snapshot.territories.territories.length} secured
+            </dd>
           </div>
           <div>
             <dt>Landmarks</dt>
@@ -220,6 +228,8 @@ function Hud({
         <MissionTracker mission={snapshot.missions.active} />
       )}
 
+      <TerritoryPanel territories={snapshot.territories} />
+
       {snapshot.interaction && (
         <div className="mf-interact-prompt" role="status">
           <kbd>E</kbd>
@@ -246,6 +256,12 @@ function Hud({
             {snapshot.survival.pickupsTotal}
           </span>
           <span>MODULES {selectEquipmentUsed(snapshot)}</span>
+          <span>
+            TERRITORY{' '}
+            {snapshot.territories.territories
+              .map((territory) => territory.state)
+              .join('/') || 'NONE'}
+          </span>
           <span>FIRE {fireFailure ?? 'READY'}</span>
           <span>DODGE {snapshot.player.dodgeCooldown.toFixed(2)}s</span>
           <span>STAM {stamina}%</span>
@@ -345,7 +361,10 @@ function Hud({
           <span className="mf-death-kicker">Signal lost</span>
           <strong>Redeploying in {snapshot.player.respawnRemaining.toFixed(1)}s</strong>
           <span className="mf-death-detail">
-            Waystation Echo uplink · health and plating restored
+            {snapshot.territories.territories.find(
+              (territory) => territory.safeZone.active,
+            )?.safeZone.name ?? 'Waystation Echo'}{' '}
+            uplink · health and plating restored
           </span>
         </div>
       )}
@@ -655,7 +674,7 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
           </button>
         </div>
         <p className="mf-pause-footnote">
-          Stage 8 / Missions & Objectives · build {snapshot.version}
+          {snapshot.stage} · build {snapshot.version}
         </p>
       </div>
     </div>

@@ -3,6 +3,10 @@ import type { Creature } from "../entities/Creature";
 import type { PlayerRenderState } from "../entities/Player";
 import type { TargetDummy } from "../entities/TargetDummy";
 import type { MissionMarkerSnapshot } from "../systems/MissionSystem";
+import type {
+  TerritoriesSnapshot,
+  TerritoryState,
+} from "../systems/TerritorySystem";
 import {
   terrainAt,
   type LoadedWorld,
@@ -33,6 +37,7 @@ export class MinimapRenderer {
     creatures: readonly Creature[],
     targets: readonly TargetDummy[],
     missionMarkers: readonly MissionMarkerSnapshot[],
+    territories: TerritoriesSnapshot,
     viewportWidth: number,
   ): void {
     const width = 164;
@@ -105,6 +110,57 @@ export class MinimapRenderer {
       context.lineTo(markerX + 3.3, markerY);
       context.lineTo(markerX, markerY + 3.3);
       context.lineTo(markerX - 3.3, markerY);
+      context.closePath();
+      context.fill();
+      context.stroke();
+    }
+
+    for (const territory of territories.territories) {
+      const color = territoryColor(territory.state);
+      const centerX = x + 6 + territory.x * scaleX;
+      const centerY = y + 6 + territory.y * scaleY;
+      const radius = Math.max(3, territory.radius * scaleX);
+
+      context.fillStyle = `rgba(${color}, ${territory.state === "secured" ? 0.12 : 0.06})`;
+      context.strokeStyle = `rgba(${color}, 0.58)`;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+
+      if (territory.safeZone.active) {
+        context.fillStyle = "rgba(117, 245, 203, 0.95)";
+        context.beginPath();
+        context.arc(
+          x + 6 + territory.safeZone.x * scaleX,
+          y + 6 + territory.safeZone.y * scaleY,
+          2,
+          0,
+          Math.PI * 2,
+        );
+        context.fill();
+      }
+    }
+
+    for (const nest of territories.nests) {
+      if (nest.state === "inactive") {
+        continue;
+      }
+
+      const color =
+        nest.state === "cleared" ? "117, 245, 203" : "255, 113, 92";
+      const nestX = x + 6 + nest.x * scaleX;
+      const nestY = y + 6 + nest.y * scaleY;
+
+      context.fillStyle = `rgba(${color}, 0.92)`;
+      context.strokeStyle = "rgba(8, 18, 14, 0.9)";
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(nestX, nestY - 3);
+      context.lineTo(nestX + 3, nestY);
+      context.lineTo(nestX, nestY + 3);
+      context.lineTo(nestX - 3, nestY);
       context.closePath();
       context.fill();
       context.stroke();
@@ -234,6 +290,19 @@ function minimapColor(
   }
 
   return minimapTerrainColor(kind);
+}
+
+function territoryColor(state: TerritoryState): string {
+  switch (state) {
+    case "hostile":
+      return "255, 113, 92";
+    case "contested":
+      return "255, 154, 88";
+    case "securing":
+      return "247, 191, 91";
+    case "secured":
+      return "117, 245, 203";
+  }
 }
 
 function poiColor(kind: PointOfInterestKind): string {
