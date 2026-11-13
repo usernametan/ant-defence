@@ -110,6 +110,18 @@ describe('InputRouter', () => {
     router.detach();
   });
 
+  it('dispatches the interaction action from E', () => {
+    const { target, actions, router } = createHarness();
+    router.attach();
+
+    target.dispatchEvent(createKeyboardEvent('keydown', 'KeyE'));
+    target.dispatchEvent(createKeyboardEvent('keydown', 'KeyE', true));
+
+    expect(actions).toEqual(['interact']);
+
+    router.detach();
+  });
+
   it('tracks left-button fire until pointer release', () => {
     const { target, canvas, router } = createHarness();
     router.attach();

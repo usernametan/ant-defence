@@ -2,16 +2,29 @@
 
 A top-down survival action game set on the edge of a transformed frontier.
 
-This repository is in **Stage 7 — Equipment & Inventory**. The combat prototype
+This repository is in **Stage 8 — Missions & Objectives**. The combat prototype
 takes place in **Greenreach Wilds**, an authored 2048 × 1280 explorable region
 with waystation roads, ruins, a stream crossing, forest pockets, rocky ground,
 and creature-held terrain. Players now manage health and armor, recover from
-field caches, tune a small loadout of blasters and modules, and redeploy at
-Waystation Echo after death. Missions, nests, territory capture, bosses,
+field caches, tune a small loadout of blasters and modules, take the Reclaim the
+Greenreach field order, track its objectives, restore the watchpost relay, and
+redeploy at Waystation Echo after death. Nests, territory capture, bosses,
 checkpoints, and campaign progression remain planned for later stages.
 
 ## Current status
 
+- Stage 8 mission layer: data-driven mission and objective definitions, a
+  validated runtime state machine, prerequisite gating, progress tracking,
+  optional objectives, markers, rewards, failure state, and one-time completion.
+- “Reclaim the Greenreach”: eliminate creatures, reach the Moss-Eaten
+  Watchpost, restore its field relay with `E`, and optionally recover supplies
+  or clear the watchpost perimeter.
+- Mission tracker HUD with per-objective progress, world and minimap markers,
+  proximity interaction prompts, menu briefing, and a victory screen with a
+  rewarded new-expedition or return-to-menu flow.
+- The Greenreach map now includes a validated relay interactable and POI entry
+  triggers. Mission progress and interaction state reset with each expedition;
+  persistence is planned for Stage 11.
 - Stage 7 loadout layer: data-driven weapon definitions and three equipment
   lines with capped, non-stacking effects.
 - Reinforced Plating improves maximum armor and absorption, Mobility Module
@@ -45,8 +58,8 @@ checkpoints, and campaign progression remain planned for later stages.
   boulders, ruin walls, crates, barrels, tents, carts, signs, logs, fences, and
   a walkable bridge across the stream.
 - Map loading validates bounds, terrain size, unique ids, entry points, creature
-  spawn points, target placement, recovery-cache and item placement, known item
-  ids, and solid-prop overlaps.
+  spawn points, target placement, recovery-cache, item, and interactable
+  placement, known item ids, and solid-prop overlaps.
 - Crawlers chase directly and gain a small pack-speed bonus, Stalkers strafe for
   an opening, and Spitters hold range with telegraphed acid projectiles.
 - Creatures acquire targets by detection range and line of sight, lose hidden or
@@ -78,6 +91,8 @@ checkpoints, and campaign progression remain planned for later stages.
   coordinates, health and armor, recovery-cache placement and counts, loadout
   state, respawn state, nearby solids, nearby spawns, combat state, and world
   overlays.
+- Mission markers are drawn in the world and minimap, while relays and other
+  interactables render as world objects with activation state.
 - Lightweight synthesized Web Audio feedback for firing, switching weapons,
   denied actions, target hits, enemy attacks, player damage, recovery and item
   pickups, equipment changes, and creature deaths.
@@ -87,14 +102,17 @@ checkpoints, and campaign progression remain planned for later stages.
   armor, survival notices, death countdown, weapon, energy, cooldown, pickup,
   loadout, target, enemy, kill, and projectile readouts.
 - Vitest coverage for map loading and validation, terrain sampling, world
-  dimensions, prop/pickup/item layering and placement, boundary clamping, player
-  and creature-sized prop collision, authored spawn validity, map refills,
-  movement, sprint, dodge, armor mitigation, equipment modifiers, healing caps,
-  pickup collection/respawn, one-shot item collection, inventory equip/unequip/
-  duplicate/capacity rules, respawn protection, line of sight, swept projectile
-  hits, weapon range and failure feedback, damage/respawn, cooldowns, creature
-  targeting/behaviors/death, spatial hashing, camera follow and aim offsets,
-  input state, loop stepping, RNG determinism, and snapshot throttling.
+  dimensions, prop/pickup/item/interactable layering and placement, boundary
+  clamping, player and creature-sized prop collision, authored spawn validity,
+  map refills, movement, sprint, dodge, armor mitigation, equipment modifiers,
+  healing caps, pickup collection/respawn, one-shot item collection, inventory
+  equip/unequip/duplicate/capacity rules, respawn protection, mission objective
+  transitions, event counting, optional progress, prerequisite gating, failure
+  rules, completion-once behavior, trigger entry and interaction state, line of
+  sight, swept projectile hits, weapon range and failure feedback,
+  damage/respawn, cooldowns, creature targeting/behaviors/death, spatial
+  hashing, camera follow and aim offsets, input state, loop stepping, RNG
+  determinism, and snapshot throttling.
 - The old Ant Defence source is retained for reference, but it is no longer
   imported by the active app.
 
@@ -110,8 +128,9 @@ See [MONSTER_FRONTIER_PLAN.md](MONSTER_FRONTIER_PLAN.md) for the full roadmap.
 | `Mouse` | Face the aim reticle |
 | `Left mouse` | Hold to fire the current blaster |
 | `1` / `2` / `3` | Select Basic / Rapid / Heavy Blaster |
+| `E` | Activate a nearby field interactable |
 | `I` | Open or close inventory |
-| `Enter` | Enter Greenreach or resume |
+| `Enter` | Enter Greenreach, resume, or restart after victory |
 | `Escape` | Close inventory, pause, or resume |
 | `F3` | Toggle collision and diagnostic overlays |
 
@@ -158,15 +177,15 @@ src/
   game/
     audio/        Lightweight synthesized combat sound effects
     combat/       Weapons, firing rules, projectile simulation, and damage
-    content/      Game identity, weapon/equipment definitions, pickups, map
+    content/      Game identity, weapons, equipment, pickups, missions, map
     core/         Loop, RNG, math, IDs, events, shared types
     ai/           Creature brains and movement behaviors
     entities/     Player, damageable creatures, and training dummies
     input/        Input routing, held-key state, pointer, and fire state
     render/       Camera, Canvas 2D renderer, effects, and debug drawing
-    systems/      Spawning, refills, recovery pickups, items, and inventory
+    systems/      Spawning, pickups, inventory, and mission state
     ui/           UI snapshots, store, and selectors
-    world/        Map types/loading, collision, line of sight, and spatial hash
+    world/        Map types/loading, collision, triggers, line of sight, hash
   components/     Retained Ant Defence UI, disconnected from the active app
   game/*          Retained Ant Defence engine modules
 public/           Retained assets and social preview image

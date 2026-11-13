@@ -2,6 +2,7 @@ import { hashString } from "../core/rng";
 import type { Creature } from "../entities/Creature";
 import type { PlayerRenderState } from "../entities/Player";
 import type { TargetDummy } from "../entities/TargetDummy";
+import type { MissionMarkerSnapshot } from "../systems/MissionSystem";
 import {
   terrainAt,
   type LoadedWorld,
@@ -31,6 +32,7 @@ export class MinimapRenderer {
     player: PlayerRenderState,
     creatures: readonly Creature[],
     targets: readonly TargetDummy[],
+    missionMarkers: readonly MissionMarkerSnapshot[],
     viewportWidth: number,
   ): void {
     const width = 164;
@@ -89,6 +91,23 @@ export class MinimapRenderer {
         3,
         3,
       );
+    }
+
+    for (const marker of missionMarkers) {
+      const markerX = x + 6 + marker.x * scaleX;
+      const markerY = y + 6 + marker.y * scaleY;
+
+      context.strokeStyle = "rgba(233, 255, 248, 0.92)";
+      context.fillStyle = "rgba(117, 245, 203, 0.34)";
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(markerX, markerY - 3.3);
+      context.lineTo(markerX + 3.3, markerY);
+      context.lineTo(markerX, markerY + 3.3);
+      context.lineTo(markerX - 3.3, markerY);
+      context.closePath();
+      context.fill();
+      context.stroke();
     }
 
     for (const target of targets) {

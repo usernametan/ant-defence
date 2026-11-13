@@ -1,4 +1,4 @@
-export type GamePhase = "menu" | "playing" | "paused";
+export type GamePhase = "menu" | "playing" | "paused" | "victory";
 
 export interface Vec2 {
   x: number;

@@ -5,6 +5,7 @@ export type InputAction =
   | "pause"
   | "toggleDebug"
   | "dodge"
+  | "interact"
   | "inventory"
   | "weapon1"
   | "weapon2"
@@ -30,6 +31,7 @@ export const DEFAULT_BINDINGS: Record<InputAction, readonly string[]> = {
   pause: ["Escape"],
   toggleDebug: ["F3"],
   dodge: ["Space"],
+  interact: ["KeyE"],
   inventory: ["KeyI"],
   weapon1: ["Digit1"],
   weapon2: ["Digit2"],

@@ -5,6 +5,7 @@ import type {
   MapDecorationDef,
   MapDecorationKind,
   MapDef,
+  MapInteractableDef,
   MapPointOfInterestDef,
   MapPropDef,
   MapPropKind,
@@ -151,6 +152,18 @@ const TARGETS: readonly MapTargetDef[] = [
   { id: "dummy-gamma", x: 1600, y: 820 },
 ];
 
+const INTERACTABLES: readonly MapInteractableDef[] = [
+  {
+    id: "relay-watchpost",
+    name: "Watchpost Relay",
+    kind: "relay",
+    x: 1040,
+    y: 790,
+    radius: 44,
+    prompt: "Restore the watchpost relay",
+  },
+];
+
 const POINTS_OF_INTEREST: readonly MapPointOfInterestDef[] = [
   {
     id: "poi-waystation",
@@ -250,6 +263,7 @@ export function createGreenreachMap(): MapDef {
     targets: TARGETS,
     pickups: GREENREACH_PICKUPS,
     items: GREENREACH_ITEMS,
+    interactables: INTERACTABLES,
     entryPoints,
     pointsOfInterest: POINTS_OF_INTEREST,
   };

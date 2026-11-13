@@ -106,6 +106,25 @@ export interface LoadedItemDef extends Vec2 {
   radius: number;
 }
 
+
+export type InteractableKind = "relay" | "beacon";
+
+export interface MapInteractableDef extends Vec2 {
+  id: string;
+  name: string;
+  kind: InteractableKind;
+  radius?: number;
+  prompt?: string;
+}
+
+export interface LoadedInteractableDef extends Vec2 {
+  id: string;
+  name: string;
+  kind: InteractableKind;
+  radius: number;
+  prompt: string;
+}
+
 export type PointOfInterestKind =
   | "waystation"
   | "ruin"
@@ -134,6 +153,7 @@ export interface MapDef {
   targets: readonly MapTargetDef[];
   pickups: readonly MapPickupDef[];
   items?: readonly MapItemDef[];
+  interactables?: readonly MapInteractableDef[];
   entryPoints: Record<string, Vec2>;
   pointsOfInterest: readonly MapPointOfInterestDef[];
 }
@@ -152,6 +172,7 @@ export interface LoadedWorld extends CollisionWorld {
   targets: readonly MapTargetDef[];
   pickups: readonly LoadedPickupDef[];
   items: readonly LoadedItemDef[];
+  interactables: readonly LoadedInteractableDef[];
   entryPoints: Record<string, Vec2>;
   spawn: Vec2;
   pointsOfInterest: readonly MapPointOfInterestDef[];

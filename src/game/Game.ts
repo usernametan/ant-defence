@@ -36,6 +36,7 @@ import {
   type InventoryItemKind,
 } from "./systems/InventorySystem";
 import { ItemPickupSystem } from "./systems/ItemPickupSystem";
+import { MissionSystem } from "./systems/MissionSystem";
 import { PickupSystem } from "./systems/PickupSystem";
 import { SpawnDirector } from "./systems/SpawnDirector";
 import {
@@ -43,6 +44,7 @@ import {
   type SurvivalNoticeTone,
 } from "./ui/UiSnapshot";
 import { SpatialHash } from "./world/SpatialHash";
+import { TriggerSystem } from "./world/Triggers";
 import { createGreenreachMap } from "./content/maps/greenreach";
 import { loadMap } from "./world/MapLoader";
 import type { LoadedWorld } from "./world/MapDef";
@@ -103,6 +105,8 @@ export class Game {
   private readonly spawnDirector: SpawnDirector;
   private readonly pickups: PickupSystem;
   private readonly worldItems: ItemPickupSystem;
+  private readonly triggers: TriggerSystem;
+  private readonly missions: MissionSystem;
   private readonly spatialHash = new SpatialHash<Creature>(120);
   private readonly effects = new ImpactEffects();
   private readonly sfx = new CombatSfx();
@@ -146,6 +150,14 @@ export class Game {
     this.spawnDirector = new SpawnDirector(this.world.creatureSpawns);
     this.pickups = new PickupSystem(this.world.pickups);
     this.worldItems = new ItemPickupSystem(this.world.items);
+    this.triggers = new TriggerSystem(
+      this.world.pointsOfInterest,
+      this.world.interactables,
+    );
+    this.missions = new MissionSystem(undefined, {
+      pointsOfInterest: this.world.pointsOfInterest,
+      interactables: this.world.interactables,
+    });
     this.targets = createTrainingDummies(this.world.targets);
     this.applyInventoryModifiers();
     this.camera.moveTo(this.player.x, this.player.y);
@@ -201,7 +213,7 @@ export class Game {
   }
 
   enterPreview(): void {
-    if (this.phase === "playing") {
+    if (this.phase === "playing" || this.phase === "victory") {
       return;
     }
 
@@ -226,6 +238,15 @@ export class Game {
       return;
     }
 
+    this.setPhase("playing");
+  }
+
+  restartMission(): void {
+    if (this.phase !== "victory") {
+      return;
+    }
+
+    this.resetRun();
     this.setPhase("playing");
   }
 
@@ -290,6 +311,9 @@ export class Game {
     this.spawnDirector.reset(this.world);
     this.pickups.reset();
     this.worldItems.reset();
+    this.triggers.reset();
+    this.missions.reset();
+    this.missions.drainEvents();
     this.effects.clear();
     this.playerRespawnRemaining = 0;
     this.feedbackText = "";
@@ -313,6 +337,8 @@ export class Game {
           this.enterPreview();
         } else if (this.phase === "paused") {
           this.resume();
+        } else if (this.phase === "victory") {
+          this.restartMission();
         }
         break;
       case "pause":
@@ -328,6 +354,9 @@ export class Game {
       case "toggleDebug":
         this.toggleDebug();
         break;
+      case "interact":
+        this.handleInteract();
+        break;
       case "inventory":
         this.toggleInventory();
         break;
@@ -337,6 +366,7 @@ export class Game {
         } else if (this.phase === "paused") {
           this.resume();
         } else if (
+          this.phase === "playing" &&
           this.player.requestDodge(this.input.getMovementIntent())
         ) {
           this.publish(true);
@@ -355,7 +385,7 @@ export class Game {
   };
 
   private selectWeapon(index: number): void {
-    if (this.phase === "menu") {
+    if (this.phase === "menu" || this.phase === "victory") {
       return;
     }
 
@@ -463,6 +493,10 @@ export class Game {
       );
     }
 
+    if (this.player.alive) {
+      this.updateTriggers();
+    }
+
     this.pickups.update(stepSeconds);
 
     if (this.player.alive) {
@@ -568,6 +602,11 @@ export class Game {
       });
 
       if (creature && killed) {
+        this.missions.recordCreatureKill(
+          creature.archetype.id,
+          creature.x,
+          creature.y,
+        );
         this.events.emit("combat:creature-killed", {
           creatureId: creature.id,
           archetypeId: creature.archetype.id,
@@ -582,6 +621,7 @@ export class Game {
 
     this.spawnDirector.update(stepSeconds, this.world);
     this.effects.update(stepSeconds);
+    this.processMissionEvents();
   };
 
   private updateCreatures(deltaSeconds: number): void {
@@ -706,6 +746,8 @@ export class Game {
     for (const drop of collected) {
       const type = this.pickups.getType(drop.pickup.kind);
 
+      this.missions.recordCollect(drop.pickup.kind);
+
       this.effects.spawnImpact(
         drop.pickup.x,
         drop.pickup.y,
@@ -746,6 +788,8 @@ export class Game {
 
       const type = this.worldItems.getType(item);
       const label = this.itemLabel(item.kind, item.itemId).toUpperCase();
+
+      this.missions.recordCollect(item.itemId);
 
       this.effects.spawnImpact(
         item.x,
@@ -790,6 +834,121 @@ export class Game {
     if (loadoutChanged) {
       this.applyInventoryModifiers();
     }
+  }
+
+  private handleInteract(): void {
+    if (
+      this.phase !== "playing" ||
+      this.inventoryOpen ||
+      !this.player.alive
+    ) {
+      return;
+    }
+
+    const interactable = this.triggers.activateNearby(this.player);
+
+    if (!interactable) {
+      this.showFeedback(
+        "NO FIELD INTERFACE IN RANGE",
+        "energy",
+        0.9,
+      );
+      this.sfx.denied();
+      return;
+    }
+
+    this.missions.recordInteract(interactable.id);
+    this.effects.spawnImpact(
+      interactable.x,
+      interactable.y,
+      "#f7bf5b",
+      "#e9fff8",
+      18,
+    );
+    this.sfx.equip();
+    this.showFeedback(
+      `${interactable.name.toUpperCase()} · ONLINE`,
+      "respawn",
+      2.2,
+    );
+    this.processMissionEvents();
+    this.publish(true);
+  }
+
+  private updateTriggers(): void {
+    const result = this.triggers.update(this.player);
+
+    for (const point of result.enteredPoints) {
+      this.missions.recordReach(point.id);
+      this.showFeedback(
+        `${point.name.toUpperCase()} · REACHED`,
+        "respawn",
+        1.6,
+      );
+    }
+  }
+
+  private processMissionEvents(): void {
+    for (const event of this.missions.drainEvents()) {
+      switch (event.type) {
+        case "mission-activated":
+          this.sfx.weaponSwitch();
+          this.showFeedback(
+            `MISSION ACTIVE · ${event.title.toUpperCase()}`,
+            "energy",
+            2.4,
+          );
+          break;
+        case "objective-completed":
+          this.sfx.equip();
+          this.showFeedback(
+            `${event.optional ? "OPTIONAL" : "OBJECTIVE"} · ${event.title.toUpperCase()}`,
+            "respawn",
+            1.8,
+          );
+          break;
+        case "mission-completed":
+          this.completeMission(event.title, event.rewards);
+          break;
+        case "mission-failed":
+          this.showFeedback(
+            `MISSION FAILED · ${event.reason.toUpperCase()}`,
+            "death",
+            2.4,
+          );
+          break;
+      }
+    }
+  }
+
+  private completeMission(
+    title: string,
+    rewards: {
+      armor?: number;
+      energy?: number;
+      summary: string;
+    } | null,
+  ): void {
+    if (rewards?.armor) {
+      this.player.restoreArmor(rewards.armor);
+    }
+
+    if (rewards?.energy) {
+      this.combat.restoreEnergy(rewards.energy);
+    }
+
+    this.effects.spawnImpact(
+      this.player.x,
+      this.player.y,
+      "#75f5cb",
+      "#e9fff8",
+      24,
+    );
+    this.sfx.equip();
+    this.feedbackText = `MISSION COMPLETE · ${title.toUpperCase()}`;
+    this.feedbackTone = "respawn";
+    this.feedbackRemaining = 3;
+    this.setPhase("victory");
   }
 
   private handleFireFailure(): void {
@@ -919,6 +1078,7 @@ export class Game {
     }
 
     const creatures = this.spawnDirector.creatures;
+    const missionSnapshot = this.missions.snapshot();
 
     this.interpolation = interpolation;
     this.renderer.render({
@@ -935,6 +1095,8 @@ export class Game {
       ),
       pickups: this.pickups,
       items: this.worldItems,
+      interactables: this.triggers.interactables,
+      missionMarkers: missionSnapshot.markers,
       effects: this.effects,
       combat: {
         weaponName: this.combat.currentWeapon.name,
@@ -1059,6 +1221,14 @@ export class Game {
           alive: this.player.alive,
           respawnRemaining: this.playerRespawnRemaining,
         },
+        missions: this.missions.snapshot(),
+        interaction: this.triggers.nearbyInteractable
+          ? {
+              id: this.triggers.nearbyInteractable.id,
+              name: this.triggers.nearbyInteractable.name,
+              prompt: this.triggers.nearbyInteractable.prompt,
+            }
+          : null,
         survival: {
           pickupsActive: this.pickups.activeCount,
           pickupsTotal: this.pickups.totalCount,

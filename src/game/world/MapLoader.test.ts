@@ -29,6 +29,14 @@ describe('Greenreach Wilds', () => {
       radius: 14,
       respawnSeconds: 18,
     });
+    expect(world.interactables).toHaveLength(1);
+    expect(world.interactables[0]).toMatchObject({
+      id: 'relay-watchpost',
+      name: 'Watchpost Relay',
+      kind: 'relay',
+      radius: 44,
+      prompt: 'Restore the watchpost relay',
+    });
     expect(world.items).toHaveLength(5);
     expect(world.items.filter((item) => item.kind === 'weapon')).toHaveLength(2);
     expect(
@@ -78,6 +86,7 @@ describe('Greenreach Wilds', () => {
       ...world.targets,
       ...world.pickups,
       ...world.items,
+      ...world.interactables,
       ...world.pointsOfInterest,
     ].map((item) => item.id);
 
@@ -145,6 +154,44 @@ describe('Greenreach Wilds', () => {
         ],
       }),
     ).toThrow(/pickup.*outside/i);
+  });
+
+  it('rejects interactables outside the map', () => {
+    const map = createGreenreachMap();
+    const interactable = (map.interactables ?? [])[0];
+
+    expect(() =>
+      loadMap({
+        ...map,
+        interactables: [
+          ...(map.interactables ?? []),
+          { ...interactable, id: 'invalid-interactable-outside', x: -40 },
+        ],
+      }),
+    ).toThrow(/interactable.*outside/i);
+  });
+
+  it('rejects interactables that overlap a solid prop', () => {
+    const map = createGreenreachMap();
+    const interactable = (map.interactables ?? [])[0];
+
+    expect(() =>
+      loadMap({
+        ...map,
+        props: [
+          ...map.props,
+          {
+            id: 'invalid-interactable-blocker',
+            kind: 'boulder',
+            x: interactable.x - 12,
+            y: interactable.y - 12,
+            width: 24,
+            height: 24,
+            solid: true,
+          },
+        ],
+      }),
+    ).toThrow(/interactable.*overlap/i);
   });
 
   it('rejects items with unknown item ids', () => {

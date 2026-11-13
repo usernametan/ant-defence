@@ -6,10 +6,14 @@ import type { PlayerRenderState } from "../entities/Player";
 import type { TargetDummy } from "../entities/TargetDummy";
 import type { ItemPickupSystem } from "../systems/ItemPickupSystem";
 import type { PickupSystem } from "../systems/PickupSystem";
+import type { MissionMarkerSnapshot } from "../systems/MissionSystem";
 import type { LoadedWorld } from "../world/MapDef";
+import type { InteractableState } from "../world/Triggers";
 import type { Camera } from "./Camera";
 import { drawCreature } from "./drawCreature";
 import { drawDebugOverlay, drawWorldDebug } from "./drawDebug";
+import { drawInteractable } from "./drawInteractables";
+import { drawMissionMarker } from "./drawMissionMarkers";
 import { drawPickup } from "./drawPickups";
 import { drawPlayer } from "./drawPlayer";
 import { drawWorldItem } from "./drawWorldItems";
@@ -57,6 +61,8 @@ export interface RenderState {
   creatureStates: readonly CreatureRenderState[];
   pickups: PickupSystem;
   items: ItemPickupSystem;
+  interactables: readonly InteractableState[];
+  missionMarkers: readonly MissionMarkerSnapshot[];
   effects: ImpactEffects;
   combat: CombatRenderState;
 }
@@ -181,6 +187,7 @@ export class Renderer {
         state.player,
         state.creatures,
         state.targets,
+        state.missionMarkers,
         viewportWidth,
       );
     }
@@ -243,6 +250,14 @@ export class Renderer {
       });
     }
 
+    for (const interactable of state.interactables) {
+      items.push({
+        y: interactable.y,
+        draw: () =>
+          drawInteractable(context, interactable, state.timeSeconds),
+      });
+    }
+
     for (const target of state.targets) {
       items.push({
         y: target.y,
@@ -291,6 +306,11 @@ export class Renderer {
     }
 
     drawProjectiles(context, state.projectiles);
+
+    for (const marker of state.missionMarkers) {
+      drawMissionMarker(context, marker, state.timeSeconds);
+    }
+
     this.drawAimGuide(state.player, state.aim, state.timeSeconds);
     state.effects.draw(context);
   }

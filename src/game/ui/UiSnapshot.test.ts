@@ -121,6 +121,13 @@ describe('UI selectors', () => {
     expect(selectIsPlaying(snapshot)).toBe(false);
     expect(selectCameraReadout(snapshot)).toBe('812 / 434');
     expect(selectPhaseLabel(snapshot)).toBe('Expedition paused');
+
+    expect(
+      selectPhaseLabel({
+        ...snapshot,
+        phase: 'victory',
+      }),
+    ).toBe('Greenreach route secured');
   });
 
   it('derives player, stamina, and dodge labels', () => {
@@ -184,6 +191,19 @@ describe('UI selectors', () => {
     expect(selectEnemiesReadout(engaged)).toBe('4 / 8');
     expect(selectHostilesReadout(engaged)).toBe('6');
     expect(engaged.combat.kills).toBe(5);
+  });
+
+  it('starts with the Greenreach mission active', () => {
+    const snapshot = createInitialSnapshot();
+    const mission = snapshot.missions.active;
+
+    expect(mission?.title).toBe('Reclaim the Greenreach');
+    expect(mission?.status).toBe('active');
+    expect(mission?.objectives).toHaveLength(5);
+    expect(
+      mission?.objectives.filter((objective) => objective.optional),
+    ).toHaveLength(2);
+    expect(snapshot.interaction).toBeNull();
   });
 
   it('derives weapon, energy, and target readouts', () => {

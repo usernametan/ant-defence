@@ -7,6 +7,10 @@ import type { EquipmentSlot } from "../content/upgrades";
 import type { GamePhase, Size } from "../core/types";
 import { DEFAULT_PLAYER_CONFIG } from "../entities/Player";
 import { InventorySystem } from "../systems/InventorySystem";
+import {
+  MissionSystem,
+  type MissionsSnapshot,
+} from "../systems/MissionSystem";
 
 export interface WeaponSnapshot {
   id: string;
@@ -58,6 +62,12 @@ export interface CombatSnapshot {
   kills: number;
   fireFailure: string | null;
   weapons: readonly WeaponSnapshot[];
+}
+
+export interface InteractionSnapshot {
+  id: string;
+  name: string;
+  prompt: string;
 }
 
 export type SurvivalNoticeTone =
@@ -118,6 +128,8 @@ export interface UiSnapshot {
   player: PlayerSnapshot;
   combat: CombatSnapshot;
   inventory: InventorySnapshot;
+  missions: MissionsSnapshot;
+  interaction: InteractionSnapshot | null;
   survival: SurvivalSnapshot;
   frame: number;
   elapsed: number;
@@ -128,6 +140,7 @@ export interface UiSnapshot {
 }
 
 const INITIAL_INVENTORY = new InventorySystem().snapshot();
+const INITIAL_MISSIONS = new MissionSystem().snapshot();
 
 function initialWeapons(): readonly WeaponSnapshot[] {
   return STARTER_WEAPONS.map((weapon, index) => ({
@@ -199,6 +212,8 @@ export function createInitialSnapshot(): UiSnapshot {
       fireFailure: null,
       weapons: initialWeapons(),
     },
+    missions: INITIAL_MISSIONS,
+    interaction: null,
     inventory: {
       open: false,
       capacity: INITIAL_INVENTORY.capacity,
@@ -407,5 +422,7 @@ export function selectPhaseLabel(snapshot: UiSnapshot): string {
       return "Greenreach expedition active";
     case "paused":
       return "Expedition paused";
+    case "victory":
+      return "Greenreach route secured";
   }
 }

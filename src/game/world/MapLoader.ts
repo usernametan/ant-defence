@@ -5,10 +5,12 @@ import { EQUIPMENT_BY_ID } from "../content/upgrades";
 import type { Vec2 } from "../core/types";
 import { circleIntersectsAabb } from "./Collision";
 import {
+  type LoadedInteractableDef,
   type LoadedItemDef,
   type LoadedPickupDef,
   type LoadedWorld,
   type MapDef,
+  type MapInteractableDef,
   type MapItemDef,
   type MapPickupDef,
   type MapPropDef,
@@ -53,6 +55,9 @@ export function loadMap(def: MapDef): LoadedWorld {
   const solidProps = props.filter((prop) => prop.solid);
   const pickups = def.pickups.map((pickup) => normalizePickup(pickup));
   const items = (def.items ?? []).map((item) => normalizeItem(item));
+  const interactables = (def.interactables ?? []).map((interactable) =>
+    normalizeInteractable(interactable),
+  );
   const spawn = def.entryPoints.start;
 
   if (!spawn) {
@@ -76,6 +81,7 @@ export function loadMap(def: MapDef): LoadedWorld {
     targets: def.targets,
     pickups,
     items,
+    interactables,
     entryPoints: def.entryPoints,
     spawn: { ...spawn },
     pointsOfInterest: def.pointsOfInterest,
@@ -88,6 +94,7 @@ export function loadMap(def: MapDef): LoadedWorld {
   validateTargets(world);
   validatePickups(world);
   validateItems(world);
+  validateInteractables(world);
 
   return world;
 }
@@ -121,6 +128,16 @@ function normalizeItem(item: MapItemDef): LoadedItemDef {
   return {
     ...item,
     radius: item.radius ?? type.radius,
+  };
+}
+
+function normalizeInteractable(
+  interactable: MapInteractableDef,
+): LoadedInteractableDef {
+  return {
+    ...interactable,
+    radius: interactable.radius ?? 42,
+    prompt: interactable.prompt ?? `Activate ${interactable.name}`,
   };
 }
 
@@ -179,6 +196,12 @@ function validateBounds(world: LoadedWorld): void {
       throw new Error(`Point of interest "${poi.id}" is outside the map`);
     }
   }
+
+  for (const interactable of world.interactables) {
+    if (!isCircleInBounds(interactable, interactable.radius, world)) {
+      throw new Error(`Interactable "${interactable.id}" is outside the map`);
+    }
+  }
 }
 
 function validateUniqueIds(world: LoadedWorld): void {
@@ -191,6 +214,7 @@ function validateUniqueIds(world: LoadedWorld): void {
     ...world.targets,
     ...world.pickups,
     ...world.items,
+    ...world.interactables,
     ...world.pointsOfInterest,
   ]) {
     if (ids.has(item.id)) {
@@ -285,6 +309,27 @@ function validateItems(world: LoadedWorld): void {
 
     if (isCircleBlocked(item, item.radius, world)) {
       throw new Error(`Item "${item.id}" overlaps a solid prop`);
+    }
+  }
+}
+
+function validateInteractables(world: LoadedWorld): void {
+  for (const interactable of world.interactables) {
+    if (
+      !interactable.name ||
+      !interactable.prompt ||
+      !Number.isFinite(interactable.radius) ||
+      interactable.radius <= 0
+    ) {
+      throw new Error(
+        `Interactable "${interactable.id}" has invalid properties`,
+      );
+    }
+
+    if (isCircleBlocked(interactable, interactable.radius, world)) {
+      throw new Error(
+        `Interactable "${interactable.id}" overlaps a solid prop`,
+      );
     }
   }
 }

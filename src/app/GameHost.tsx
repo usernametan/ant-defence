@@ -18,6 +18,8 @@ import {
   selectWeaponStatus,
   type UiSnapshot,
 } from '../game/ui/UiSnapshot';
+import { MissionTracker } from '../components/hud/MissionTracker';
+import { MissionsScreen } from '../components/menus/MissionsScreen';
 import { useGameSnapshot } from './useGameSnapshot';
 
 export function GameHost() {
@@ -71,6 +73,11 @@ interface ScreenProps {
 }
 
 function MenuScreen({ snapshot, game }: ScreenProps) {
+  const mission =
+    snapshot.missions.active ??
+    snapshot.missions.missions[0] ??
+    null;
+
   return (
     <section className="mf-screen mf-menu" aria-labelledby="mf-menu-title">
       <div className="mf-menu-panel">
@@ -97,9 +104,9 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <kbd>Enter</kbd>
           </button>
           <p className="mf-action-note">
-            Stage 7 arms the expedition. Tune three blaster lines with field
-            modules, recover salvage from duplicates, and make every trip beyond
-            Waystation Echo count.
+            Stage 8 links the expedition to Waystation command. Reclaim the
+            Greenreach, restore the watchpost relay, and complete optional field
+            objectives while holding the frontier road.
           </p>
         </div>
 
@@ -119,11 +126,7 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
       <aside className="mf-briefing" aria-label="Greenreach expedition briefing">
         <p className="mf-briefing-label">Contact expected</p>
         <p className="mf-briefing-region">{snapshot.region}</p>
-        <p className="mf-briefing-copy">
-          Waystation Echo is the last safe landmark in Greenreach. Broken
-          roads run east through the watchpost ruins and across the ford, while
-          the woods and rocky approach stay creature-held.
-        </p>
+        <MissionsScreen mission={mission} />
         <dl className="mf-specs">
           <div>
             <dt>Build</dt>
@@ -134,8 +137,8 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
             <dd>60 Hz</dd>
           </div>
           <div>
-            <dt>Weapons</dt>
-            <dd>3 blasters · 3 modules</dd>
+            <dt>Mission</dt>
+            <dd>1 field order</dd>
           </div>
           <div>
             <dt>Region</dt>
@@ -154,7 +157,7 @@ function MenuScreen({ snapshot, game }: ScreenProps) {
         </dl>
         <p className="mf-briefing-footnote">
           WASD move · Shift sprint · Space dodge · LMB fire · 1–3 weapons ·
-          I inventory · F3 diagnostics
+          E interact · I inventory · F3 diagnostics
         </p>
       </aside>
     </section>
@@ -213,6 +216,17 @@ function Hud({
         </div>
       </div>
 
+      {snapshot.missions.active && (
+        <MissionTracker mission={snapshot.missions.active} />
+      )}
+
+      {snapshot.interaction && (
+        <div className="mf-interact-prompt" role="status">
+          <kbd>E</kbd>
+          <span>{snapshot.interaction.prompt}</span>
+        </div>
+      )}
+
       {snapshot.debug && (
         <div className="mf-debug-panel">
           <span>FRAME {snapshot.frame}</span>
@@ -242,7 +256,7 @@ function Hud({
       <div className="mf-hud-bottom">
         <div className="mf-status-stack">
           <span className="mf-stage-stamp">
-            {snapshot.stage} // loadout online
+            {snapshot.stage} // mission link online
           </span>
           <div className="mf-player-meters">
             <div
@@ -315,6 +329,7 @@ function Hud({
           <kbd>Space</kbd> dodge <span aria-hidden="true">·</span>{' '}
           <kbd>LMB</kbd> fire <span aria-hidden="true">·</span>{' '}
           <kbd>1–3</kbd> weapon <span aria-hidden="true">·</span>{' '}
+          <kbd>E</kbd> interact <span aria-hidden="true">·</span>{' '}
           <kbd>I</kbd> inventory <span aria-hidden="true">·</span>{' '}
           <kbd>Esc</kbd> pause <span aria-hidden="true">·</span>{' '}
           <kbd>F3</kbd> debug
@@ -334,6 +349,62 @@ function Hud({
           </span>
         </div>
       )}
+
+      {snapshot.phase === 'victory' && (
+        <VictoryScreen snapshot={snapshot} game={game} />
+      )}
+    </div>
+  );
+}
+
+function VictoryScreen({ snapshot, game }: ScreenProps) {
+  const mission =
+    snapshot.missions.missions.find(
+      (entry) => entry.status === 'completed',
+    ) ?? snapshot.missions.active;
+  const requiredIds = new Set(mission?.completionObjectiveIds ?? []);
+
+  return (
+    <div
+      className="mf-screen mf-victory"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mf-victory-title"
+    >
+      <div className="mf-victory-card">
+        <p className="mf-kicker">Mission complete</p>
+        <h2 id="mf-victory-title">{mission?.title ?? 'Greenreach secured'}</h2>
+        <p className="mf-victory-copy">
+          {mission?.rewards?.summary ??
+            'Waystation command has acknowledged the expedition.'}
+        </p>
+        {mission && (
+          <ul className="mf-victory-objectives">
+            {mission.objectives
+              .filter((objective) => requiredIds.has(objective.id))
+              .map((objective) => (
+                <li key={objective.id}>{objective.title}</li>
+              ))}
+          </ul>
+        )}
+        <div className="mf-pause-actions">
+          <button
+            type="button"
+            className="mf-button mf-button-primary"
+            onClick={() => game?.restartMission()}
+          >
+            New expedition
+            <kbd>Enter</kbd>
+          </button>
+          <button
+            type="button"
+            className="mf-button mf-button-quiet"
+            onClick={() => game?.returnToMenu()}
+          >
+            Return to menu
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -584,7 +655,7 @@ function PauseScreen({ snapshot, game }: ScreenProps) {
           </button>
         </div>
         <p className="mf-pause-footnote">
-          Stage 7 / Equipment & Inventory · build {snapshot.version}
+          Stage 8 / Missions & Objectives · build {snapshot.version}
         </p>
       </div>
     </div>
