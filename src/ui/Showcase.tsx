@@ -292,12 +292,12 @@ export const Showcase: React.FC = () => {
         onClose={() => setHowToPlayOpen(false)}
       />
 
-      {/* Showcase Control Panel (tucked top-left below kill feed when open, compact pill when collapsed) */}
+      {/* Showcase Control Panel (above operator card, zero overlap with kill feed or action bar) */}
       <div
         style={{
           position: 'fixed',
           left: 16,
-          top: 120,
+          bottom: 108,
           zIndex: 'var(--z-transition)',
           maxWidth: '420px',
         }}

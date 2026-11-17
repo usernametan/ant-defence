@@ -461,7 +461,7 @@ export class StubSim implements SimApi {
       pickups: [
         {
           id: 'p-epic-1',
-          pos: { x: 30 * 32 + 24, y: 20 * 32 + 12 },
+          pos: { x: 27 * 32 + 28, y: 22 * 32 + 12 },
           weaponId: 'sniper',
           rarity: 'epic',
           ttl: 20,

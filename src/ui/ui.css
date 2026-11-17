@@ -274,10 +274,10 @@
 
 /* Zone Capture Banner & Streak Toast */
 @keyframes ht-banner-sweep {
-  0% { opacity: 0; transform: translateY(-18px) scaleX(0.88); }
-  14% { opacity: 1; transform: translateY(0) scaleX(1); }
-  84% { opacity: 1; transform: translateY(0) scaleX(1); }
-  100% { opacity: 0; transform: translateY(-10px) scaleX(0.96); }
+  0% { opacity: 0; transform: translateX(-50%) translateY(-18px) scaleX(0.88); }
+  14% { opacity: 1; transform: translateX(-50%) translateY(0) scaleX(1); }
+  84% { opacity: 1; transform: translateX(-50%) translateY(0) scaleX(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px) scaleX(0.96); }
 }
 
 .ht-capture-banner {
