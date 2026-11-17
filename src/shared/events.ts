@@ -1,28 +1,29 @@
 import type {
-  DialogueNode,
-  InventoryItem,
-  QuestFlag,
-  Reaction,
-  ReactionEffect,
+  MatchConfig,
+  Pickup,
+  Team,
   Vec2,
+  WeaponId,
 } from './types';
 
+/** All gameplay events. Payloads are the single source of truth for emitters and listeners. */
 export interface EventMap {
-  'dialogue:start': { scriptId: string; node: DialogueNode };
-  'dialogue:end': { scriptId: string };
-  'quest:flag': { flag: QuestFlag; value: boolean };
-  'reaction:performed': {
-    reactionId: string;
-    effect: ReactionEffect;
-    origin?: Vec2;
-  };
-  'reaction:discovered': { reaction: Reaction };
-  'gauntlet:open': { slot?: number };
-  'gauntlet:close': undefined;
-  'inventory:changed': { inventory: InventoryItem[] };
-  'scene:change': { from?: string; to: string; spawn?: Vec2 };
-  'player:damaged': { amount: number; currentHp: number; maxHp: number };
-  'cutscene:play': { cutsceneId: string };
+  'shot': { unitId: string; weaponId: WeaponId; pos: Vec2; angle: number };
+  'hit': { targetId: string; damage: number; pos: Vec2; killed: boolean };
+  'kill': { killerId: string; victimId: string; weaponId: WeaponId };
+  'cover:damaged': { tile: string; hpLeft: number };
+  'cover:destroyed': { tile: string };
+  'explosion': { pos: Vec2; radius: number };
+  'zone:captured': { zoneId: string; team: Team };
+  'zone:contested': { zoneId: string };
+  'pickup:spawned': { pickup: Pickup };
+  'pickup:collected': { unitId: string; weaponId: WeaponId };
+  'unit:respawned': { unitId: string };
+  'base:damaged': { team: Team; hpLeft: number };
+  'match:start': { config: MatchConfig };
+  'match:end': { winner: Team };
+  'reload:start': undefined;
+  'reload:end': undefined;
 }
 
 export type EventKey = keyof EventMap;
@@ -30,6 +31,7 @@ export type EventHandler<K extends EventKey> = (payload: EventMap[K]) => void;
 
 type HandlerSet<K extends EventKey> = Set<EventHandler<K>>;
 
+/** Minimal typed pub/sub. No dependencies, no runtime reflection. */
 export class TypedEventBus {
   private listeners: { [K in EventKey]?: HandlerSet<K> } = {};
 
@@ -43,6 +45,14 @@ export class TypedEventBus {
     return () => this.off(event, handler);
   }
 
+  once<K extends EventKey>(event: K, handler: EventHandler<K>): () => void {
+    const unsubscribe = this.on(event, ((payload: EventMap[K]) => {
+      unsubscribe();
+      handler(payload);
+    }) as EventHandler<K>);
+    return unsubscribe;
+  }
+
   off<K extends EventKey>(event: K, handler: EventHandler<K>): void {
     const set = this.listeners[event] as HandlerSet<K> | undefined;
     if (!set) return;
@@ -54,7 +64,9 @@ export class TypedEventBus {
 
   emit<K extends EventKey>(
     event: K,
-    ...args: EventMap[K] extends undefined ? [payload?: undefined] : [payload: EventMap[K]]
+    ...args: EventMap[K] extends undefined
+      ? [payload?: undefined]
+      : [payload: EventMap[K]]
   ): void {
     const set = this.listeners[event] as HandlerSet<K> | undefined;
     if (!set) return;
@@ -69,4 +81,5 @@ export class TypedEventBus {
   }
 }
 
+/** Process-wide bus shared by the sim, renderer, UI, and audio tracks. */
 export const bus = new TypedEventBus();

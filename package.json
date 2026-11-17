@@ -1,8 +1,8 @@
 {
-  "name": "art-of-alchemy",
+  "name": "zone-control",
   "private": true,
   "version": "0.1.0",
-  "description": "A 2D pixel-art action RPG set in ancient India where magic is chemistry",
+  "description": "A deterministic top-down arena shooter with capture zones and destructible cover",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -16,7 +16,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "phaser": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
