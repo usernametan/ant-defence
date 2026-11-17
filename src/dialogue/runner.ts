@@ -1,7 +1,7 @@
 import { TypedEventBus, bus } from '../shared/events';
 import type { DialogueNode, QuestFlag } from '../shared/types';
 
-const QUEST_FLAGS: readonly QuestFlag[] = [
+export const QUEST_FLAGS: readonly QuestFlag[] = [
   'village_intro',
   'met_masked_man',
   'son_kidnapped',
@@ -15,7 +15,7 @@ const QUEST_FLAGS: readonly QuestFlag[] = [
   'dragon_quest_started',
 ];
 
-function isQuestFlag(value: string): value is QuestFlag {
+export function isQuestFlag(value: string): value is QuestFlag {
   return (QUEST_FLAGS as readonly string[]).includes(value);
 }
 

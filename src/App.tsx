@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
 import { BootScene } from './game/scenes/BootScene';
+import { UIScene } from './game/scenes/UIScene';
+import { VillageScene } from './game/scenes/VillageScene';
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -22,7 +24,7 @@ export default function App() {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
-      scene: [BootScene],
+      scene: [BootScene, VillageScene, UIScene],
     });
 
     return () => {
