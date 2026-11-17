@@ -1,0 +1,361 @@
+/* Holo-Tactical Screens & HUD Layout */
+
+.ht-screen-full {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(16px, 3vw, 36px);
+  overflow-y: auto;
+}
+
+.ht-living-bg {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-canvas);
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ht-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: radial-gradient(
+    circle at 28% 45%,
+    rgba(7, 11, 20, 0.35) 0%,
+    rgba(7, 11, 20, 0.86) 72%
+  );
+  pointer-events: none;
+}
+
+.ht-title-sweep {
+  position: relative;
+  display: inline-block;
+  font-size: clamp(36px, 6vw, 68px);
+  line-height: 1;
+  letter-spacing: 0.14em;
+  background: linear-gradient(
+    110deg,
+    var(--text-hi) 0%,
+    var(--text-hi) 38%,
+    var(--player-glow) 50%,
+    var(--gold) 55%,
+    var(--text-hi) 68%,
+    var(--text-hi) 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.25));
+  animation: ht-title-glint 4.8s var(--ease-standard) infinite;
+}
+
+@keyframes ht-title-glint {
+  0%, 15% { background-position: 100% 0; }
+  65%, 100% { background-position: 0% 0; }
+}
+
+.ht-menu-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(340px, 100%);
+}
+
+/* Match Setup */
+.ht-setup-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 0.95fr;
+  gap: var(--space-5);
+  width: min(1120px, 100%);
+  margin: auto;
+}
+
+@media (max-width: 900px) {
+  .ht-setup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ht-diff-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.ht-weapon-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .ht-diff-grid,
+  .ht-weapon-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* HUD Layer */
+.ht-hud-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-hud);
+  pointer-events: none;
+  padding: clamp(12px, 2vw, 22px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+}
+
+.ht-hud-scaled {
+  transform: scale(var(--hud-scale, 1));
+}
+
+.ht-hud-top-left {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  transform-origin: top left;
+}
+
+.ht-hud-top-center {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  transform-origin: top center;
+}
+
+.ht-hud-top-right {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  transform-origin: top right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.ht-hud-bottom-left {
+  grid-column: 1;
+  grid-row: 3;
+  justify-self: start;
+  align-self: end;
+  transform-origin: bottom left;
+}
+
+.ht-hud-bottom-center {
+  grid-column: 2;
+  grid-row: 3;
+  justify-self: center;
+  align-self: end;
+  transform-origin: bottom center;
+}
+
+.ht-hud-bottom-right {
+  grid-column: 3;
+  grid-row: 3;
+  justify-self: end;
+  align-self: end;
+  transform-origin: bottom right;
+}
+
+/* Health Segments */
+.ht-hp-segments {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  width: 220px;
+}
+
+.ht-hp-seg {
+  height: 10px;
+  border-radius: 2px;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard);
+}
+
+.ht-hp-seg.is-filled {
+  background: var(--player);
+  border-color: var(--player-glow);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.35);
+}
+
+.ht-hp-seg.is-danger {
+  background: var(--danger);
+  border-color: var(--enemy-glow);
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.55);
+}
+
+@keyframes ht-lowhp-pulse {
+  0%, 100% { box-shadow: var(--shadow-md), 0 0 0 rgba(244, 63, 94, 0); }
+  50% { box-shadow: var(--shadow-md), 0 0 24px rgba(244, 63, 94, 0.55); }
+}
+
+.ht-is-lowhp {
+  animation: ht-lowhp-pulse 0.85s ease-in-out infinite;
+  border-color: var(--danger) !important;
+}
+
+.ht-is-regen {
+  box-shadow: var(--shadow-md), 0 0 20px rgba(52, 211, 153, 0.45) !important;
+  border-color: var(--success) !important;
+}
+
+.ht-is-damage-flash {
+  box-shadow: var(--shadow-md), 0 0 28px rgba(244, 63, 94, 0.78) !important;
+  border-color: var(--enemy-glow) !important;
+}
+
+/* Heartbeat low-health screen vignette */
+.ht-heartbeat-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+  background: radial-gradient(
+    circle at 50% 50%,
+    transparent 54%,
+    rgba(244, 63, 94, 0.34) 100%
+  );
+  animation: ht-heartbeat 0.9s ease-in-out infinite;
+}
+
+@keyframes ht-heartbeat {
+  0%, 100% { opacity: 0.35; }
+  25% { opacity: 0.85; }
+  45% { opacity: 0.4; }
+  65% { opacity: 0.78; }
+}
+
+/* Weapon card flip */
+@keyframes ht-weapon-flip {
+  0% { transform: perspective(500px) rotateX(65deg) scale(0.94); opacity: 0.4; }
+  100% { transform: perspective(500px) rotateX(0deg) scale(1); opacity: 1; }
+}
+
+.ht-weapon-flip {
+  animation: ht-weapon-flip 240ms var(--ease-bounce) forwards;
+}
+
+/* Zone pips */
+.ht-zone-pip {
+  width: 30px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-0);
+  font-size: 12px;
+  font-weight: 800;
+  transition: transform var(--dur-fast) var(--ease-snappy), border-color var(--dur-fast);
+}
+
+.ht-zone-pip.is-contested {
+  animation: ht-pip-pulse 0.7s ease-in-out infinite;
+}
+
+@keyframes ht-pip-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); box-shadow: var(--glow-gold); }
+}
+
+/* Zone Capture Banner & Streak Toast */
+@keyframes ht-banner-sweep {
+  0% { opacity: 0; transform: translateY(-18px) scaleX(0.88); }
+  14% { opacity: 1; transform: translateY(0) scaleX(1); }
+  84% { opacity: 1; transform: translateY(0) scaleX(1); }
+  100% { opacity: 0; transform: translateY(-10px) scaleX(0.96); }
+}
+
+.ht-capture-banner {
+  position: fixed;
+  top: 94px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  animation: ht-banner-sweep 2.4s var(--ease-snappy) forwards;
+}
+
+.ht-streak-toast {
+  position: fixed;
+  top: 146px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  animation: ht-banner-sweep 2.1s var(--ease-bounce) forwards;
+}
+
+/* Kill Feed */
+@keyframes ht-kill-slide {
+  0% { opacity: 0; transform: translateX(24px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+.ht-killfeed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: rgba(13, 20, 36, 0.84);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  animation: ht-kill-slide var(--dur-med) var(--ease-snappy) forwards;
+}
+
+/* Countdown Shockwave */
+@keyframes ht-countdown-pop {
+  0% { opacity: 0; transform: scale(2.1); }
+  25% { opacity: 1; transform: scale(1); }
+  85% { opacity: 1; transform: scale(0.96); }
+  100% { opacity: 0; transform: scale(0.82); }
+}
+
+.ht-countdown-num {
+  font-size: clamp(72px, 14vw, 136px);
+  line-height: 1;
+  color: var(--player-glow);
+  text-shadow: 0 0 32px rgba(34, 211, 238, 0.65);
+  animation: ht-countdown-pop 950ms var(--ease-snappy) forwards;
+}
+
+/* Game Over Grade Stamp Slam */
+@keyframes ht-grade-slam {
+  0% { opacity: 0; transform: scale(2.8) rotate(-14deg); }
+  65% { opacity: 1; transform: scale(0.92) rotate(-4deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-6deg); }
+}
+
+.ht-grade-stamp {
+  animation: ht-grade-slam 520ms var(--ease-bounce) forwards;
+  animation-delay: 420ms;
+  opacity: 0;
+}
+
+/* Respawn & Pause Backdrop */
+.ht-blur-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: rgba(7, 11, 20, 0.64);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+}
