@@ -254,7 +254,7 @@ export function updatePickups(world: SimWorld, dt: number): void {
 
   for (const unit of world.livingUnits()) {
     const radius = unit.isPlayer ? INTERACT_RADIUS : PICKUP_PICKUP_RADIUS;
-    if (unit.isPlayer && !world.runtime(unit).intent.interact) continue;
+    if (unit.isPlayer && !world.runtime(unit).intent.interact && !world.runtime(unit).intent.swapWeapon) continue;
     for (let index = world.state.pickups.length - 1; index >= 0; index -= 1) {
       const pickup = world.state.pickups[index];
       if (Math.hypot(unit.pos.x - pickup.pos.x, unit.pos.y - pickup.pos.y) > radius) continue;

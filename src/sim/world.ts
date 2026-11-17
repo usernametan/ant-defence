@@ -162,7 +162,15 @@ export class SimWorld {
     victim.vel.y = 0;
     victim.reloading = false;
     victim.reloadProgress = 0;
-    victim.respawnIn = victim.isPlayer ? RESPAWN_DELAY_PLAYER : RESPAWN_DELAY_ENEMY;
+    if (victim.isPlayer) {
+      victim.respawnIn = RESPAWN_DELAY_PLAYER;
+    } else {
+      // Stagger enemy respawns so they return in small waves, not all at once.
+      const deadEnemies = this.state.units.filter(
+        (unit) => unit.team === 'enemy' && unit.dead,
+      ).length;
+      victim.respawnIn = RESPAWN_DELAY_ENEMY + deadEnemies * 0.4;
+    }
     victim.deaths += 1;
 
     const killer = this.unitById(killerId);
