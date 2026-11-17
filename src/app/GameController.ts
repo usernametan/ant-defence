@@ -1,5 +1,6 @@
 import type { SimApi } from '../shared/api';
-import type { GameState, InputState } from '../shared/types';
+import type { GameState, InputState, MatchConfig } from '../shared/types';
+import { DEFAULT_CONFIG } from '../sim';
 import { FIXED_DT, MAX_SUBSTEPS } from '../sim/constants';
 
 /** Camera mapping supplied by the renderer: screen = world * scale + offset. */
@@ -51,6 +52,22 @@ export class GameController {
 
   getSim(): SimApi {
     return this.sim;
+  }
+
+  startMatch(config: MatchConfig = DEFAULT_CONFIG): void {
+    this.clearInput();
+    this.sim.start(config);
+  }
+
+  togglePause(): void {
+    const status = this.sim.getState().status;
+    if (status === 'playing') this.sim.pause();
+    else if (status === 'paused') this.sim.resume();
+  }
+
+  restartMatch(): void {
+    this.clearInput();
+    this.sim.restart();
   }
 
   /** Live snapshot for the renderer; never cache or mutate this object. */
