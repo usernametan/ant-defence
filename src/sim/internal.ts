@@ -21,6 +21,7 @@ export interface AiRuntime {
   strafeSign: number;
   aimError: number;
   lastSeenAt: number;
+  firePulse: number;
 }
 
 export interface UnitRuntime {
@@ -76,6 +77,7 @@ export function createUnitRuntime(): UnitRuntime {
       strafeSign: 1,
       aimError: 0,
       lastSeenAt: -100,
+      firePulse: 0,
     },
   };
 }

@@ -1,4 +1,5 @@
 import { WEAPON_DEFS } from '../shared/api';
+import { PathCache } from './ai/pathfinding';
 import { bus } from '../shared/events';
 import type {
   GameState,
@@ -34,6 +35,7 @@ export class SimWorld {
   readonly units = new Map<string, UnitRuntime>();
   readonly projectileMeta = new Map<string, ProjectileMeta>();
   readonly spatial = new SpatialGrid();
+  readonly pathCache = new PathCache();
   mapVersion = 0;
   crateTimer = 18;
   readonly zoneContested = new Set<string>();
