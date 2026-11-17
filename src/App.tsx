@@ -1,4 +1,14 @@
+import { Showcase } from './ui';
+
 export default function App() {
+  const isShowcase =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('showcase') === '1';
+
+  if (isShowcase) {
+    return <Showcase />;
+  }
+
   return (
     <main className="game-root">
       <div className="placeholder">
