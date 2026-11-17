@@ -28,6 +28,7 @@ export const BASE_RADIUS = 110;
 export const BASE_CORE_DPS = 14;
 export const BASE_DAMAGE_EVENT_INTERVAL = 0.5;
 
+export const ZONE_CAPTURE_RATE = 0.28;
 export const ZONE_SCORE_RATE = 2;
 export const KILL_SCORE = 3;
 export const MATCH_TIME_LIMIT = 300;
