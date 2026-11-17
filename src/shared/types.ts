@@ -96,7 +96,17 @@ export type QuestFlag =
   | 'learned_reaction'
   | 'learned_transformation'
   | 'received_gauntlet'
-  | 'dragon_quest_started';
+  | 'dragon_quest_started'
+  | 'wake_up'
+  | 'fetched_water'
+  | 'delivered_turmeric'
+  | 'saw_turmeric_lime'
+  | 'cooked_with_son'
+  | 'fished_with_son'
+  | 'sparred_with_son'
+  | 'found_shining_stone'
+  | 'lit_diyas'
+  | 'dusk_falls';
 
 export interface InventoryItem {
   materialId: string;

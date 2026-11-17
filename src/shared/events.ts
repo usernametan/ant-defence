@@ -23,6 +23,20 @@ export interface EventMap {
   'scene:change': { from?: string; to: string; spawn?: Vec2 };
   'player:damaged': { amount: number; currentHp: number; maxHp: number };
   'cutscene:play': { cutsceneId: string };
+  'objective:set': {
+    id: string;
+    text: string;
+    targetX?: number;
+    targetY?: number;
+  };
+  'objective:complete': { id: string };
+  'minigame:start': {
+    kind: 'hold' | 'timing' | 'rhythm';
+    label: string;
+  };
+  'minigame:progress': { progress: number };
+  'minigame:end': { success: boolean };
+  'interact:prompt': { text: string | null };
 }
 
 export type EventKey = keyof EventMap;
