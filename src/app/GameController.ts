@@ -16,8 +16,8 @@ const KEY_MOVE_LEFT = 'KeyA';
 const KEY_MOVE_RIGHT = 'KeyD';
 const KEY_RELOAD = 'KeyR';
 const KEY_INTERACT = 'KeyE';
-const KEY_SWAP = 'KeyQ';
-const KEY_DASH = ['ShiftLeft', 'ShiftRight', 'Space'];
+/** The HUD labels Q as Tactical Dash; Shift/Space remain aliases. */
+const KEY_DASH = ['KeyQ', 'ShiftLeft', 'ShiftRight', 'Space'];
 
 /**
  * Owns the SimApi instance, drives a fixed 60 Hz update loop, and translates
@@ -168,7 +168,7 @@ export class GameController {
     this.input.firing = this.mouse.down;
     this.input.reload = this.keys.has(KEY_RELOAD);
     this.input.interact = this.keys.has(KEY_INTERACT);
-    this.input.swapWeapon = this.keys.has(KEY_SWAP);
+    this.input.swapWeapon = false;
     this.input.dash = KEY_DASH.some((code) => this.keys.has(code));
     return this.input;
   }
