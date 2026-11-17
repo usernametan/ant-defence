@@ -50,6 +50,129 @@ export class CombatSfx {
     this.noise(context, killed ? 0.15 : 0.05, 0.035, 800);
   }
 
+  enemyAttack(kind: "melee" | "projectile"): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    if (kind === "projectile") {
+      this.tone(context, 300, 92, 0.14, "sawtooth", 0.04);
+      this.noise(context, 0.1, 0.026, 1100);
+      return;
+    }
+
+    this.tone(context, 150, 58, 0.11, "square", 0.032);
+    this.noise(context, 0.08, 0.03, 620);
+  }
+
+  playerHit(): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    this.tone(context, 118, 42, 0.2, "sawtooth", 0.07);
+    this.noise(context, 0.16, 0.055, 430);
+  }
+
+  pickup(kind: "health" | "armor"): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    const notes =
+      kind === "health" ? [392, 523, 659] : [294, 440, 587];
+
+    notes.forEach((frequency, index) => {
+      const start = context.currentTime + index * 0.055;
+      const oscillator = context.createOscillator();
+      const envelope = context.createGain();
+
+      oscillator.type = kind === "health" ? "sine" : "triangle";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      envelope.gain.setValueAtTime(0.0001, start);
+      envelope.gain.exponentialRampToValueAtTime(0.035, start + 0.01);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+      oscillator.connect(envelope);
+      envelope.connect(this.master!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.14);
+    });
+  }
+
+  creatureDeath(): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    this.tone(context, 190, 54, 0.22, "triangle", 0.045);
+    this.noise(context, 0.18, 0.04, 720);
+  }
+
+  item(kind: "weapon" | "equipment"): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    const notes =
+      kind === "weapon" ? [330, 494, 742] : [262, 392, 523];
+
+    notes.forEach((frequency, index) => {
+      const start = context.currentTime + index * 0.06;
+
+      this.scheduledTone(
+        context,
+        frequency,
+        frequency * 1.02,
+        start,
+        0.14,
+        kind === "weapon" ? "square" : "sine",
+        0.028,
+      );
+    });
+  }
+
+  equip(): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    this.tone(context, 240, 360, 0.08, "triangle", 0.028);
+    this.tone(context, 360, 520, 0.1, "sine", 0.022);
+  }
+
+  weaponSwitch(): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    this.tone(context, 280, 210, 0.05, "square", 0.025);
+    this.noise(context, 0.04, 0.018, 1200);
+  }
+
+  denied(): void {
+    const context = this.ensure();
+
+    if (!context) {
+      return;
+    }
+
+    this.tone(context, 150, 110, 0.08, "sawtooth", 0.024);
+  }
+
   dispose(): void {
     const context = this.context;
     this.context = null;
@@ -105,6 +228,30 @@ export class CombatSfx {
     );
     envelope.gain.setValueAtTime(0.0001, start);
     envelope.gain.exponentialRampToValueAtTime(gain, start + 0.006);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(envelope);
+    envelope.connect(this.master!);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.02);
+  }
+
+  private scheduledTone(
+    context: AudioContext,
+    from: number,
+    to: number,
+    start: number,
+    duration: number,
+    type: OscillatorType,
+    gain: number,
+  ): void {
+    const oscillator = context.createOscillator();
+    const envelope = context.createGain();
+
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(from, start);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, to), start + duration);
+    envelope.gain.setValueAtTime(0.0001, start);
+    envelope.gain.exponentialRampToValueAtTime(gain, start + 0.008);
     envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
     oscillator.connect(envelope);
     envelope.connect(this.master!);

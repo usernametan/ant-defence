@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   circleIntersectsAabb,
+  hasLineOfSight,
   moveCircleWithCollision,
   segmentAabbHit,
   segmentCircleHit,
@@ -97,6 +98,21 @@ describe('segment collisions', () => {
         rect,
       ),
     ).toBeNull();
+  });
+});
+
+describe('hasLineOfSight', () => {
+  it('detects clear and blocked sight lines', () => {
+    expect(
+      hasLineOfSight({ x: 0, y: 100 }, { x: 300, y: 100 }, createWorld()),
+    ).toBe(true);
+    expect(
+      hasLineOfSight(
+        { x: 0, y: 100 },
+        { x: 300, y: 100 },
+        createWorld([{ x: 140, y: 60, width: 20, height: 80 }]),
+      ),
+    ).toBe(false);
   });
 });
 

@@ -2,10 +2,10 @@ export const GAME_IDENTITY = {
   title: "Monster Frontier",
   wordmark: "MONSTER FRONTIER",
   kicker: "PROJECT VERDANT",
-  stage: "Stage 3 — Combat Prototype",
-  version: "0.3.0",
+  stage: "Stage 9 — Nests & Territory Control",
+  version: "0.9.0",
   tagline:
-    "The frontier is waking. Weapons are online, and the range is live before the creatures arrive.",
+    "Greenreach Wilds is contested. Burn out the Bloom Nest, secure the watchpost, and hold the roads beyond Waystation Echo.",
   firstRegion: "Greenreach Wilds",
   regions: [
     "Greenreach Wilds",
@@ -18,10 +18,12 @@ export const GAME_IDENTITY = {
 } as const;
 
 export const PROTOTYPE_CHECKS = [
-  { label: "Weapons", detail: "LMB fire · 3 emitters" },
-  { label: "Projectiles", detail: "Pooled · swept hits" },
-  { label: "Targets", detail: "Dummies · respawn" },
-  { label: "Energy", detail: "Shared cell · regen" },
-  { label: "Movement", detail: "WASD · sprint · dodge" },
-  { label: "Camera", detail: "Damped follow + bounds" },
+  { label: "Health", detail: "Clamped vitals · hit feedback" },
+  { label: "Loadout", detail: "3 blasters · 3 modules" },
+  { label: "Inventory", detail: "Collect · equip · swap" },
+  { label: "Mission", detail: "Track · complete · reward" },
+  { label: "Territory", detail: "Contest · capture · secure" },
+  { label: "Nest", detail: "Bloom nodes · spawn pressure" },
+  { label: "Relay", detail: "E interaction · field order" },
+  { label: "Respawn", detail: "Safe-zone relink shield" },
 ] as const;

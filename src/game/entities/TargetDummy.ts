@@ -111,10 +111,12 @@ export class TargetDummy implements Damageable {
   }
 }
 
-export function createTrainingDummies(): TargetDummy[] {
-  return [
-    new TargetDummy({ id: "dummy-alpha", x: 760, y: 560 }),
-    new TargetDummy({ id: "dummy-beta", x: 1240, y: 840 }),
-    new TargetDummy({ id: "dummy-gamma", x: 1480, y: 760 }),
-  ];
+export function createTrainingDummies(
+  spawns: readonly TargetDummySpawn[] = [
+    { id: "dummy-alpha", x: 760, y: 560 },
+    { id: "dummy-beta", x: 1240, y: 840 },
+    { id: "dummy-gamma", x: 1480, y: 760 },
+  ],
+): TargetDummy[] {
+  return spawns.map((spawn) => new TargetDummy(spawn));
 }

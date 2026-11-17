@@ -12,6 +12,8 @@ export interface DamageResult {
   applied: number;
   killed: boolean;
   remainingHealth: number;
+  armorAbsorbed?: number;
+  remainingArmor?: number;
 }
 
 export interface Damageable {

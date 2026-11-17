@@ -117,6 +117,20 @@ export function segmentAabbHit(
   return entry;
 }
 
+export function hasLineOfSight(
+  start: Vec2,
+  end: Vec2,
+  world: CollisionWorld,
+): boolean {
+  for (const obstacle of world.obstacles) {
+    if (segmentAabbHit(start, end, obstacle) !== null) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function moveCircleWithCollision(
   position: Vec2,
   delta: Vec2,

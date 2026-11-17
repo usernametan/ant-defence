@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DamageContext } from '../combat/Damage';
 import type { CollisionWorld } from '../world/Collision';
 import { DEFAULT_PLAYER_CONFIG, Player } from './Player';
 
@@ -113,6 +114,169 @@ describe('Player sprint and stamina', () => {
     simulate(player, 1, { x: 1, y: 0 }, false);
 
     expect(player.currentStamina).toBeGreaterThan(drainedStamina);
+  });
+});
+
+describe('Player health', () => {
+  const CONTEXT: DamageContext = {
+    sourceId: 'crawler-1',
+    weaponId: 'crawler-melee',
+    direction: { x: 1, y: 0 },
+  };
+
+  it('mitigates damage with armor and dies at zero health', () => {
+    const player = new Player({ x: 500, y: 500 });
+    const firstHit = player.takeDamage(25, CONTEXT);
+
+    expect(firstHit.killed).toBe(false);
+    expect(firstHit.applied).toBeCloseTo(11.25);
+    expect(firstHit.armorAbsorbed).toBeCloseTo(13.75);
+    expect(firstHit.remainingHealth).toBeCloseTo(88.75);
+    expect(firstHit.remainingArmor).toBeCloseTo(66.25);
+    expect(player.hitFlash).toBe(1);
+
+    const fatalHit = player.takeDamage(999, CONTEXT);
+
+    expect(fatalHit.killed).toBe(true);
+    expect(fatalHit.applied).toBeCloseTo(88.75);
+    expect(fatalHit.armorAbsorbed).toBeCloseTo(66.25);
+    expect(fatalHit.remainingHealth).toBe(0);
+    expect(fatalHit.remainingArmor).toBe(0);
+    expect(player.alive).toBe(false);
+    expect(player.takeDamage(10, CONTEXT).applied).toBe(0);
+  });
+
+  it('passes damage beyond depleted armor into health', () => {
+    const player = new Player(
+      { x: 500, y: 500 },
+      { ...DEFAULT_PLAYER_CONFIG, maxArmor: 10, armorAbsorbRatio: 1 },
+    );
+    const hit = player.takeDamage(25, CONTEXT);
+
+    expect(hit.armorAbsorbed).toBe(10);
+    expect(hit.applied).toBe(15);
+    expect(hit.remainingArmor).toBe(0);
+    expect(player.health).toBe(85);
+  });
+
+  it('restores health and armor without exceeding their caps', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    player.takeDamage(40, CONTEXT);
+    const lostHealth = player.maxHealth - player.health;
+    const lostArmor = player.maxArmor - player.armor;
+
+    expect(player.restoreHealth(999)).toBeCloseTo(lostHealth);
+    expect(player.restoreArmor(999)).toBeCloseTo(lostArmor);
+    expect(player.restoreHealth(5)).toBe(0);
+    expect(player.restoreArmor(5)).toBe(0);
+    expect(player.health).toBe(player.maxHealth);
+    expect(player.armor).toBe(player.maxArmor);
+  });
+
+  it('ignores damage while dodging and restores resources on reset', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    expect(player.requestDodge({ x: 1, y: 0 })).toBe(true);
+    expect(player.takeDamage(20, CONTEXT).applied).toBe(0);
+    expect(player.health).toBe(player.maxHealth);
+
+    simulate(player, 0.3, { x: 0, y: 0 });
+
+    expect(player.takeDamage(20, CONTEXT).applied).toBeGreaterThan(0);
+    expect(player.health).toBeLessThan(player.maxHealth);
+
+    player.reset({ x: 500, y: 500 });
+
+    expect(player.health).toBe(player.maxHealth);
+    expect(player.armor).toBe(player.maxArmor);
+    expect(player.alive).toBe(true);
+    expect(player.hitFlash).toBe(0);
+  });
+
+  it('restores resources and grants brief invulnerability on respawn', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    player.takeDamage(999, CONTEXT);
+    expect(player.alive).toBe(false);
+
+    player.respawn({ x: 320, y: 640 });
+
+    expect(player.alive).toBe(true);
+    expect(player.health).toBe(player.maxHealth);
+    expect(player.armor).toBe(player.maxArmor);
+    expect(player.isInvulnerable).toBe(true);
+    expect(player.takeDamage(20, CONTEXT).applied).toBe(0);
+
+    simulate(player, DEFAULT_PLAYER_CONFIG.respawnInvulnerability + 0.1, {
+      x: 0,
+      y: 0,
+    });
+
+    expect(player.isInvulnerable).toBe(false);
+    expect(player.takeDamage(20, CONTEXT).applied).toBeGreaterThan(0);
+  });
+});
+
+describe('Player equipment modifiers', () => {
+  it('updates caps and keeps resource ratios when the loadout changes', () => {
+    const player = new Player({ x: 500, y: 500 });
+    const CONTEXT: DamageContext = {
+      sourceId: 'crawler-1',
+      weaponId: 'crawler-melee',
+      direction: { x: 1, y: 0 },
+    };
+
+    player.takeDamage(80, CONTEXT);
+    const healthRatio = player.health / player.maxHealth;
+    const armorRatio = player.armor / player.maxArmor;
+
+    player.applyModifiers({
+      maxArmorBonus: 25,
+      armorAbsorbRatioBonus: 0.05,
+      maxStaminaBonus: 10,
+      moveSpeedMultiplier: 1.08,
+    });
+
+    expect(player.maxArmor).toBe(105);
+    expect(player.maxStamina).toBe(110);
+    expect(player.armor / player.maxArmor).toBeCloseTo(armorRatio);
+    expect(player.health / player.maxHealth).toBeCloseTo(healthRatio);
+
+    const moved = new Player({ x: 500, y: 500 });
+    moved.applyModifiers({ moveSpeedMultiplier: 1.08 });
+    simulate(moved, 1, { x: 1, y: 0 });
+    expect(moved.speed).toBeCloseTo(
+      DEFAULT_PLAYER_CONFIG.moveSpeed * 1.08,
+      1,
+    );
+
+    player.applyModifiers();
+    expect(player.maxArmor).toBe(DEFAULT_PLAYER_CONFIG.maxArmor);
+    expect(player.maxStamina).toBe(DEFAULT_PLAYER_CONFIG.maxStamina);
+    expect(player.armor).toBeLessThanOrEqual(player.maxArmor);
+    expect(player.health).toBeLessThanOrEqual(player.maxHealth);
+  });
+
+  it('uses modified health and armor caps on respawn and ignores invalid values', () => {
+    const player = new Player({ x: 500, y: 500 });
+
+    player.applyModifiers({
+      maxHealthBonus: 20,
+      maxArmorBonus: -999,
+      moveSpeedMultiplier: Number.NaN,
+      dodgeCooldownMultiplier: -1,
+    });
+
+    expect(player.maxHealth).toBe(120);
+    expect(player.maxArmor).toBe(0);
+    expect(player.health).toBe(120);
+
+    player.respawn({ x: 320, y: 640 });
+
+    expect(player.health).toBe(120);
+    expect(player.armor).toBe(0);
+    expect(player.dodgeCooldownMax).toBeGreaterThan(0);
   });
 });
 

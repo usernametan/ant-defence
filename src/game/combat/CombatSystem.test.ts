@@ -111,4 +111,60 @@ describe('CombatSystem', () => {
       fire(closeCombat, { aim: { x: ORIGIN.x + 2, y: ORIGIN.y } }),
     ).toBeNull();
   });
+  it('reports why a held trigger cannot fire', () => {
+    const drainedConfig: CombatConfig = {
+      ...DEFAULT_COMBAT_CONFIG,
+      maxEnergy: 1,
+    };
+    const combat = new CombatSystem([BASIC_BLASTER], drainedConfig, () => 0.5);
+
+    expect(combat.update(0, { firing: true, origin: ORIGIN, aim: null })).toBeNull();
+    expect(combat.lastFireFailure).toBe('no-aim');
+    expect(fire(combat)).toBeNull();
+    expect(combat.lastFireFailure).toBe('energy');
+
+    const ready = new CombatSystem([BASIC_BLASTER], DEFAULT_COMBAT_CONFIG, () => 0.5);
+    expect(ready.update(0, { firing: true, origin: ORIGIN, aim: AIM })).not.toBeNull();
+    expect(ready.update(0, { firing: true, origin: ORIGIN, aim: AIM })).toBeNull();
+    expect(ready.lastFireFailure).toBe('cooldown');
+  });
+
+  it('applies energy modifiers without refilling spent cells', () => {
+    const combat = new CombatSystem([BASIC_BLASTER], DEFAULT_COMBAT_CONFIG, () => 0.5);
+
+    fire(combat);
+    const spent = combat.currentEnergy;
+    combat.applyModifiers({
+      maxEnergyBonus: 25,
+      energyRegenRateMultiplier: 1.2,
+    });
+
+    expect(combat.maxEnergy).toBe(DEFAULT_COMBAT_CONFIG.maxEnergy + 25);
+    expect(combat.currentEnergy).toBeCloseTo(
+      spent * ((DEFAULT_COMBAT_CONFIG.maxEnergy + 25) / DEFAULT_COMBAT_CONFIG.maxEnergy),
+    );
+    const missing = combat.maxEnergy - combat.currentEnergy;
+    expect(combat.restoreEnergy(999)).toBeCloseTo(missing);
+    expect(combat.restoreEnergy(5)).toBe(0);
+  });
+
+  it('caps projectile lifetime to the configured range', () => {
+    const rangedWeapon: WeaponDef = {
+      ...BASIC_BLASTER,
+      id: 'range-test',
+      cooldown: 0,
+      energyCost: 0,
+      projectile: {
+        ...BASIC_BLASTER.projectile,
+        speed: 200,
+        life: 2,
+        range: 100,
+      },
+    };
+    const combat = new CombatSystem([rangedWeapon], DEFAULT_COMBAT_CONFIG, () => 0.5);
+
+    const shot = fire(combat);
+
+    expect(shot?.spawns[0].life).toBeCloseTo(0.5);
+  });
 });

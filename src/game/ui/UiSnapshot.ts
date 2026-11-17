@@ -3,14 +3,45 @@ import {
 } from "../combat/CombatSystem";
 import { STARTER_WEAPONS } from "../content/equipment";
 import { GAME_IDENTITY } from "../content";
+import type { EquipmentSlot } from "../content/upgrades";
 import type { GamePhase, Size } from "../core/types";
+import { DEFAULT_PLAYER_CONFIG } from "../entities/Player";
+import { InventorySystem } from "../systems/InventorySystem";
+import {
+  MissionSystem,
+  type MissionsSnapshot,
+} from "../systems/MissionSystem";
+import {
+  TerritorySystem,
+  type TerritoriesSnapshot,
+} from "../systems/TerritorySystem";
 
 export interface WeaponSnapshot {
   id: string;
   name: string;
   slot: number;
   energyCost: number;
+  description: string;
+  range: number;
   selected: boolean;
+  owned: boolean;
+}
+
+export interface EquipmentSnapshot {
+  id: string;
+  name: string;
+  slot: EquipmentSlot;
+  description: string;
+  equipped: boolean;
+}
+
+export interface InventorySnapshot {
+  open: boolean;
+  capacity: number;
+  used: number;
+  weapons: readonly WeaponSnapshot[];
+  equipped: readonly EquipmentSnapshot[];
+  stored: readonly EquipmentSnapshot[];
 }
 
 export interface CombatSnapshot {
@@ -18,6 +49,8 @@ export interface CombatSnapshot {
   weaponName: string;
   weaponSlot: number;
   weaponCount: number;
+  description: string;
+  range: number;
   energy: number;
   maxEnergy: number;
   energyCost: number;
@@ -28,7 +61,38 @@ export interface CombatSnapshot {
   projectilesMax: number;
   targetsAlive: number;
   targetsTotal: number;
+  enemiesAlive: number;
+  enemiesTotal: number;
+  kills: number;
+  fireFailure: string | null;
   weapons: readonly WeaponSnapshot[];
+}
+
+export interface InteractionSnapshot {
+  id: string;
+  name: string;
+  prompt: string;
+}
+
+export type SurvivalNoticeTone =
+  | "health"
+  | "armor"
+  | "energy"
+  | "module"
+  | "damage"
+  | "death"
+  | "respawn";
+
+export interface SurvivalNoticeSnapshot {
+  text: string;
+  tone: SurvivalNoticeTone;
+  remaining: number;
+}
+
+export interface SurvivalSnapshot {
+  pickupsActive: number;
+  pickupsTotal: number;
+  notice: SurvivalNoticeSnapshot | null;
 }
 
 export interface PlayerSnapshot {
@@ -43,6 +107,12 @@ export interface PlayerSnapshot {
   invulnerable: boolean;
   dodgeCooldown: number;
   dodgeCooldownMax: number;
+  health: number;
+  maxHealth: number;
+  armor: number;
+  maxArmor: number;
+  alive: boolean;
+  respawnRemaining: number;
 }
 
 export interface UiSnapshot {
@@ -61,12 +131,34 @@ export interface UiSnapshot {
   };
   player: PlayerSnapshot;
   combat: CombatSnapshot;
+  inventory: InventorySnapshot;
+  missions: MissionsSnapshot;
+  territories: TerritoriesSnapshot;
+  interaction: InteractionSnapshot | null;
+  survival: SurvivalSnapshot;
   frame: number;
   elapsed: number;
   fps: number;
   interpolation: number;
   debug: boolean;
   updatedAt: number;
+}
+
+const INITIAL_INVENTORY = new InventorySystem().snapshot();
+const INITIAL_MISSIONS = new MissionSystem().snapshot();
+const INITIAL_TERRITORIES = new TerritorySystem().snapshot();
+
+function initialWeapons(): readonly WeaponSnapshot[] {
+  return STARTER_WEAPONS.map((weapon, index) => ({
+    id: weapon.id,
+    name: weapon.name,
+    slot: weapon.slot,
+    energyCost: weapon.energyCost,
+    description: weapon.description,
+    range: weapon.projectile.range,
+    selected: index === 0,
+    owned: true,
+  }));
 }
 
 export function createInitialSnapshot(): UiSnapshot {
@@ -96,12 +188,20 @@ export function createInitialSnapshot(): UiSnapshot {
       invulnerable: false,
       dodgeCooldown: 0,
       dodgeCooldownMax: 0,
+      health: DEFAULT_PLAYER_CONFIG.maxHealth,
+      maxHealth: DEFAULT_PLAYER_CONFIG.maxHealth,
+      armor: DEFAULT_PLAYER_CONFIG.maxArmor,
+      maxArmor: DEFAULT_PLAYER_CONFIG.maxArmor,
+      alive: true,
+      respawnRemaining: 0,
     },
     combat: {
       weaponId: STARTER_WEAPONS[0].id,
       weaponName: STARTER_WEAPONS[0].name,
       weaponSlot: STARTER_WEAPONS[0].slot,
       weaponCount: STARTER_WEAPONS.length,
+      description: STARTER_WEAPONS[0].description,
+      range: STARTER_WEAPONS[0].projectile.range,
       energy: DEFAULT_COMBAT_CONFIG.maxEnergy,
       maxEnergy: DEFAULT_COMBAT_CONFIG.maxEnergy,
       energyCost: STARTER_WEAPONS[0].energyCost,
@@ -112,13 +212,31 @@ export function createInitialSnapshot(): UiSnapshot {
       projectilesMax: 0,
       targetsAlive: 3,
       targetsTotal: 3,
-      weapons: STARTER_WEAPONS.map((weapon, index) => ({
-        id: weapon.id,
-        name: weapon.name,
-        slot: weapon.slot,
-        energyCost: weapon.energyCost,
-        selected: index === 0,
+      enemiesAlive: 0,
+      enemiesTotal: 0,
+      kills: 0,
+      fireFailure: null,
+      weapons: initialWeapons(),
+    },
+    missions: INITIAL_MISSIONS,
+    territories: INITIAL_TERRITORIES,
+    interaction: null,
+    inventory: {
+      open: false,
+      capacity: INITIAL_INVENTORY.capacity,
+      used: INITIAL_INVENTORY.used,
+      weapons: initialWeapons(),
+      equipped: INITIAL_INVENTORY.equipped.map((item) => ({
+        ...item,
       })),
+      stored: INITIAL_INVENTORY.stored.map((item) => ({
+        ...item,
+      })),
+    },
+    survival: {
+      pickupsActive: 0,
+      pickupsTotal: 0,
+      notice: null,
     },
     frame: 0,
     elapsed: 0,
@@ -220,6 +338,26 @@ export function selectStaminaPercent(snapshot: UiSnapshot): number {
   );
 }
 
+export function selectHealthPercent(snapshot: UiSnapshot): number {
+  if (snapshot.player.maxHealth <= 0) {
+    return 0;
+  }
+
+  return Math.round(
+    (snapshot.player.health / snapshot.player.maxHealth) * 100,
+  );
+}
+
+export function selectArmorPercent(snapshot: UiSnapshot): number {
+  if (snapshot.player.maxArmor <= 0) {
+    return 0;
+  }
+
+  return Math.round(
+    (snapshot.player.armor / snapshot.player.maxArmor) * 100,
+  );
+}
+
 export function selectDodgeReady(snapshot: UiSnapshot): boolean {
   return snapshot.player.dodgeCooldown <= 0.001;
 }
@@ -252,8 +390,35 @@ export function selectWeaponStatus(snapshot: UiSnapshot): string {
   return `${snapshot.combat.cooldown.toFixed(1)}s`;
 }
 
+export function selectEquipmentUsed(snapshot: UiSnapshot): string {
+  return `${snapshot.inventory.used} / ${snapshot.inventory.capacity}`;
+}
+
+export function selectFireFailureLabel(snapshot: UiSnapshot): string | null {
+  switch (snapshot.combat.fireFailure) {
+    case "energy":
+      return "Cell depleted";
+    case "cooldown":
+      return "Recharging";
+    case "no-aim":
+      return "No firing solution";
+    case "range":
+      return "Target too close";
+    default:
+      return null;
+  }
+}
+
 export function selectTargetsReadout(snapshot: UiSnapshot): string {
   return `${snapshot.combat.targetsAlive} / ${snapshot.combat.targetsTotal}`;
+}
+
+export function selectEnemiesReadout(snapshot: UiSnapshot): string {
+  return `${snapshot.combat.enemiesAlive} / ${snapshot.combat.enemiesTotal}`;
+}
+
+export function selectHostilesReadout(snapshot: UiSnapshot): string {
+  return `${snapshot.combat.targetsAlive + snapshot.combat.enemiesAlive}`;
 }
 
 export function selectPhaseLabel(snapshot: UiSnapshot): string {
@@ -261,8 +426,10 @@ export function selectPhaseLabel(snapshot: UiSnapshot): string {
     case "menu":
       return "Awaiting expedition";
     case "playing":
-      return "Test arena online";
+      return "Greenreach expedition active";
     case "paused":
       return "Expedition paused";
+    case "victory":
+      return "Greenreach route secured";
   }
 }

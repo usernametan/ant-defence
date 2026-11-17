@@ -2,38 +2,138 @@
 
 A top-down survival action game set on the edge of a transformed frontier.
 
-This repository is in **Stage 3 — Combat Prototype**. The player prototype is
-now armed with three fictional energy blasters, pooled projectiles, hit effects,
-synthesized combat audio, and respawning training dummies in the Greenreach test
-arena. Creatures, missions, and progression are planned for later stages.
+This repository is in **Stage 9 — Nests & Territory Control**. The combat
+prototype takes place in **Greenreach Wilds**, an authored 2048 × 1280
+explorable region with waystation roads, ruins, a stream crossing, forest
+pockets, rocky ground, and creature-held terrain. Players now manage health and
+armor, recover from field caches, tune a small loadout of blasters and modules,
+take the Reclaim the Greenreach field order, destroy the Bloom Nest, secure the
+watchpost territory, restore its relay, and redeploy at the unlocked safe zone
+after death. Bosses, checkpoints, and campaign progression remain planned for
+later stages.
 
 ## Current status
 
-- Stage 3 combat prototype in a bounded 2048 × 1280 test arena.
+- Stage 9 territory layer: data-driven nest and territory definitions, a
+  validated runtime state machine, reusable content, territory capture,
+  safe-zone activation, and spawn suppression.
+- The Moss-Eaten Watchpost territory starts hostile and becomes contested when
+  entered. Its Bloom Nest activates nearby, wakes a Bloom Guardian, spawns
+  within the global creature budget, and exposes three destructible Bloom Nodes.
+- Destroying all Bloom Nodes clears the nest once, stops its spawns, grants a
+  reward, and opens territory capture. Holding the watchpost through capture
+  secures it, activates Watchpost Haven, suppresses ambient spawns, and grants a
+  second reward.
+- Territory HUD panel with state, cleared nest and node counts, capture
+  progress, safe-zone status, and contextual control guidance.
+- World and minimap visuals for territory boundaries, nest state, node health,
+  and safe-zone activation, plus dedicated destruction, weakening, clearing,
+  and securing feedback.
+- Stage 8 mission layer: data-driven mission and objective definitions, a
+  validated runtime state machine, prerequisite gating, progress tracking,
+  optional objectives, markers, rewards, failure state, and one-time completion.
+- “Reclaim the Greenreach”: eliminate creatures, reach the Moss-Eaten
+  Watchpost, destroy the Bloom Nest, secure the territory, restore its field
+  relay with `E`, and optionally recover supplies or clear the watchpost
+  perimeter.
+- Mission tracker HUD with per-objective progress, world and minimap markers,
+  proximity interaction prompts, menu briefing, and a victory screen with a
+  rewarded new-expedition or return-to-menu flow.
+- The Greenreach map now includes validated relay, nest, node, spawn, and
+  territory content. Mission, interaction, nest, and capture state reset with
+  each expedition; persistence is planned for Stage 11.
+- Stage 7 loadout layer: data-driven weapon definitions and three equipment
+  lines with capped, non-stacking effects.
+- Reinforced Plating improves maximum armor and absorption, Mobility Module
+  improves movement and dodge, and Energy Regulator improves the shared energy
+  cell.
+- Compact six-slot inventory: collect, store, equip, and unequip weapons and
+  modules. Duplicate weapons convert to energy; duplicate modules convert to
+  armor salvage.
+- Five authored Greenreach item spawns: two weapon upgrades and three field
+  modules, collected once per run with HUD and audio feedback.
+- Inventory screen on `I`, with equipped modules, owned weapons, supplies, and
+  stored-gear actions. It freezes simulation while open and survives death and
+  respawn.
+- Stage 6 survival layer: clamped health and armor pools, armor-first damage
+  mitigation, overflow damage into health, and full resource restoration on
+  respawn.
+- Twelve authored recovery caches across Greenreach: six health dressings and
+  six armor plates, each with its own respawn timer.
+- Recovery caches are consumed only when they restore a missing resource, which
+  prevents wasted pickups at full health or armor.
+- Damage, healing, armor recovery, death, and respawn produce HUD notices,
+  impact effects, synthesized audio, hit flashes, low-health screen feedback,
+  and a temporary post-respawn shield.
+- Death enters a readable signal-loss overlay with a countdown, then returns the
+  player to Waystation Echo or the active territory safe zone with health and
+  armor restored.
+- Stage 5 Greenreach Wilds map: 2048 × 1280 world, 32 px tiles, 64 × 40 terrain
+  grid, eight surface types, and deterministic terrain decoration.
+- Authored landmarks, roads, and props: Waystation Echo, Moss-Eaten Watchpost,
+  Broken Ford, Sunken Meadow, Thornmaw Approach, and the Quiet Glade.
+- Layered world props with solid collision defaults, scattered trees and bushes,
+  boulders, ruin walls, crates, barrels, tents, carts, signs, logs, fences, and
+  a walkable bridge across the stream.
+- Map loading validates bounds, terrain size, unique ids, entry points, creature
+  spawn points, target placement, recovery-cache, item, interactable, nest,
+  node, nest-spawn, guardian, safe-zone, and territory placement, known item
+  and creature ids, and solid-prop overlaps.
+- Crawlers chase directly and gain a small pack-speed bonus, Stalkers strafe for
+  an opening, and Spitters hold range with telegraphed acid projectiles.
+- Creatures acquire targets by detection range and line of sight, lose hidden or
+  distant targets, avoid solid obstacles, and separate from nearby allies.
+- The spawn director draws from authored Greenreach points, starts a controlled
+  six-creature encounter, caps the field at eight, removes dead creatures,
+  counts defeats, and refills over time.
+- Player health, armor mitigation, hit feedback, downed state, automatic
+  waystation respawn, and respawn protection support creature damage.
 - Frame-rate-independent 8-direction movement with acceleration and sliding
   collision against walls and world bounds.
 - Sprint with stamina drain and recovery, plus a dodge burst with cooldown and
   brief invulnerability.
-- Mouse-facing aim, hold-to-fire combat, deadzone camera follow, and capped
-  look-ahead.
+- Mouse-facing aim with camera-relative pointer conversion, hold-to-fire combat,
+  deadzone camera follow, world-bound clamping, and capped look-ahead.
 - Three fictional blasters: Basic Blaster, Rapid Blaster, and Heavy Blaster.
-  Each has its own damage, fire rate, energy draw, spread, and projectile feel.
+  Each has its own damage, range, fire rate, energy draw, spread, and projectile
+  feel.
 - Shared regenerating energy cell, per-weapon cooldowns, and `1`–`3` switching.
 - Pooled projectiles with swept collision, wall impacts, pierce, expiry, active
   caps, and same-team filtering for self-damage prevention.
-- Three hostile training dummies with health, hit flash, death, and timed
-  respawn.
-- Canvas 2D renderer with arena, obstacles, player, aim reticle, projectiles,
-  dummies, hit effects, and combat diagnostics.
-- Lightweight synthesized Web Audio feedback for firing and target hits.
+- Three hostile training dummies placed at authored Greenreach targets with
+  health, hit flash, death, and timed respawn.
+- Canvas 2D renderer with cached terrain, sorted props, tree canopies, player,
+  aim reticle, projectiles, dummies, three creature silhouettes, health bars,
+  attack telegraphs, hit effects, world items, territory and nest overlays,
+  safe-zone rings, a Greenreach minimap, and combat diagnostics.
+- F3 world diagnostics include map dimensions, tile grid, camera and player
+  coordinates, health and armor, recovery-cache placement and counts, loadout
+  state, respawn state, nearby solids, nearby spawns, combat state, and world
+  overlays.
+- Mission markers are drawn in the world and minimap, while relays and other
+  interactables render as world objects with activation state.
+- Lightweight synthesized Web Audio feedback for firing, switching weapons,
+  denied actions, target hits, enemy attacks, player damage, recovery and item
+  pickups, equipment changes, and creature deaths.
 - Fixed 60 Hz simulation loop with catch-up limits.
 - Seedable RNG, typed events, math, and ID utilities.
-- React UI fed by throttled snapshots instead of per-frame state, with weapon,
-  energy, cooldown, target, and projectile readouts.
-- Vitest coverage for movement, sprint, dodge, collision, swept projectile hits,
-  expiry, pierce, pooling caps, damage/respawn, cooldowns, energy, spread bounds,
-  input state, camera follow, loop stepping, RNG determinism, and snapshot
-  throttling.
+- React UI fed by throttled snapshots instead of per-frame state, with health,
+  armor, survival notices, death countdown, weapon, energy, cooldown, pickup,
+  loadout, target, enemy, kill, and projectile readouts.
+- Vitest coverage for map loading and validation, terrain sampling, world
+  dimensions, prop/pickup/item/interactable layering and placement, boundary
+  clamping, player and creature-sized prop collision, authored spawn validity,
+  map refills, movement, sprint, dodge, armor mitigation, equipment modifiers,
+  healing caps, pickup collection/respawn, one-shot item collection, inventory
+  equip/unequip/duplicate/capacity rules, respawn protection, mission objective
+  transitions, event counting, optional progress, prerequisite gating, failure
+  rules, completion-once behavior, nest activation and spawn budgets, node
+  destruction and clear-once rewards, territory capture and safe-zone
+  activation, spawn suppression, trigger entry and interaction state, line of
+  sight, swept projectile hits, weapon range and failure feedback,
+  damage/respawn, cooldowns, creature targeting/behaviors/death, spatial
+  hashing, camera follow and aim offsets, input state, loop stepping, RNG
+  determinism, and snapshot throttling.
 - The old Ant Defence source is retained for reference, but it is no longer
   imported by the active app.
 
@@ -49,8 +149,10 @@ See [MONSTER_FRONTIER_PLAN.md](MONSTER_FRONTIER_PLAN.md) for the full roadmap.
 | `Mouse` | Face the aim reticle |
 | `Left mouse` | Hold to fire the current blaster |
 | `1` / `2` / `3` | Select Basic / Rapid / Heavy Blaster |
-| `Enter` | Enter the test arena or resume |
-| `Escape` | Pause or resume |
+| `E` | Activate a nearby field interactable |
+| `I` | Open or close inventory |
+| `Enter` | Enter Greenreach, resume, or restart after victory |
+| `Escape` | Close inventory, pause, or resume |
 | `F3` | Toggle collision and diagnostic overlays |
 
 ## Development
@@ -96,13 +198,15 @@ src/
   game/
     audio/        Lightweight synthesized combat sound effects
     combat/       Weapons, firing rules, projectile simulation, and damage
-    content/      Game identity, equipment definitions, and metadata
+    content/      Game identity, weapons, equipment, pickups, missions, map
     core/         Loop, RNG, math, IDs, events, shared types
-    entities/     Player movement plus damageable training dummies
+    ai/           Creature brains and movement behaviors
+    entities/     Player, damageable creatures, and training dummies
     input/        Input routing, held-key state, pointer, and fire state
     render/       Camera, Canvas 2D renderer, effects, and debug drawing
+    systems/      Spawning, pickups, inventory, and mission state
     ui/           UI snapshots, store, and selectors
-    world/        Collision response and the test arena
+    world/        Map types/loading, collision, triggers, line of sight, hash
   components/     Retained Ant Defence UI, disconnected from the active app
   game/*          Retained Ant Defence engine modules
 public/           Retained assets and social preview image

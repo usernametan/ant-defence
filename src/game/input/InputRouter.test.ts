@@ -103,8 +103,21 @@ describe('InputRouter', () => {
     target.dispatchEvent(createKeyboardEvent('keydown', 'Digit1'));
     target.dispatchEvent(createKeyboardEvent('keydown', 'Digit2'));
     target.dispatchEvent(createKeyboardEvent('keydown', 'Digit3'));
+    target.dispatchEvent(createKeyboardEvent('keydown', 'KeyI'));
 
-    expect(actions).toEqual(['weapon1', 'weapon2', 'weapon3']);
+    expect(actions).toEqual(['weapon1', 'weapon2', 'weapon3', 'inventory']);
+
+    router.detach();
+  });
+
+  it('dispatches the interaction action from E', () => {
+    const { target, actions, router } = createHarness();
+    router.attach();
+
+    target.dispatchEvent(createKeyboardEvent('keydown', 'KeyE'));
+    target.dispatchEvent(createKeyboardEvent('keydown', 'KeyE', true));
+
+    expect(actions).toEqual(['interact']);
 
     router.detach();
   });

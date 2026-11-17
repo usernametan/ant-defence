@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   SnapshotStore,
   createInitialSnapshot,
+  selectArmorPercent,
   selectCameraReadout,
   selectDodgeLabel,
   selectDodgeReady,
+  selectEnemiesReadout,
   selectEnergyPercent,
+  selectEquipmentUsed,
+  selectFireFailureLabel,
+  selectHealthPercent,
+  selectHostilesReadout,
   selectIsPaused,
   selectIsPlaying,
   selectPhaseLabel,
@@ -115,6 +121,13 @@ describe('UI selectors', () => {
     expect(selectIsPlaying(snapshot)).toBe(false);
     expect(selectCameraReadout(snapshot)).toBe('812 / 434');
     expect(selectPhaseLabel(snapshot)).toBe('Expedition paused');
+
+    expect(
+      selectPhaseLabel({
+        ...snapshot,
+        phase: 'victory',
+      }),
+    ).toBe('Greenreach route secured');
   });
 
   it('derives player, stamina, and dodge labels', () => {
@@ -133,7 +146,7 @@ describe('UI selectors', () => {
     };
 
     expect(selectIsPlaying(snapshot)).toBe(true);
-    expect(selectPhaseLabel(snapshot)).toBe('Test arena online');
+    expect(selectPhaseLabel(snapshot)).toBe('Greenreach expedition active');
     expect(selectPlayerReadout(snapshot)).toBe('512 / 640');
     expect(selectStaminaPercent(snapshot)).toBe(42);
     expect(selectDodgeReady(snapshot)).toBe(false);
@@ -148,6 +161,54 @@ describe('UI selectors', () => {
     expect(selectDodgeLabel(readySnapshot)).toBe('Ready');
   });
 
+  it('derives health, enemy, and combined hostile readouts', () => {
+    const snapshot = createInitialSnapshot();
+
+    expect(selectHealthPercent(snapshot)).toBe(100);
+    expect(selectArmorPercent(snapshot)).toBe(100);
+    expect(selectEnemiesReadout(snapshot)).toBe('0 / 0');
+
+    const engaged = {
+      ...snapshot,
+      player: {
+        ...snapshot.player,
+        health: 35,
+        maxHealth: 100,
+        armor: 24,
+        maxArmor: 80,
+      },
+      combat: {
+        ...snapshot.combat,
+        targetsAlive: 2,
+        enemiesAlive: 4,
+        enemiesTotal: 8,
+        kills: 5,
+      },
+    };
+
+    expect(selectHealthPercent(engaged)).toBe(35);
+    expect(selectArmorPercent(engaged)).toBe(30);
+    expect(selectEnemiesReadout(engaged)).toBe('4 / 8');
+    expect(selectHostilesReadout(engaged)).toBe('6');
+    expect(engaged.combat.kills).toBe(5);
+  });
+
+  it('starts with the Greenreach mission active', () => {
+    const snapshot = createInitialSnapshot();
+    const mission = snapshot.missions.active;
+
+    expect(mission?.title).toBe('Reclaim the Greenreach');
+    expect(mission?.status).toBe('active');
+    expect(mission?.objectives).toHaveLength(7);
+    expect(
+      mission?.objectives.filter((objective) => objective.optional),
+    ).toHaveLength(2);
+    expect(snapshot.interaction).toBeNull();
+    expect(snapshot.territories.territories).toHaveLength(1);
+    expect(snapshot.territories.territories[0].state).toBe('hostile');
+    expect(snapshot.territories.nests[0].state).toBe('inactive');
+  });
+
   it('derives weapon, energy, and target readouts', () => {
     const snapshot = createInitialSnapshot();
 
@@ -155,6 +216,12 @@ describe('UI selectors', () => {
     expect(snapshot.combat.weaponCount).toBe(3);
     expect(snapshot.combat.weapons).toHaveLength(3);
     expect(snapshot.combat.weapons[0].selected).toBe(true);
+    expect(snapshot.combat.weapons[0].owned).toBe(true);
+    expect(snapshot.inventory.used).toBe(0);
+    expect(snapshot.inventory.capacity).toBe(6);
+    expect(snapshot.inventory.weapons).toHaveLength(3);
+    expect(selectEquipmentUsed(snapshot)).toBe('0 / 6');
+    expect(selectFireFailureLabel(snapshot)).toBeNull();
     expect(selectEnergyPercent(snapshot)).toBe(100);
     expect(selectWeaponStatus(snapshot)).toBe('Ready');
     expect(selectTargetsReadout(snapshot)).toBe('3 / 3');
@@ -185,5 +252,18 @@ describe('UI selectors', () => {
     };
 
     expect(selectWeaponStatus(cooling)).toBe('0.5s');
+
+    expect(
+      selectFireFailureLabel({
+        ...snapshot,
+        combat: { ...snapshot.combat, fireFailure: 'energy' },
+      }),
+    ).toBe('Cell depleted');
+    expect(
+      selectFireFailureLabel({
+        ...snapshot,
+        combat: { ...snapshot.combat, fireFailure: 'cooldown' },
+      }),
+    ).toBe('Recharging');
   });
 });
