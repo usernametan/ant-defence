@@ -1,0 +1,99 @@
+:root {
+  /* Core Surfaces */
+  --bg-0: #070B14;
+  --bg-1: #0D1424;
+  --bg-2: #141D33;
+  --line: #24304D;
+
+  /* Text */
+  --text-hi: #EAF2FF;
+  --text-mid: #9FB0CF;
+  --text-low: #5C6C8C;
+
+  /* Team & Semantic */
+  --player: #22D3EE;
+  --player-glow: #67E8F9;
+  --enemy: #FF5A3C;
+  --enemy-glow: #FF8A6B;
+  --neutral: #7C8BA8;
+  --gold: #FACC15;
+
+  /* Rarity */
+  --common: #B8C4DA;
+  --rare: #4F8CFF;
+  --epic: #C26BFF;
+
+  /* Status */
+  --success: #34D399;
+  --danger: #F43F5E;
+
+  /* Glass Surfaces */
+  --glass-bg: rgba(13, 20, 36, 0.78);
+  --glass-bg-hi: rgba(20, 29, 51, 0.86);
+  --glass-border: rgba(34, 211, 238, 0.22);
+  --glass-border-subtle: rgba(159, 176, 207, 0.16);
+
+  /* Typography */
+  --font-display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", "Inter", system-ui, sans-serif;
+  --font-body: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", "Inter", system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+
+  /* 4px Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Radii */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 9999px;
+
+  /* Shadows & Glows */
+  --shadow-sm: 0 2px 8px rgba(7, 11, 20, 0.45);
+  --shadow-md: 0 8px 24px rgba(7, 11, 20, 0.65);
+  --shadow-lg: 0 18px 48px rgba(7, 11, 20, 0.8);
+  --shadow-inner: inset 0 1px 0 rgba(234, 242, 255, 0.08), inset 0 0 20px rgba(34, 211, 238, 0.04);
+
+  --glow-player: 0 0 16px rgba(34, 211, 238, 0.38), 0 0 32px rgba(103, 232, 249, 0.16);
+  --glow-enemy: 0 0 16px rgba(255, 90, 60, 0.38), 0 0 32px rgba(255, 138, 107, 0.16);
+  --glow-gold: 0 0 16px rgba(250, 204, 21, 0.35), 0 0 32px rgba(250, 204, 21, 0.14);
+  --glow-rare: 0 0 16px rgba(79, 140, 255, 0.36);
+  --glow-epic: 0 0 18px rgba(194, 107, 255, 0.42);
+  --glow-success: 0 0 14px rgba(52, 211, 153, 0.36);
+  --glow-danger: 0 0 16px rgba(244, 63, 94, 0.42);
+
+  /* Blur Levels */
+  --blur-sm: 6px;
+  --blur-md: 12px;
+  --blur-lg: 20px;
+
+  /* Z-index Layers */
+  --z-canvas: 0;
+  --z-hud: 10;
+  --z-overlay: 20;
+  --z-menu: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-transition: 60;
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --dur-slow: 320ms;
+  --dur-cinematic: 600ms;
+
+  --ease-standard: cubic-bezier(.2, .8, .2, 1);
+  --ease-snappy: cubic-bezier(.16, 1, .3, 1);
+  --ease-bounce: cubic-bezier(.34, 1.56, .64, 1);
+
+  /* User-configurable UI scales */
+  --hud-scale: 1;
+}
