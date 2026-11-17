@@ -124,15 +124,26 @@ export class StubSim implements SimApi {
       }
     }
 
-    // Move bots in scenic tactical patrols
+    // Move bots in scenic tactical patrols (only onto floor tiles)
     for (let i = 0; i < units.length; i += 1) {
       const u = units[i];
       if (u.isPlayer || u.dead) continue;
       const phase = nextTime * 0.9 + i * 1.4;
-      const anchorX = u.team === 'player' ? 24 * 32 : 37 * 32;
-      const anchorY = (14 + (i % 3) * 6) * 32;
-      u.pos.x = anchorX + Math.cos(phase) * 75;
-      u.pos.y = anchorY + Math.sin(phase * 1.2) * 55;
+      const anchorX = u.team === 'player' ? 23 * 32 : 36 * 32;
+      const anchorY = (16 + (i % 3) * 4) * 32;
+      const nx = anchorX + Math.cos(phase) * 52;
+      const ny = anchorY + Math.sin(phase * 1.2) * 38;
+      const col = Math.floor(nx / 32);
+      const row = Math.floor(ny / 32);
+      if (this.state.map.tiles[row]?.[col] === 'floor') {
+        u.vel.x = (nx - u.pos.x) / dt;
+        u.vel.y = (ny - u.pos.y) / dt;
+        u.pos.x = nx;
+        u.pos.y = ny;
+      } else {
+        u.vel.x = 0;
+        u.vel.y = 0;
+      }
       u.angle = Math.atan2(
         (player?.pos.y ?? 640) - u.pos.y,
         (player?.pos.x ?? 960) - u.pos.x,
@@ -413,7 +424,7 @@ export class StubSim implements SimApi {
     const ally: Unit = {
       id: 'ally-1',
       team: 'player',
-      pos: { x: 24 * 32, y: 17 * 32 },
+      pos: { x: 23 * 32, y: 18 * 32 },
       vel: { x: 0, y: 0 },
       angle: 0.2,
       hp: 94,
@@ -434,7 +445,7 @@ export class StubSim implements SimApi {
     const enemies: Unit[] = Array.from({ length: config.enemyCount }, (_, i) => ({
       id: `enemy-${i + 1}`,
       team: 'enemy',
-      pos: { x: (36 + (i % 2) * 3) * 32, y: (14 + i * 3) * 32 },
+      pos: { x: (35 + (i % 2) * 2) * 32, y: (16 + (i % 3) * 4) * 32 },
       vel: { x: 0, y: 0 },
       angle: Math.PI,
       hp: i === 0 ? 64 : 100,

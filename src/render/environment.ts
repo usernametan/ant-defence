@@ -14,14 +14,12 @@ export class EnvironmentRenderer {
     const tctx = tile.getContext('2d');
     if (!tctx) return null;
 
-    // 2x2 subtle checkerboard stone arena tiles
     tctx.fillStyle = PALETTE.floorBase;
     tctx.fillRect(0, 0, 64, 64);
     tctx.fillStyle = PALETTE.floorAlt;
     tctx.fillRect(0, 0, 32, 32);
     tctx.fillRect(32, 32, 32, 32);
 
-    // Fine stone seams + corner rivets
     tctx.strokeStyle = PALETTE.floorSeam;
     tctx.lineWidth = 1;
     tctx.strokeRect(0.5, 0.5, 31, 31);
@@ -29,9 +27,10 @@ export class EnvironmentRenderer {
     tctx.strokeRect(0.5, 32.5, 31, 31);
     tctx.strokeRect(32.5, 32.5, 31, 31);
 
-    tctx.fillStyle = 'rgba(234, 242, 255, 0.03)';
-    for (let i = 0; i < 24; i += 1) {
-      tctx.fillRect((i * 17 + 5) % 64, (i * 29 + 9) % 64, 2, 1);
+    // Subtle stone texture speckles
+    tctx.fillStyle = 'rgba(234, 242, 255, 0.035)';
+    for (let i = 0; i < 28; i += 1) {
+      tctx.fillRect((i * 19 + 5) % 64, (i * 29 + 9) % 64, 2, 1);
     }
 
     this.floorPattern = ctx.createPattern(tile, 'repeat');
@@ -53,7 +52,7 @@ export class EnvironmentRenderer {
     const minRow = Math.max(0, Math.floor(viewMinY / ts) - 1);
     const maxRow = Math.min(map.height - 1, Math.ceil(viewMaxY / ts) + 1);
 
-    // Textured stone floor
+    // Stone floor
     const pattern = this.ensureFloorPattern(ctx);
     ctx.fillStyle = pattern ?? PALETTE.floorBase;
     ctx.fillRect(
@@ -63,7 +62,7 @@ export class EnvironmentRenderer {
       (maxRow - minRow + 1) * ts,
     );
 
-    // Water pools with animated caustics & stone border
+    // Water basins with stone curb & glowing caustic shimmer
     for (let r = minRow; r <= maxRow; r += 1) {
       for (let c = minCol; c <= maxCol; c += 1) {
         const kind = map.tiles[r][c];
@@ -74,33 +73,41 @@ export class EnvironmentRenderer {
           ctx.fillStyle = PALETTE.waterDeep;
           ctx.fillRect(x, y, ts, ts);
 
-          const wave = Math.sin(time * 2.1 + c * 0.8 + r * 0.6);
+          const wave = Math.sin(time * 2.1 + c * 0.75 + r * 0.55);
           ctx.fillStyle = PALETTE.waterMid;
-          ctx.globalAlpha = 0.55;
-          ctx.fillRect(x + 2, y + 3, ts - 4, ts - 6);
+          ctx.globalAlpha = 0.65;
+          ctx.fillRect(x + 1, y + 2, ts - 2, ts - 3);
 
-          // Caustic shimmer highlights
+          // Caustic shimmer bands
           ctx.fillStyle = PALETTE.waterShimmer;
-          ctx.globalAlpha = 0.22 + (wave + 1) * 0.08;
-          ctx.fillRect(x + 4, y + 7 + wave * 2.5, ts - 10, 2.5);
-          ctx.fillRect(x + 9, y + 19 - wave * 2.5, ts - 14, 2);
+          ctx.globalAlpha = 0.28 + (wave + 1) * 0.1;
+          ctx.fillRect(x + 4, y + 7 + wave * 2.2, ts - 9, 2.5);
+          ctx.fillRect(x + 8, y + 20 - wave * 2.2, ts - 13, 2);
           ctx.globalAlpha = 1;
 
-          // Stone rim on adjacent non-water edges
+          // Sunken stone basin rim on exposed sides
           ctx.fillStyle = PALETTE.wallSide;
-          if (map.tiles[r - 1]?.[c] !== 'water') ctx.fillRect(x, y, ts, 3);
-          if (map.tiles[r][c - 1] !== 'water') ctx.fillRect(x, y, 3, ts);
+          if (map.tiles[r - 1]?.[c] !== 'water') ctx.fillRect(x, y, ts, 4);
+          if (map.tiles[r + 1]?.[c] !== 'water') ctx.fillRect(x, y + ts - 2, ts, 2);
+          if (map.tiles[r][c - 1] !== 'water') ctx.fillRect(x, y, 4, ts);
+          if (map.tiles[r][c + 1] !== 'water') ctx.fillRect(x + ts - 2, y, 2, ts);
         } else if (kind === 'spawnPlayer' || kind === 'spawnEnemy') {
           ctx.fillStyle =
             kind === 'spawnPlayer'
-              ? 'rgba(34, 211, 238, 0.1)'
-              : 'rgba(255, 90, 60, 0.1)';
-          ctx.fillRect(x + 1, y + 1, ts - 2, ts - 2);
+              ? 'rgba(34, 211, 238, 0.12)'
+              : 'rgba(255, 90, 60, 0.12)';
+          ctx.fillRect(x, y, ts, ts);
+          ctx.strokeStyle =
+            kind === 'spawnPlayer'
+              ? 'rgba(34, 211, 238, 0.24)'
+              : 'rgba(255, 90, 60, 0.24)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 0.5, y + 0.5, ts - 1, ts - 1);
         }
       }
     }
 
-    // Low cover: Tactical wooden/brass crates & stone barriers with damage cracks
+    // Low cover: Tactical supply crates & stone half-walls
     for (let r = minRow; r <= maxRow; r += 1) {
       for (let c = minCol; c <= maxCol; c += 1) {
         if (map.tiles[r][c] !== 'lowCover') continue;
@@ -109,28 +116,35 @@ export class EnvironmentRenderer {
         const hp = map.coverHp[`${c},${r}`] ?? 100;
         const isCrate = (c + r) % 2 === 0;
 
-        // Crisp drop shadow
-        ctx.fillStyle = 'rgba(7, 11, 20, 0.6)';
-        ctx.fillRect(x + 5, y + 7, ts - 5, ts - 4);
+        ctx.fillStyle = 'rgba(7, 11, 20, 0.62)';
+        ctx.fillRect(x + 5, y + 7, ts - 4, ts - 3);
 
         if (isCrate) {
+          // Gold-trimmed wooden supply crate
           ctx.fillStyle = PALETTE.crateBody;
-          ctx.fillRect(x + 3, y + 3, ts - 6, ts - 6);
+          ctx.fillRect(x + 2, y + 2, ts - 4, ts - 4);
+          ctx.fillStyle = '#734F1E';
+          ctx.fillRect(x + 2, y + ts - 7, ts - 4, 5);
           ctx.strokeStyle = PALETTE.crateTrim;
           ctx.lineWidth = 2;
-          ctx.strokeRect(x + 3.5, y + 3.5, ts - 7, ts - 7);
+          ctx.strokeRect(x + 3, y + 3, ts - 6, ts - 6);
           ctx.beginPath();
           ctx.moveTo(x + 5, y + 5);
-          ctx.lineTo(x + ts - 5, y + ts - 5);
+          ctx.lineTo(x + ts - 5, y + ts - 7);
           ctx.stroke();
         } else {
+          // Low stone barrier connected with neighbors
+          const leftCover = map.tiles[r]?.[c - 1] === 'lowCover';
+          const rightCover = map.tiles[r]?.[c + 1] === 'lowCover';
+          const padL = leftCover ? 0 : 2;
+          const padR = rightCover ? 0 : 2;
           ctx.fillStyle = PALETTE.sandbagBody;
-          ctx.fillRect(x + 2, y + 4, ts - 4, ts - 8);
-          ctx.strokeStyle = PALETTE.wallEdge;
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(x + 2.5, y + 4.5, ts - 5, ts - 9);
+          ctx.fillRect(x + padL, y + 4, ts - padL - padR, ts - 8);
           ctx.fillStyle = PALETTE.wallSide;
-          ctx.fillRect(x + 2, y + ts - 8, ts - 4, 4);
+          ctx.fillRect(x + padL, y + ts - 9, ts - padL - padR, 5);
+          ctx.strokeStyle = PALETTE.wallEdge;
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(x + padL + 0.5, y + 4.5, ts - padL - padR - 1, ts - 9);
         }
 
         if (hp < 75) {
@@ -149,54 +163,92 @@ export class EnvironmentRenderer {
       }
     }
 
-    // 2.5D Stone Walls with extruded front face, mortar seams, and corner foliage
-    const extrude = 9;
+    // Connected 2.5D Stone Fortress Walls
+    const extrude = 11;
+    // Pass 1: ambient floor drop shadow cast to south-east
+    ctx.fillStyle = 'rgba(7, 11, 20, 0.55)';
     for (let r = minRow; r <= maxRow; r += 1) {
       for (let c = minCol; c <= maxCol; c += 1) {
         if (map.tiles[r][c] !== 'wall') continue;
         const x = c * ts;
         const y = r * ts;
-        const wallBelow = map.tiles[r + 1]?.[c] === 'wall';
+        ctx.fillRect(x + 7, y + 8, ts, ts);
+      }
+    }
 
-        // Floor shadow
-        ctx.fillStyle = 'rgba(7, 11, 20, 0.55)';
-        ctx.fillRect(x + 6, y + 7, ts, ts);
+    // Pass 2: continuous masonry top faces, extruded front faces, and outer rim borders
+    for (let r = minRow; r <= maxRow; r += 1) {
+      for (let c = minCol; c <= maxCol; c += 1) {
+        if (map.tiles[r][c] !== 'wall') continue;
+        const x = c * ts;
+        const y = r * ts;
+        const nUp = map.tiles[r - 1]?.[c] === 'wall';
+        const nDown = map.tiles[r + 1]?.[c] === 'wall';
+        const nLeft = map.tiles[r]?.[c - 1] === 'wall';
+        const nRight = map.tiles[r]?.[c + 1] === 'wall';
 
-        // Front extruded wall face (visible if no wall directly below)
-        if (!wallBelow) {
+        // Extruded vertical face if exposed on south side
+        if (!nDown) {
           ctx.fillStyle = PALETTE.wallSide;
           ctx.fillRect(x, y + ts - extrude, ts, extrude);
-          ctx.fillStyle = PALETTE.bg0;
+          // Stone brick vertical seam on front face
+          ctx.fillStyle = PALETTE.floorSeam;
+          ctx.fillRect(x + ts * 0.5, y + ts - extrude, 1, extrude);
           ctx.fillRect(x, y + ts - 2, ts, 2);
         }
 
-        // Top stone block
+        // Elevated top cap (contiguous ashlar masonry)
         ctx.fillStyle = (c + r) % 3 === 0 ? PALETTE.wallTopAlt : PALETTE.wallTop;
         ctx.fillRect(x, y - extrude, ts, ts);
 
-        // Brick seam & bevel highlight
-        ctx.strokeStyle = PALETTE.floorSeam;
+        // Subtle interior stone mortar line
+        ctx.strokeStyle = 'rgba(21, 27, 43, 0.45)';
         ctx.lineWidth = 1;
         ctx.strokeRect(x + 0.5, y - extrude + 0.5, ts - 1, ts - 1);
 
+        // Crisp bevel highlights ONLY on exposed outer edges (makes walls look like solid structures!)
         ctx.fillStyle = PALETTE.wallEdge;
-        ctx.globalAlpha = 0.5;
-        ctx.fillRect(x + 1, y - extrude + 1, ts - 2, 2);
-        ctx.globalAlpha = 1;
+        if (!nUp) ctx.fillRect(x, y - extrude, ts, 2.5);
+        if (!nLeft) ctx.fillRect(x, y - extrude, 2.5, ts);
 
-        // Occasional subtle moss/foliage tuft along wall corners
-        if ((c * 13 + r * 7) % 11 === 0 && !wallBelow) {
-          ctx.fillStyle = PALETTE.foliageDark;
-          ctx.beginPath();
-          ctx.arc(x + 5, y + ts - 1, 5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = PALETTE.foliageBright;
-          ctx.beginPath();
-          ctx.arc(x + 4, y + ts - 3, 3, 0, Math.PI * 2);
-          ctx.fill();
+        ctx.fillStyle = PALETTE.bg0;
+        if (!nRight) ctx.fillRect(x + ts - 1.5, y - extrude, 1.5, ts);
+        if (!nDown) ctx.fillRect(x, y + ts - extrude - 1.5, ts, 1.5);
+
+        // Corner foliage & vines along walls near water or exposed corners
+        const nearWater =
+          map.tiles[r + 1]?.[c] === 'water' ||
+          map.tiles[r - 1]?.[c] === 'water' ||
+          map.tiles[r]?.[c + 1] === 'water' ||
+          map.tiles[r]?.[c - 1] === 'water';
+
+        if ((!nDown && !nLeft && (c + r) % 2 === 0) || (nearWater && (c * 7 + r * 3) % 3 === 0)) {
+          this.drawFoliageCluster(ctx, x + 5, y + ts - 2);
+        }
+        if (!nDown && !nRight && (c + r) % 3 === 0) {
+          this.drawFoliageCluster(ctx, x + ts - 6, y + ts - 2);
         }
       }
     }
+  }
+
+  private drawFoliageCluster(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    ctx.fillStyle = PALETTE.bg0;
+    ctx.beginPath();
+    ctx.arc(x, y + 1, 7.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = PALETTE.foliageDark;
+    ctx.beginPath();
+    ctx.arc(x - 2, y, 6, 0, Math.PI * 2);
+    ctx.arc(x + 3, y - 1, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = PALETTE.foliageBright;
+    ctx.beginPath();
+    ctx.arc(x - 1, y - 2, 3.5, 0, Math.PI * 2);
+    ctx.arc(x + 2.5, y - 2.5, 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   drawZonesAndBases(
@@ -212,7 +264,6 @@ export class EnvironmentRenderer {
       const contested = zState?.contested ?? false;
       const progress = zState?.progress ?? 0;
 
-      // Neutral/contested zones glow warm gold like Zone B in the reference!
       const ringColor =
         owner === 'neutral' || contested ? PALETTE.gold : teamColor(owner);
       const glow =
@@ -223,7 +274,6 @@ export class EnvironmentRenderer {
 
       const zoneR = Math.min(def.radius, 76);
 
-      // Soft floor halo
       const grad = ctx.createRadialGradient(0, 0, 8, 0, 0, zoneR + 18);
       grad.addColorStop(0, `${ringColor}36`);
       grad.addColorStop(0.65, `${ringColor}18`);
@@ -233,7 +283,6 @@ export class EnvironmentRenderer {
       ctx.arc(0, 0, zoneR + 18, 0, Math.PI * 2);
       ctx.fill();
 
-      // Rotating cog-notched holographic ring
       ctx.save();
       ctx.rotate(time * 0.45);
       ctx.strokeStyle = ringColor;
@@ -243,7 +292,6 @@ export class EnvironmentRenderer {
       ctx.arc(0, 0, zoneR, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 8 outer cog brackets
       const teeth = 8;
       ctx.fillStyle = glow;
       for (let i = 0; i < teeth; i += 1) {
@@ -255,14 +303,12 @@ export class EnvironmentRenderer {
       }
       ctx.restore();
 
-      // Inner crisp circle
       ctx.strokeStyle = glow;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(0, 0, zoneR - 12, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Progress arc
       const absProg = Math.min(1, Math.abs(progress));
       if (absProg > 0.02) {
         ctx.strokeStyle = progress >= 0 ? PALETTE.playerGlow : PALETTE.enemyGlow;
@@ -278,7 +324,6 @@ export class EnvironmentRenderer {
         ctx.stroke();
       }
 
-      // Bold Zone Letter
       ctx.font = '900 30px Bahnschrift, "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -290,7 +335,7 @@ export class EnvironmentRenderer {
       ctx.restore();
     }
 
-    // Bases with glowing energy cores
+    // Framed Base Energy Cores
     for (const base of state.map.bases) {
       const hp = state.baseHp[base.team];
       const maxHp = Math.max(1, base.coreHp);
@@ -302,10 +347,15 @@ export class EnvironmentRenderer {
       ctx.save();
       ctx.translate(base.center.x, base.center.y);
 
-      ctx.fillStyle = `${color}22`;
-      ctx.beginPath();
-      ctx.arc(0, 0, base.radius * 0.72, 0, Math.PI * 2);
-      ctx.fill();
+      // Stone chamber pad
+      ctx.fillStyle = PALETTE.bg1;
+      ctx.strokeStyle = PALETTE.wallEdge;
+      ctx.lineWidth = 3;
+      ctx.fillRect(-48, -48, 96, 96);
+      ctx.strokeRect(-48, -48, 96, 96);
+
+      ctx.fillStyle = `${color}28`;
+      ctx.fillRect(-42, -42, 84, 84);
 
       ctx.save();
       ctx.rotate(time * 0.8);
@@ -313,39 +363,24 @@ export class EnvironmentRenderer {
       ctx.lineWidth = 3;
       ctx.setLineDash([14, 7]);
       ctx.beginPath();
-      ctx.arc(0, 0, 32, 0, Math.PI * 2);
+      ctx.arc(0, 0, 30, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
       const pulse = 1 + 0.08 * Math.sin(time * 5);
-      const coreGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 26 * pulse);
+      const coreGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 24 * pulse);
       coreGrad.addColorStop(0, PALETTE.textHi);
-      coreGrad.addColorStop(0.45, glow);
+      coreGrad.addColorStop(0.5, glow);
       coreGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = coreGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, 26 * pulse, 0, Math.PI * 2);
+      ctx.arc(0, 0, 24 * pulse, 0, Math.PI * 2);
       ctx.fill();
-
-      if (ratio < 0.75) {
-        ctx.strokeStyle = PALETTE.bg0;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-10, -8);
-        ctx.lineTo(-2, -1);
-        ctx.lineTo(-7, 9);
-        if (ratio < 0.4) {
-          ctx.moveTo(8, -10);
-          ctx.lineTo(2, 2);
-          ctx.lineTo(11, 8);
-        }
-        ctx.stroke();
-      }
 
       ctx.strokeStyle = color;
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(0, 0, 40, -Math.PI / 2, -Math.PI / 2 + ratio * Math.PI * 2);
+      ctx.arc(0, 0, 38, -Math.PI / 2, -Math.PI / 2 + ratio * Math.PI * 2);
       ctx.stroke();
 
       ctx.restore();
