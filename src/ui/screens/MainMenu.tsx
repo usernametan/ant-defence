@@ -99,7 +99,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             ctx.fillStyle = PALETTE.crateBody;
             ctx.fillRect(c * ts + 4, r * ts + 4, ts - 8, ts - 8);
           } else if (tile === 'water') {
-            ctx.fillStyle = PALETTE.waterBase;
+            ctx.fillStyle = PALETTE.waterDeep;
             ctx.fillRect(c * ts, r * ts, ts, ts);
           }
         }

@@ -347,6 +347,372 @@
   opacity: 0;
 }
 
+/* Chamfered Holo-Tactical HUD Panels */
+.ht-chamfer-panel {
+  position: relative;
+  background: rgba(11, 18, 33, 0.86);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  border: 1.5px solid rgba(34, 211, 238, 0.45);
+  box-shadow:
+    0 6px 22px rgba(7, 11, 20, 0.72),
+    inset 0 0 18px rgba(34, 211, 238, 0.08);
+  clip-path: polygon(
+    10px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%,
+    0 10px
+  );
+}
+
+/* Top-Left Kill Feed Panel */
+.ht-killfeed-panel {
+  padding: 8px 12px;
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ht-killfeed-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.25;
+  animation: ht-kill-slide var(--dur-med) var(--ease-snappy) forwards;
+}
+
+/* Top-Center Winged Scoreboard */
+.ht-scoreboard-shell {
+  display: flex;
+  align-items: stretch;
+  filter: drop-shadow(0 6px 18px rgba(7, 11, 20, 0.75));
+}
+
+.ht-score-wing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 20px;
+  background: rgba(11, 18, 33, 0.9);
+  border-top: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+}
+
+.ht-score-wing--player {
+  border-color: var(--player);
+  border-left: 2px solid var(--player);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 16px 100%);
+  padding-left: 26px;
+}
+
+.ht-score-wing--enemy {
+  border-color: var(--enemy);
+  border-right: 2px solid var(--enemy);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+  padding-right: 26px;
+}
+
+.ht-score-val {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.ht-score-center {
+  background: rgba(7, 11, 20, 0.94);
+  border-top: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+  padding: 5px 18px;
+  text-align: center;
+  min-width: 148px;
+}
+
+.ht-score-clock {
+  font-size: 20px;
+  line-height: 1.05;
+  color: var(--text-hi);
+}
+
+.ht-score-goal {
+  font-size: 10px;
+  color: var(--text-mid);
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+/* Top-Right Minimap & Objectives */
+.ht-minimap-frame {
+  padding: 5px;
+}
+
+.ht-objectives-card {
+  width: 208px;
+  padding: 10px 12px;
+}
+
+.ht-objectives-title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--text-hi);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ht-objectives-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ht-objective-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.ht-objective-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-mid);
+  flex-shrink: 0;
+}
+
+.ht-objective-dot.is-done {
+  background: var(--success);
+  border-color: var(--success);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+}
+
+/* Bottom-Left Operator Portrait + HP / Shield */
+.ht-operator-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 6px;
+  background: rgba(11, 18, 33, 0.86);
+  backdrop-filter: blur(var(--blur-md));
+  border: 1.5px solid rgba(34, 211, 238, 0.45);
+  box-shadow: 0 6px 22px rgba(7, 11, 20, 0.72);
+  clip-path: polygon(
+    10px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%,
+    0 10px
+  );
+}
+
+.ht-operator-portrait {
+  position: relative;
+  width: 64px;
+  height: 68px;
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.16), rgba(13, 20, 36, 0.95));
+  border: 1px solid rgba(34, 211, 238, 0.55);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.ht-operator-lvl {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(7, 11, 20, 0.88);
+  border-top: 1px solid var(--line);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-hi);
+  padding: 1px 0;
+}
+
+.ht-operator-bars {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-width: 178px;
+  padding-right: 6px;
+}
+
+.ht-vital-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ht-vital-icon {
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  width: 15px;
+  text-align: center;
+}
+
+.ht-vital-track-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ht-vital-nums {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  line-height: 1;
+}
+
+.ht-vital-cur {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-hi);
+}
+
+.ht-vital-max {
+  font-size: 11px;
+  color: var(--text-mid);
+}
+
+.ht-vital-track {
+  height: 7px;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ht-vital-fill {
+  height: 100%;
+  transition: width 160ms var(--ease-standard);
+}
+
+/* Bottom-Center 4 Action Slots */
+.ht-action-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.ht-action-slot-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.ht-action-slot {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 18, 33, 0.88);
+  border: 1.5px solid rgba(34, 211, 238, 0.55);
+  color: var(--player-glow);
+  box-shadow: inset 0 0 14px rgba(34, 211, 238, 0.14);
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+  transition:
+    transform var(--dur-fast) var(--ease-snappy),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast);
+}
+
+.ht-action-slot.is-highlight {
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.45), inset 0 0 14px rgba(250, 204, 21, 0.2);
+  transform: translateY(-2px);
+}
+
+.ht-action-badge {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  color: var(--text-hi);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.ht-action-key {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-hi);
+  letter-spacing: 0.08em;
+}
+
+/* Bottom-Right Weapon Card */
+.ht-weapon-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  min-width: 226px;
+}
+
+.ht-weapon-silhouette {
+  color: var(--text-mid);
+  display: flex;
+  align-items: center;
+  filter: drop-shadow(0 2px 6px rgba(7, 11, 20, 0.7));
+}
+
+.ht-weapon-ammo-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.ht-weapon-ammo-nums {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.ht-weapon-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ht-weapon-reload-bar {
+  width: 78px;
+  height: 4px;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.ht-weapon-reload-fill {
+  height: 100%;
+  background: var(--gold);
+}
+
 /* Respawn & Pause Backdrop */
 .ht-blur-backdrop {
   position: fixed;

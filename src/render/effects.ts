@@ -337,10 +337,13 @@ export class EffectsSystem {
         ctx.closePath();
         ctx.fill();
       } else {
-        ctx.fillStyle = PALETTE.textHi;
-        ctx.fillRect(-5, -1.5, 10, 3);
-        ctx.fillStyle = glow;
-        ctx.fillRect(-7, -1, 5, 2);
+        // Golden-white luminous tracer streak
+        const grad = ctx.createLinearGradient(-16, 0, 6, 0);
+        grad.addColorStop(0, 'transparent');
+        grad.addColorStop(0.45, PALETTE.gold);
+        grad.addColorStop(1, PALETTE.textHi);
+        ctx.fillStyle = grad;
+        ctx.fillRect(-16, -1.8, 22, 3.6);
       }
       ctx.restore();
     }

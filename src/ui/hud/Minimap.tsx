@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { PALETTE, rarityColor, teamColor } from '../../render/palette';
 import type { GameState } from '../../shared/types';
-import { Panel } from '../design';
 
 export interface ZonePing {
   zoneId: string;
@@ -38,7 +37,6 @@ export const Minimap: React.FC<MinimapProps> = ({
     ctx.fillStyle = PALETTE.bg0;
     ctx.fillRect(0, 0, w, h);
 
-    // Map geometry
     const tileW = map.tileSize * sx;
     const tileH = map.tileSize * sy;
     for (let r = 0; r < map.height; r += 1) {
@@ -51,35 +49,46 @@ export const Minimap: React.FC<MinimapProps> = ({
           ctx.fillStyle = PALETTE.crateBody;
           ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
         } else if (kind === 'water') {
-          ctx.fillStyle = PALETTE.waterBase;
+          ctx.fillStyle = PALETTE.waterMid;
           ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
         }
       }
     }
 
-    // Zones + attack pings
+    // Bases
+    for (const base of map.bases) {
+      ctx.fillStyle = teamColor(base.team);
+      ctx.beginPath();
+      ctx.arc(base.center.x * sx, base.center.y * sy, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Zones
     for (const def of map.zones) {
       const zState = state.zones.find((z) => z.id === def.id);
       const owner = zState?.owner ?? 'neutral';
+      const contested = zState?.contested ?? false;
       const zx = def.center.x * sx;
       const zy = def.center.y * sy;
-      const zr = def.radius * sx;
+      const zr = Math.max(8, def.radius * sx);
+      const ringColor =
+        owner === 'neutral' || contested ? PALETTE.gold : teamColor(owner);
 
-      ctx.fillStyle = `${teamColor(owner)}33`;
-      ctx.strokeStyle = zState?.contested ? PALETTE.gold : teamColor(owner);
-      ctx.lineWidth = 1.5;
+      ctx.fillStyle = `${ringColor}2e`;
+      ctx.strokeStyle = ringColor;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.arc(zx, zy, zr, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
       const hasPing = pings.some((p) => p.zoneId === def.id);
-      if (hasPing || zState?.contested) {
+      if (hasPing || contested) {
         const phase = (state.time * 2.2) % 1;
         ctx.strokeStyle = PALETTE.gold;
         ctx.globalAlpha = 1 - phase;
         ctx.beginPath();
-        ctx.arc(zx, zy, zr + phase * 14, 0, Math.PI * 2);
+        ctx.arc(zx, zy, zr + phase * 10, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
@@ -88,7 +97,7 @@ export const Minimap: React.FC<MinimapProps> = ({
       ctx.font = '800 9px Bahnschrift, "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(def.id, zx, zy);
+      ctx.fillText(def.id, zx, zy + 0.5);
     }
 
     // Pickups
@@ -97,21 +106,8 @@ export const Minimap: React.FC<MinimapProps> = ({
       ctx.fillRect(p.pos.x * sx - 1.5, p.pos.y * sy - 1.5, 3, 3);
     }
 
-    // Player view cone
-    const player = state.units.find((u) => u.id === state.playerId);
-    if (player && !player.dead) {
-      const px = player.pos.x * sx;
-      const py = player.pos.y * sy;
-      ctx.fillStyle = 'rgba(34, 211, 238, 0.16)';
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.arc(px, py, 34, player.angle - 0.52, player.angle + 0.52);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Units (triangle for allies, diamond for enemies)
-    const pipR = colorblindAssist ? 4.2 : 3.2;
+    // Units
+    const pipR = colorblindAssist ? 4.2 : 3;
     for (const u of state.units) {
       if (u.dead) continue;
       const ux = u.pos.x * sx;
@@ -134,26 +130,17 @@ export const Minimap: React.FC<MinimapProps> = ({
   }, [state, pings, colorblindAssist]);
 
   return (
-    <Panel
-      bracketed
-      scanlines={false}
-      style={{
-        padding: 6,
-        borderRadius: 'var(--radius-md)',
-        overflow: 'hidden',
-      }}
-    >
+    <div className="ht-chamfer-panel ht-minimap-frame">
       <canvas
         ref={canvasRef}
-        width={198}
-        height={132}
+        width={196}
+        height={130}
         style={{
           display: 'block',
-          borderRadius: 'var(--radius-sm)',
-          border: '1px solid var(--line)',
+          borderRadius: '2px',
         }}
         aria-label="Tactical Minimap"
       />
-    </Panel>
+    </div>
   );
 };

@@ -15,9 +15,9 @@ import { generatePreviewMap } from './previewMap';
 const DEFAULT_CONFIG: MatchConfig = {
   seed: 4242,
   difficulty: 'normal',
-  scoreToWin: 100,
+  scoreToWin: 1000,
   enemyCount: 4,
-  startingWeapon: 'rifle',
+  startingWeapon: 'pistol',
 };
 
 /**
@@ -393,10 +393,10 @@ export class StubSim implements SimApi {
     const playerUnit: Unit = {
       id: 'player',
       team: 'player',
-      pos: { x: 30 * 32, y: 20 * 32 },
+      pos: { x: 27 * 32, y: 21 * 32 },
       vel: { x: 0, y: 0 },
       angle: 0,
-      hp: 82,
+      hp: 100,
       maxHp: 100,
       weaponId: config.startingWeapon,
       ammoInMag: weapon.magSize,
@@ -476,14 +476,14 @@ export class StubSim implements SimApi {
       ],
       zones: [
         { id: 'A', owner: 'player', progress: 1, contested: false },
-        { id: 'B', owner: 'neutral', progress: 0.2, contested: true },
-        { id: 'C', owner: 'enemy', progress: -1, contested: false },
+        { id: 'B', owner: 'neutral', progress: 0, contested: true },
+        { id: 'C', owner: 'player', progress: 1, contested: false },
       ],
-      score: { player: 48, enemy: 39 },
+      score: { player: 120, enemy: 85 },
       baseHp: { player: 460, enemy: 410 },
       status: 'playing',
       playerId: 'player',
-      matchConfig: config,
+      matchConfig: { ...config, scoreToWin: config.scoreToWin || 1000 },
     };
   }
 }

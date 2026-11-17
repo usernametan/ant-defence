@@ -47,7 +47,7 @@ export const Showcase: React.FC = () => {
   const [screen, setScreen] = useState<ShowcaseScreen>('hud');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
-  const [dockOpen, setDockOpen] = useState(true);
+  const [dockOpen, setDockOpen] = useState(false);
   const [settings, setSettings] = useState(() => loadSettings());
   const [gameState, setGameState] = useState(() => simRef.current!.getState());
   const [viewTransform, setViewTransform] = useState<ViewTransform | null>(null);
@@ -55,9 +55,9 @@ export const Showcase: React.FC = () => {
   const [matchConfig, setMatchConfig] = useState<MatchConfig>({
     seed: 4242,
     difficulty: 'normal',
-    scoreToWin: 100,
+    scoreToWin: 1000,
     enemyCount: 4,
-    startingWeapon: 'rifle',
+    startingWeapon: 'pistol',
   });
 
   // Apply settings & audio sink
@@ -194,7 +194,33 @@ export const Showcase: React.FC = () => {
           aimScreenPos={aimScreenPos}
           crosshairStyle={settings.crosshairStyle}
           colorblindAssist={settings.colorblindAssist}
-          showHints={settings.showHints}
+          showHints={false}
+          initialKillFeed={[
+            {
+              id: 1,
+              killerName: 'YOU',
+              killerTeam: 'player',
+              victimName: 'RogueBot',
+              victimTeam: 'enemy',
+              weaponId: 'rifle',
+            },
+            {
+              id: 2,
+              killerName: 'Alpha-7',
+              killerTeam: 'player',
+              victimName: 'Kilo-3',
+              victimTeam: 'enemy',
+              weaponId: 'smg',
+            },
+            {
+              id: 3,
+              killerName: 'RogueBot',
+              killerTeam: 'enemy',
+              victimName: 'Delta-9',
+              victimTeam: 'player',
+              weaponId: 'rifle',
+            },
+          ]}
           onStreak={(count) => audioRef.current?.playStreakStinger(count)}
         />
       )}
@@ -266,18 +292,17 @@ export const Showcase: React.FC = () => {
         onClose={() => setHowToPlayOpen(false)}
       />
 
-      {/* Showcase Control Panel */}
+      {/* Showcase Control Panel (tucked top-left below kill feed when open, compact pill when collapsed) */}
       <div
         style={{
           position: 'fixed',
-          left: '50%',
-          bottom: 12,
-          transform: 'translateX(-50%)',
+          left: 16,
+          top: 120,
           zIndex: 'var(--z-transition)',
-          maxWidth: '94vw',
+          maxWidth: '420px',
         }}
       >
-        <Panel bracketed style={{ padding: dockOpen ? 10 : 6 }}>
+        <Panel bracketed style={{ padding: dockOpen ? 10 : 5 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Badge tone="gold">SHOWCASE=1</Badge>
             <Button

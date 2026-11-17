@@ -197,7 +197,7 @@ export class Renderer {
 
     ctx.restore();
 
-    // Dynamic shadow / visibility polygon pass (med & high quality)
+    // Dynamic shadow / visibility polygon pass (subtle tactical fog so arena stays crisp)
     if (this.options.quality !== 'low' && player && !player.dead) {
       this.drawLightingOverlay(ctx, state, player.pos, vt.camX, vt.camY, vt.zoom);
     }
@@ -322,7 +322,7 @@ export class Renderer {
     sctx.save();
     sctx.setTransform(1, 0, 0, 1, 0, 0);
     sctx.clearRect(0, 0, sc.width, sc.height);
-    sctx.fillStyle = 'rgba(7, 11, 20, 0.44)';
+    sctx.fillStyle = 'rgba(7, 11, 20, 0.24)';
     sctx.fillRect(0, 0, sc.width, sc.height);
 
     sctx.globalCompositeOperation = 'destination-out';
