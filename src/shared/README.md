@@ -1,6 +1,10 @@
 # `src/shared/`
 
-**Owner:** Nobody (READ-ONLY contract after initial foundation setup)
+**Owner:** Nobody — READ-ONLY contract after this foundation task.
 
-Contains shared TypeScript types (`types.ts`) and the typed pub/sub event bus (`events.ts`) used to communicate between the OpenCode and Antigravity tracks.
-If a change is needed here, stop and ask the user.
+This folder defines the contract shared by every track: domain types (`types.ts`),
+the typed event bus (`events.ts`), and the simulation interface plus weapon
+balance table (`api.ts`).
+
+Do not edit these files without asking the user. Render, UI, and audio code may
+only read `GameState` and subscribe to bus events.
