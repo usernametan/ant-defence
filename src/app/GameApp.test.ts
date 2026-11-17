@@ -4,12 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { GameApp } from './GameApp';
 
 describe('GameApp', () => {
-  it('renders the game shell, canvas and HUD without crashing', () => {
+  it('renders the real-game shell with the main menu (no stub sim in the live flow)', () => {
     const html = renderToString(createElement(GameApp));
-    expect(html).toContain('game-shell');
-    expect(html).toContain('game-canvas');
-    expect(html).toContain('SCORE');
-    expect(html).toContain('HEALTH');
-    expect(html).toContain('WASD move');
+    expect(html).toContain('ZONE CONTROL');
+    expect(html).toContain('DEPLOY');
+    expect(html).toContain('<canvas');
+    expect(html).not.toContain('foundation in progress');
   });
 });
