@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { generatePreviewMap } from './previewMap';
 import { DEFAULT_SETTINGS, loadSettings } from './settingsStore';
 import { StubSim } from './stubSim';
 
@@ -24,5 +25,16 @@ describe('UI StubSim and settings', () => {
   it('loadSettings falls back cleanly to DEFAULT_SETTINGS in Node', () => {
     const loaded = loadSettings();
     expect(loaded).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('generatePreviewMap moves capture zones across map themes and seeds', () => {
+    const jungle = generatePreviewMap(4242, 'jungle');
+    const temple = generatePreviewMap(4242, 'temple');
+    const fortress = generatePreviewMap(4242, 'fortress');
+
+    expect(jungle.theme).toBe('jungle');
+    expect(temple.theme).toBe('temple');
+    expect(JSON.stringify(jungle.zones)).not.toBe(JSON.stringify(temple.zones));
+    expect(JSON.stringify(jungle.zones)).not.toBe(JSON.stringify(fortress.zones));
   });
 });

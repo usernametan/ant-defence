@@ -28,14 +28,16 @@
   --danger: #F43F5E;
 
   /* Glass Surfaces */
-  --glass-bg: rgba(13, 20, 36, 0.78);
-  --glass-bg-hi: rgba(20, 29, 51, 0.86);
-  --glass-border: rgba(34, 211, 238, 0.22);
-  --glass-border-subtle: rgba(159, 176, 207, 0.16);
+  --glass-bg: rgba(9, 14, 25, 0.84);
+  --glass-bg-hi: rgba(18, 27, 46, 0.9);
+  --glass-border: rgba(148, 174, 219, 0.24);
+  --glass-border-subtle: rgba(159, 176, 207, 0.14);
+  --hud-surface: rgba(8, 12, 22, 0.86);
+  --hud-border: rgba(148, 174, 219, 0.26);
 
   /* Typography */
-  --font-display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", "Inter", system-ui, sans-serif;
-  --font-body: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", "Inter", system-ui, sans-serif;
+  --font-display: "Bahnschrift", "DIN Alternate", "Segoe UI Variable Display", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
 
   /* 4px Spacing Scale */

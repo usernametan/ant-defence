@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { MAP_ANCHORS, areTilesConnected, generateMap, isPassable, tileKey } from './index';
+import type { MapTheme } from '../../shared/types';
+import { MAP_ANCHORS, areTilesConnected, generateMap, isPassable, tileKey, worldToTile } from './index';
 import { MAP_HEIGHT, MAP_WIDTH } from '../constants';
 
-const requiredTiles = [
-  MAP_ANCHORS.playerBase,
-  MAP_ANCHORS.enemyBase,
-  ...MAP_ANCHORS.zoneTiles,
-];
+const THEMES: MapTheme[] = ['fortress', 'jungle', 'temple'];
+
+function anchorsForMap(map: ReturnType<typeof generateMap>) {
+  return [
+    MAP_ANCHORS.playerBase,
+    MAP_ANCHORS.enemyBase,
+    ...map.zones.map((zone) => worldToTile(zone.center)),
+  ];
+}
 
 describe('generateMap', () => {
   it('produces the configured dimensions and outer walls', () => {
@@ -24,24 +29,29 @@ describe('generateMap', () => {
     }
   });
 
-  it('connects both bases and all three zones for 50 seeds', () => {
-    for (let seed = 0; seed < 50; seed += 1) {
-      const map = generateMap(seed * 7919 + 13);
-      expect(areTilesConnected(map, requiredTiles)).toBe(true);
+  it('connects both bases and all three zones across themes and seeds', () => {
+    for (const theme of THEMES) {
+      for (let seed = 0; seed < 30; seed += 1) {
+        const map = generateMap(seed * 7919 + 13, theme);
+        expect(map.theme).toBe(theme);
+        expect(areTilesConnected(map, anchorsForMap(map))).toBe(true);
+      }
     }
   });
 
-  it('never blocks a spawn or zone centre', () => {
-    for (let seed = 0; seed < 50; seed += 1) {
-      const map = generateMap(seed);
-      for (const tile of requiredTiles) {
-        expect(isPassable(map, tile.x, tile.y)).toBe(true);
+  it('never blocks a spawn or zone centre across themes and seeds', () => {
+    for (const theme of THEMES) {
+      for (let seed = 0; seed < 30; seed += 1) {
+        const map = generateMap(seed, theme);
+        for (const tile of anchorsForMap(map)) {
+          expect(isPassable(map, tile.x, tile.y)).toBe(true);
+        }
       }
     }
   });
 
   it('creates exactly three zones and two bases with crates near zones', () => {
-    const map = generateMap(42);
+    const map = generateMap(42, 'jungle');
     expect(map.zones).toHaveLength(3);
     expect(map.bases).toHaveLength(2);
     expect(map.crateSpawns.length).toBeGreaterThanOrEqual(3);
@@ -52,17 +62,32 @@ describe('generateMap', () => {
     }
   });
 
-  it('is deterministic for the same seed and differs across seeds', () => {
-    const a = generateMap(1234);
-    const b = generateMap(1234);
-    const c = generateMap(5678);
+  it('moves capture zones when changing map themes or seeds', () => {
+    const fortress = generateMap(4242, 'fortress');
+    const jungle = generateMap(4242, 'jungle');
+    const temple = generateMap(4242, 'temple');
+
+    expect(JSON.stringify(fortress.zones)).not.toBe(JSON.stringify(jungle.zones));
+    expect(JSON.stringify(jungle.zones)).not.toBe(JSON.stringify(temple.zones));
+
+    const seedVariants = new Set(
+      Array.from({ length: 12 }, (_, i) => JSON.stringify(generateMap(1000 + i * 73, 'jungle').zones)),
+    );
+    expect(seedVariants.size).toBeGreaterThan(1);
+  });
+
+  it('is deterministic for the same seed and theme and differs across seeds', () => {
+    const a = generateMap(1234, 'temple');
+    const b = generateMap(1234, 'temple');
+    const c = generateMap(5678, 'temple');
     expect(a.tiles).toEqual(b.tiles);
+    expect(a.zones).toEqual(b.zones);
     expect(a.coverHp).toEqual(b.coverHp);
     expect(JSON.stringify(a.tiles)).not.toBe(JSON.stringify(c.tiles));
   });
 
   it('records cover hp for every low-cover tile', () => {
-    const map = generateMap(99);
+    const map = generateMap(99, 'jungle');
     for (let y = 0; y < MAP_HEIGHT; y += 1) {
       for (let x = 0; x < MAP_WIDTH; x += 1) {
         if (map.tiles[y][x] === 'lowCover') {

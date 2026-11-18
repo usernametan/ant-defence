@@ -29,6 +29,7 @@ const INITIAL_CONFIG: MatchConfig = {
   scoreToWin: 120,
   enemyCount: 4,
   startingWeapon: 'rifle',
+  mapTheme: 'jungle',
 };
 
 type Screen = 'menu' | 'setup' | 'countdown' | 'playing' | 'paused' | 'won' | 'lost';
@@ -296,6 +297,9 @@ function GameRoot() {
 
       {screen === 'countdown' && (
         <CountdownOverlay
+          mapTheme={matchConfig.mapTheme}
+          difficulty={matchConfig.difficulty}
+          scoreToWin={matchConfig.scoreToWin}
           onTick={(remaining) => audioRef.current?.playCountdownTick(remaining <= 0)}
           onComplete={() => {
             controller.getSim().resume();
@@ -306,6 +310,9 @@ function GameRoot() {
 
       {screen === 'paused' && (
         <PauseMenu
+          score={state.score}
+          elapsedSeconds={state.time}
+          mapTheme={state.map.theme}
           onResume={() => {
             controller.getSim().resume();
             setScreen('playing');

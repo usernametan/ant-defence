@@ -16,11 +16,13 @@ export interface ViewTransform {
 
 export type ViewTransformHook = (transform: ViewTransform) => void;
 
+export const DEFAULT_BASE_ZOOM = 1.18;
+
 export class Camera {
   x = 0;
   y = 0;
-  zoom = 1;
-  private targetZoom = 1;
+  zoom = DEFAULT_BASE_ZOOM;
+  private targetZoom = DEFAULT_BASE_ZOOM;
   private trauma = 0;
   private shakeTime = 0;
   private initialized = false;
@@ -28,8 +30,8 @@ export class Camera {
   reset(pos: Vec2): void {
     this.x = pos.x;
     this.y = pos.y;
-    this.zoom = 1;
-    this.targetZoom = 1;
+    this.zoom = DEFAULT_BASE_ZOOM;
+    this.targetZoom = DEFAULT_BASE_ZOOM;
     this.trauma = 0;
     this.initialized = true;
   }
@@ -39,7 +41,7 @@ export class Camera {
   }
 
   addZoomKick(kick: number): void {
-    this.zoom = Math.min(1.09, this.zoom + kick);
+    this.zoom = Math.min(this.targetZoom + 0.09, this.zoom + kick);
   }
 
   update(

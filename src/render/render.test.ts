@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { MapData } from '../shared/types';
 import { Camera } from './camera';
-import { PALETTE } from './palette';
+import { formatZoneCode } from './environment';
+import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from './palette';
 import { computeVisibilityPolygon, hasLineOfSight } from './visibility';
 
 function makeMiniMap(): MapData {
@@ -52,5 +53,17 @@ describe('Renderer math & palette', () => {
 
     const poly = computeVisibilityPolygon(map, { x: 96, y: 144 }, 300, 36);
     expect(poly.length).toBeGreaterThanOrEqual(36);
+  });
+
+  it('provides distinct theme palettes for fortress, jungle, and temple', () => {
+    expect(Object.keys(MAP_THEME_PALETTES).sort()).toEqual(['fortress', 'jungle', 'temple']);
+    const jungle = getThemePalette('jungle');
+    const temple = getThemePalette('temple');
+    expect(jungle.floorBase).not.toBe(temple.floorBase);
+    expect(jungle.wallTop).not.toBe(temple.wallTop);
+    expect(getThemePalette(undefined).id).toBe('fortress');
+    expect(formatZoneCode('zone-1')).toBe('A');
+    expect(formatZoneCode('zone-2')).toBe('B');
+    expect(formatZoneCode('zone-3')).toBe('C');
   });
 });

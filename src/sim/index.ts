@@ -16,11 +16,12 @@ export const DEFAULT_CONFIG: MatchConfig = {
   scoreToWin: 100,
   enemyCount: 4,
   startingWeapon: 'pistol',
+  mapTheme: 'fortress',
 };
 
 /** Full fixed-step simulation implementing the shared SimApi contract. */
 export function createSim(): SimApi {
-  let world = new SimWorld(DEFAULT_CONFIG, generateMap(DEFAULT_CONFIG.seed));
+  let world = new SimWorld(DEFAULT_CONFIG, generateMap(DEFAULT_CONFIG.seed, DEFAULT_CONFIG.mapTheme ?? 'fortress'));
   let lastConfig: MatchConfig = { ...DEFAULT_CONFIG };
   let accumulator = 0;
 
@@ -31,9 +32,10 @@ export function createSim(): SimApi {
       scoreToWin: Math.max(1, Math.floor(config.scoreToWin)),
       enemyCount: Math.max(0, Math.floor(config.enemyCount)),
       startingWeapon: config.startingWeapon,
+      ...(config.mapTheme !== undefined ? { mapTheme: config.mapTheme } : {}),
     };
     lastConfig = { ...normalized };
-    world = new SimWorld(normalized, generateMap(normalized.seed));
+    world = new SimWorld(normalized, generateMap(normalized.seed, normalized.mapTheme ?? 'fortress'));
     world.state.playerId = 'player-1';
     addPlayer(world, normalized);
     spawnBots(world, normalized);

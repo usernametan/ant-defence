@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { PALETTE, rarityColor, teamColor } from '../../render/palette';
+import { formatZoneCode } from '../../render/environment';
+import { PALETTE, getThemePalette, rarityColor, teamColor } from '../../render/palette';
 import type { GameState } from '../../shared/types';
 
 export interface ZonePing {
@@ -29,13 +30,17 @@ export const Minimap: React.FC<MinimapProps> = ({
     const w = canvas.width;
     const h = canvas.height;
     const map = state.map;
+    const tp = getThemePalette(map.theme);
     const worldW = map.width * map.tileSize;
     const worldH = map.height * map.tileSize;
     const sx = w / worldW;
     const sy = h / worldH;
 
-    ctx.fillStyle = PALETTE.bg0;
+    ctx.fillStyle = tp.bgVoid;
     ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = tp.floorBase;
+    ctx.fillRect(1, 1, w - 2, h - 2);
 
     const tileW = map.tileSize * sx;
     const tileH = map.tileSize * sy;
@@ -43,13 +48,13 @@ export const Minimap: React.FC<MinimapProps> = ({
       for (let c = 0; c < map.width; c += 1) {
         const kind = map.tiles[r][c];
         if (kind === 'wall') {
-          ctx.fillStyle = PALETTE.wallTop;
+          ctx.fillStyle = tp.wallTop;
           ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
         } else if (kind === 'lowCover') {
-          ctx.fillStyle = PALETTE.crateBody;
+          ctx.fillStyle = tp.crateBody;
           ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
         } else if (kind === 'water') {
-          ctx.fillStyle = PALETTE.waterMid;
+          ctx.fillStyle = tp.waterMid;
           ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
         }
       }
@@ -93,7 +98,7 @@ export const Minimap: React.FC<MinimapProps> = ({
         ctx.globalAlpha = 1;
       }
 
-      const label = def.id.replace(/^zone-/i, 'Z');
+      const label = formatZoneCode(def.id);
       ctx.fillStyle = PALETTE.textHi;
       ctx.font = '800 9px Bahnschrift, "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';

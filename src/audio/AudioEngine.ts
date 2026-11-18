@@ -1,5 +1,5 @@
 import { bus } from '../shared/events';
-import type { Vec2, WeaponId } from '../shared/types';
+import type { MapTheme, Vec2, WeaponId } from '../shared/types';
 
 export interface AudioVolumes {
   master: number; // 0..1
@@ -22,6 +22,7 @@ export class AudioEngine {
   private volumes: AudioVolumes = { master: 0.8, sfx: 0.85, music: 0.45 };
   private listenerPos: Vec2 = { x: 960, y: 640 };
   private playerId = 'player';
+  private mapTheme: MapTheme = 'fortress';
   private activeVoices = 0;
   private readonly maxVoices = 22;
   private lastShotAt = new Map<string, number>();
@@ -43,6 +44,11 @@ export class AudioEngine {
 
   setListenerPos(pos: Vec2): void {
     this.listenerPos = pos;
+  }
+
+  setMapTheme(theme: MapTheme): void {
+    this.mapTheme = theme;
+    this.applyAmbientTheme();
   }
 
   setVolumes(next: Partial<AudioVolumes>): void {
@@ -103,7 +109,8 @@ export class AudioEngine {
     );
     if (this.ctx && this.ambientFilter && this.musicGain) {
       const now = this.ctx.currentTime;
-      const cutoff = 220 + this.combatHeat * 780;
+      const baseCut = this.mapTheme === 'jungle' ? 300 : this.mapTheme === 'temple' ? 260 : 220;
+      const cutoff = baseCut + this.combatHeat * 740;
       this.ambientFilter.frequency.setTargetAtTime(cutoff, now, 0.18);
       this.musicGain.gain.setTargetAtTime(
         this.volumes.music * (0.2 + this.combatHeat * 0.16),
@@ -227,6 +234,9 @@ export class AudioEngine {
 
   private bindBus(): void {
     this.unsubscribers.push(
+      bus.on('match:start', ({ config }) => {
+        this.setMapTheme(config.mapTheme ?? 'fortress');
+      }),
       bus.on('shot', ({ unitId, weaponId, pos }) => {
         if (unitId === this.playerId) {
           this.listenerPos = pos;
@@ -319,6 +329,28 @@ export class AudioEngine {
     this.ambientFilter = filter;
     this.ambientOscA = oscA;
     this.ambientOscB = oscB;
+    this.applyAmbientTheme();
+  }
+
+  private applyAmbientTheme(): void {
+    if (!this.ctx || !this.ambientOscA || !this.ambientOscB) return;
+    const now = this.ctx.currentTime;
+    if (this.mapTheme === 'jungle') {
+      this.ambientOscA.type = 'triangle';
+      this.ambientOscB.type = 'sine';
+      this.ambientOscA.frequency.setTargetAtTime(98.0, now, 0.25);
+      this.ambientOscB.frequency.setTargetAtTime(146.83, now, 0.25);
+    } else if (this.mapTheme === 'temple') {
+      this.ambientOscA.type = 'triangle';
+      this.ambientOscB.type = 'sine';
+      this.ambientOscA.frequency.setTargetAtTime(73.42, now, 0.25);
+      this.ambientOscB.frequency.setTargetAtTime(110.0, now, 0.25);
+    } else {
+      this.ambientOscA.type = 'sawtooth';
+      this.ambientOscB.type = 'triangle';
+      this.ambientOscA.frequency.setTargetAtTime(55.0, now, 0.25);
+      this.ambientOscB.frequency.setTargetAtTime(82.41, now, 0.25);
+    }
   }
 
   private playHeartbeat(): void {

@@ -11,22 +11,32 @@ export interface CrosshairGlyphProps {
   style: CrosshairStyle;
   gap: number;
   hitFlash: 'hit' | 'kill' | null;
+  reloadProgress?: number | null;
+  isLowAmmo?: boolean;
 }
 
 export const CrosshairGlyph: React.FC<CrosshairGlyphProps> = ({
   style,
   gap,
   hitFlash,
+  reloadProgress = null,
+  isLowAmmo = false,
 }) => {
-  const stroke = 'var(--player-glow)';
+  const stroke = isLowAmmo && reloadProgress === null ? 'var(--gold)' : 'var(--player-glow)';
   const g = Math.max(4, Math.min(26, gap));
+  const reloadRadius = 19;
+  const reloadCirc = 2 * Math.PI * reloadRadius;
 
   return (
     <svg
       width={68}
       height={68}
       viewBox="-34 -34 68 68"
-      style={{ overflow: 'visible', pointerEvents: 'none' }}
+      style={{
+        overflow: 'visible',
+        pointerEvents: 'none',
+        filter: 'drop-shadow(0 0 1.5px #070B14) drop-shadow(0 0 2.5px rgba(7, 11, 20, 0.9))',
+      }}
       aria-hidden="true"
     >
       {style === 'tactical' && (
@@ -35,32 +45,57 @@ export const CrosshairGlyph: React.FC<CrosshairGlyphProps> = ({
           <line x1={0} y1={g} x2={0} y2={g + 7} />
           <line x1={-g - 7} y1={0} x2={-g} y2={0} />
           <line x1={g} y1={0} x2={g + 7} y2={0} />
-          <circle cx={0} cy={0} r={1.5} fill={stroke} />
+          <circle cx={0} cy={0} r={1.6} fill={stroke} />
         </g>
       )}
       {style === 'dot' && (
         <g>
-          <circle cx={0} cy={0} r={2.5} fill={stroke} />
+          <circle cx={0} cy={0} r={2.6} fill={stroke} />
           <circle
             cx={0}
             cy={0}
             r={Math.max(5, g * 0.65)}
             fill="none"
-            stroke="rgba(103, 232, 249, 0.35)"
-            strokeWidth={1}
+            stroke="rgba(103, 232, 249, 0.42)"
+            strokeWidth={1.2}
           />
         </g>
       )}
       {style === 'chevron' && (
-        <g stroke={stroke} strokeWidth={2} fill="none" strokeLinecap="round">
+        <g stroke={stroke} strokeWidth={2.1} fill="none" strokeLinecap="round">
           <polyline points={`${-7},${4 + g * 0.25} 0,${-3} ${7},${4 + g * 0.25}`} />
-          <circle cx={0} cy={0} r={1.3} fill={stroke} />
+          <circle cx={0} cy={0} r={1.4} fill={stroke} />
         </g>
       )}
       {style === 'ring' && (
-        <g stroke={stroke} strokeWidth={1.8} fill="none">
+        <g stroke={stroke} strokeWidth={1.9} fill="none">
           <circle cx={0} cy={0} r={Math.max(6, g * 0.9)} />
-          <circle cx={0} cy={0} r={1.5} fill={stroke} />
+          <circle cx={0} cy={0} r={1.6} fill={stroke} />
+        </g>
+      )}
+
+      {reloadProgress !== null && reloadProgress >= 0 && (
+        <g>
+          <circle
+            cx={0}
+            cy={0}
+            r={reloadRadius}
+            fill="none"
+            stroke="rgba(15, 23, 42, 0.7)"
+            strokeWidth={2.6}
+          />
+          <circle
+            cx={0}
+            cy={0}
+            r={reloadRadius}
+            fill="none"
+            stroke="var(--gold)"
+            strokeWidth={2.4}
+            strokeLinecap="round"
+            strokeDasharray={reloadCirc}
+            strokeDashoffset={reloadCirc * (1 - Math.min(1, reloadProgress))}
+            transform="rotate(-90)"
+          />
         </g>
       )}
 
@@ -86,6 +121,8 @@ export interface CrosshairOverlayProps {
   gap: number;
   hitFlash: 'hit' | 'kill' | null;
   damageIndicators: DamageIndicator[];
+  reloadProgress?: number | null;
+  isLowAmmo?: boolean;
 }
 
 export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
@@ -94,6 +131,8 @@ export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
   gap,
   hitFlash,
   damageIndicators,
+  reloadProgress = null,
+  isLowAmmo = false,
 }) => {
   const x = screenPos?.x ?? (typeof window !== 'undefined' ? window.innerWidth * 0.5 : 640);
   const y = screenPos?.y ?? (typeof window !== 'undefined' ? window.innerHeight * 0.5 : 360);
@@ -110,7 +149,13 @@ export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
       }}
       aria-hidden="true"
     >
-      <CrosshairGlyph style={style} gap={gap} hitFlash={hitFlash} />
+      <CrosshairGlyph
+        style={style}
+        gap={gap}
+        hitFlash={hitFlash}
+        reloadProgress={reloadProgress}
+        isLowAmmo={isLowAmmo}
+      />
 
       {/* Damage direction arcs around crosshair */}
       {damageIndicators.map((ind) => (

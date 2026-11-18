@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ViewTransform } from '../../render';
+import { formatZoneCode } from '../../render/environment';
+import { getThemePalette } from '../../render/palette';
 import { WEAPON_DEFS } from '../../shared/api';
 import { bus } from '../../shared/events';
 import type { GameState, Pickup, Team, WeaponId } from '../../shared/types';
@@ -56,7 +58,7 @@ function formatClock(sec: number): string {
 }
 
 function formatZoneLabel(zoneId: string): string {
-  return zoneId.replace(/^zone-/i, 'Z');
+  return formatZoneCode(zoneId);
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -254,6 +256,17 @@ export const HUD: React.FC<HUDProps> = ({
     return zs?.contested && player;
   });
 
+  const activeZone =
+    player && !player.dead
+      ? state.map.zones.find(
+          (def) => Math.hypot(player.pos.x - def.center.x, player.pos.y - def.center.y) <= def.radius,
+        )
+      : undefined;
+  const activeZoneState = activeZone
+    ? state.zones.find((z) => z.id === activeZone.id)
+    : undefined;
+  const clockUrgent = state.time >= 270;
+
   const safeZone = state.zones.find((z) => z.owner === 'player')?.id ?? 'HQ';
   const safeZoneLabel = safeZone === 'HQ' ? 'HQ' : `Zone ${formatZoneLabel(safeZone)}`;
 
@@ -269,9 +282,10 @@ export const HUD: React.FC<HUDProps> = ({
   const goalScore = Math.max(1, state.matchConfig.scoreToWin);
   const playerScorePct = Math.min(100, (state.score.player / goalScore) * 100);
   const enemyScorePct = Math.min(100, (state.score.enemy / goalScore) * 100);
+  const themeAccent = getThemePalette(state.map.theme).accent;
 
   return (
-    <div className="ht-root">
+    <div className="ht-root" style={{ ['--sector-accent' as string]: themeAccent }}>
       {isLowHp && <div className="ht-heartbeat-vignette" aria-hidden="true" />}
 
       {!player?.dead && (
@@ -281,6 +295,8 @@ export const HUD: React.FC<HUDProps> = ({
           gap={crosshairGap}
           hitFlash={hitFlash}
           damageIndicators={damageIndicators}
+          reloadProgress={player?.reloading ? player.reloadProgress : null}
+          isLowAmmo={isLowAmmo}
         />
       )}
 
@@ -293,6 +309,7 @@ export const HUD: React.FC<HUDProps> = ({
           );
           const rx = Math.cos(angle) * 240;
           const ry = Math.sin(angle) * 155;
+          const deg = Math.round((angle * 180) / Math.PI + 90);
           return (
             <div
               key={`arrow-${def.id}`}
@@ -300,13 +317,19 @@ export const HUD: React.FC<HUDProps> = ({
                 position: 'fixed',
                 left: '50%',
                 top: '50%',
-                transform: `translate(${rx - 18}px, ${ry - 18}px)`,
+                transform: `translate(${rx - 20}px, ${ry - 14}px)`,
                 zIndex: 'var(--z-hud)',
                 pointerEvents: 'none',
               }}
             >
               <Badge tone="gold">
-                <Icon name="warning" size={12} /> {formatZoneLabel(def.id)}
+                <span
+                  aria-hidden="true"
+                  style={{ display: 'inline-block', transform: `rotate(${deg}deg)`, fontSize: 10 }}
+                >
+                  ▲
+                </span>
+                {formatZoneLabel(def.id)}
               </Badge>
             </div>
           );
@@ -371,7 +394,10 @@ export const HUD: React.FC<HUDProps> = ({
               </div>
 
               <div className="ht-score-center">
-                <div className="ht-display ht-score-clock">
+                <div
+                  className="ht-display ht-score-clock"
+                  style={{ color: clockUrgent ? 'var(--gold)' : 'var(--text-hi)' }}
+                >
                   {formatClock(state.time)}
                 </div>
                 <div className="ht-score-goal">
@@ -414,6 +440,12 @@ export const HUD: React.FC<HUDProps> = ({
                       style={{
                         borderColor: zone.contested ? 'var(--gold)' : color,
                         color: zone.owner === 'neutral' ? 'var(--text-hi)' : color,
+                        background:
+                          zone.owner === 'player'
+                            ? 'rgba(34, 211, 238, 0.14)'
+                            : zone.owner === 'enemy'
+                              ? 'rgba(255, 90, 60, 0.14)'
+                              : 'rgba(8, 12, 22, 0.9)',
                       }}
                       title={`${formatZoneLabel(zone.id)} — ${zone.contested ? 'Contested' : zone.owner}`}
                     >
@@ -457,8 +489,67 @@ export const HUD: React.FC<HUDProps> = ({
           />
         </div>
 
-        {/* Bottom Center: 4 Tactical Action Slots */}
-        <div className="ht-hud-bottom-center ht-hud-scaled">
+        {/* Bottom Center: Active Zone Capture Pill + 4 Tactical Action Slots */}
+        <div
+          className="ht-hud-bottom-center ht-hud-scaled"
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
+        >
+          {activeZone && activeZoneState && (
+            <div
+              className="ht-chamfer-panel"
+              style={{
+                padding: '5px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4,
+                minWidth: 168,
+              }}
+            >
+              <span
+                className="ht-display"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: '0.09em',
+                  color: activeZoneState.contested
+                    ? 'var(--gold)'
+                    : activeZoneState.owner === 'player'
+                      ? 'var(--player-glow)'
+                      : activeZoneState.owner === 'enemy'
+                        ? 'var(--enemy-glow)'
+                        : 'var(--text-hi)',
+                }}
+              >
+                {activeZoneState.contested
+                  ? `ZONE ${formatZoneLabel(activeZone.id)} CONTESTED`
+                  : activeZoneState.owner === 'player'
+                    ? `ZONE ${formatZoneLabel(activeZone.id)} SECURED`
+                    : `CAPTURING ZONE ${formatZoneLabel(activeZone.id)} · ${Math.round(Math.abs(activeZoneState.progress) * 100)}%`}
+              </span>
+              <div
+                style={{
+                  width: '100%',
+                  height: 4,
+                  background: 'var(--bg-0)',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    width: `${Math.round(Math.min(1, Math.abs(activeZoneState.progress)) * 100)}%`,
+                    height: '100%',
+                    background: activeZoneState.contested
+                      ? 'var(--gold)'
+                      : activeZoneState.progress >= 0
+                        ? 'var(--player)'
+                        : 'var(--enemy)',
+                    transition: 'width 120ms linear',
+                  }}
+                />
+              </div>
+            </div>
+          )}
           <ActionBar
             hasNearbyPickup={Boolean(nearbyPickup)}
             reloading={Boolean(player?.reloading)}
@@ -596,8 +687,23 @@ const PickupPrompt: React.FC<PickupPromptProps> = ({
     const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '•';
     const color =
       diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-mid)';
+    const bg =
+      diff > 0
+        ? 'rgba(52, 211, 153, 0.12)'
+        : diff < 0
+          ? 'rgba(244, 63, 94, 0.12)'
+          : 'rgba(148, 174, 219, 0.08)';
     return (
-      <span style={{ fontSize: 10, color, fontWeight: 700 }}>
+      <span
+        style={{
+          fontSize: 10,
+          color,
+          background: bg,
+          padding: '2px 6px',
+          borderRadius: 3,
+          fontWeight: 700,
+        }}
+      >
         {arrow} {label}
       </span>
     );
@@ -611,7 +717,7 @@ const PickupPrompt: React.FC<PickupPromptProps> = ({
           borderColor: `var(--${pickup.rarity})`,
           display: 'flex',
           flexDirection: 'column',
-          gap: 4,
+          gap: 6,
           boxShadow: 'var(--shadow-lg)',
         }}
       >
@@ -620,14 +726,26 @@ const PickupPrompt: React.FC<PickupPromptProps> = ({
           <span>
             Swap for{' '}
             <strong style={{ color: `var(--${pickup.rarity})` }}>
-              {newDef.name} ({newDef.rarity})
+              {newDef.name}
             </strong>
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
           {renderDelta('DMG', dmgDiff)}
           {renderDelta('ROF', rofDiff)}
           {renderDelta('RNG', rngDiff)}
+          <span
+            style={{
+              fontSize: 10,
+              color: 'var(--text-mid)',
+              background: 'rgba(15, 23, 42, 0.7)',
+              padding: '2px 6px',
+              borderRadius: 3,
+              fontWeight: 700,
+            }}
+          >
+            MAG {newDef.magSize}
+          </span>
         </div>
       </Panel>
     </div>

@@ -1,21 +1,30 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getThemePalette } from '../../render/palette';
+import type { MapTheme, MatchDifficulty } from '../../shared/types';
 import { Badge, Panel } from '../design';
 import '../ui.css';
 
 export interface CountdownOverlayProps {
   seconds?: number;
+  mapTheme?: MapTheme;
+  difficulty?: MatchDifficulty;
+  scoreToWin?: number;
   onTick?: (remaining: number) => void;
   onComplete: () => void;
 }
 
 export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
   seconds = 3,
+  mapTheme = 'fortress',
+  difficulty = 'normal',
+  scoreToWin = 120,
   onTick,
   onComplete,
 }) => {
   const [remaining, setRemaining] = useState(seconds);
   const onTickRef = useRef(onTick);
   const onCompleteRef = useRef(onComplete);
+  const theme = getThemePalette(mapTheme);
 
   useEffect(() => {
     onTickRef.current = onTick;
@@ -51,7 +60,7 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
           }}
         >
           <Badge tone="gold" className="ht-stagger">
-            DEPLOYMENT IMMINENT
+            DEPLOYING TO {theme.name.toUpperCase()}
           </Badge>
           <h1
             className="ht-display"
@@ -59,6 +68,19 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
           >
             ZONE CONTROL
           </h1>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 8,
+              marginTop: 10,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Badge tone="player">CAPTURE A · B · C</Badge>
+            <Badge tone="gold">{scoreToWin} SCORE TO WIN</Badge>
+            <Badge tone="common">{difficulty.toUpperCase()}</Badge>
+          </div>
         </Panel>
 
         <div key={remaining} className="ht-display ht-countdown-num">

@@ -1,5 +1,5 @@
-import type { Projectile, Vec2 } from '../shared/types';
-import { PALETTE, teamColor, teamGlowColor } from './palette';
+import type { MapData, Projectile, Vec2, WeaponId } from '../shared/types';
+import { PALETTE, getThemePalette, teamColor, teamGlowColor } from './palette';
 
 export interface Particle {
   x: number;
@@ -60,9 +60,10 @@ export class EffectsSystem {
   floatingTexts: FloatingText[] = [];
   muzzleFlashes: MuzzleFlash[] = [];
   projectileTrails = new Map<string, Vec2[]>();
+  private lastProjPos = new Map<string, { pos: Vec2; vel: Vec2; life: number }>();
   unitHitFlash = new Map<string, number>();
 
-  private maxParticles = 320;
+  private maxParticles = 340;
 
   clear(): void {
     this.particles.length = 0;
@@ -71,7 +72,26 @@ export class EffectsSystem {
     this.floatingTexts.length = 0;
     this.muzzleFlashes.length = 0;
     this.projectileTrails.clear();
+    this.lastProjPos.clear();
     this.unitHitFlash.clear();
+  }
+
+  spawnShellCasing(pos: Vec2, angle: number, weaponId: WeaponId): void {
+    if (weaponId === 'rocket') return;
+    const ejectAngle = angle + Math.PI * 0.55 + (pos.x % 0.4) - 0.2;
+    const speed = 42 + ((Math.abs(pos.x + pos.y) * 13) % 28);
+    this.pushParticle({
+      x: pos.x + Math.cos(angle) * 6,
+      y: pos.y + Math.sin(angle) * 6,
+      vx: Math.cos(ejectAngle) * speed,
+      vy: Math.sin(ejectAngle) * speed - 14,
+      size: weaponId === 'shotgun' ? 2.4 : 1.7,
+      color: weaponId === 'shotgun' ? '#DC2626' : '#EAB308',
+      alpha: 0.9,
+      life: 0.48,
+      maxLife: 0.48,
+      glow: false,
+    });
   }
 
   spawnMuzzleFlash(pos: Vec2, angle: number, color: string, heavy: boolean): void {
@@ -208,7 +228,7 @@ export class EffectsSystem {
     });
   }
 
-  update(dt: number, projectiles: Projectile[]): void {
+  update(dt: number, projectiles: Projectile[], map?: MapData): void {
     for (const [id, t] of this.unitHitFlash) {
       const next = t - dt;
       if (next <= 0) this.unitHitFlash.delete(id);
@@ -218,6 +238,11 @@ export class EffectsSystem {
     const activeProjIds = new Set<string>();
     for (const p of projectiles) {
       activeProjIds.add(p.id);
+      this.lastProjPos.set(p.id, {
+        pos: { x: p.pos.x, y: p.pos.y },
+        vel: { x: p.vel.x, y: p.vel.y },
+        life: p.life,
+      });
       let trail = this.projectileTrails.get(p.id);
       if (!trail) {
         trail = [];
@@ -245,7 +270,19 @@ export class EffectsSystem {
     }
     for (const id of this.projectileTrails.keys()) {
       if (!activeProjIds.has(id)) {
+        const last = this.lastProjPos.get(id);
+        if (last && map && last.life > 0.04) {
+          const probeX = last.pos.x + last.vel.x * dt * 1.1;
+          const probeY = last.pos.y + last.vel.y * dt * 1.1;
+          const col = Math.floor(probeX / map.tileSize);
+          const row = Math.floor(probeY / map.tileSize);
+          if (map.tiles[row]?.[col] === 'wall') {
+            const wallColor = getThemePalette(map.theme).wallEdge;
+            this.spawnImpactSparks(last.pos, wallColor, 5);
+          }
+        }
         this.projectileTrails.delete(id);
+        this.lastProjPos.delete(id);
       }
     }
 

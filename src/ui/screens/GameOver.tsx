@@ -66,6 +66,8 @@ export const GameOver: React.FC<GameOverProps> = ({
   const grade = computeGrade(winner, stats);
   const kd = stats.kills / Math.max(1, stats.deaths);
   const bestWeaponDef = WEAPON_DEFS[stats.bestWeapon];
+  const totalScore = Math.max(1, playerScore + enemyScore);
+  const playerShare = Math.round((playerScore / totalScore) * 100);
 
   return (
     <div ref={containerRef} className="ht-root ht-blur-backdrop">
@@ -104,6 +106,27 @@ export const GameOver: React.FC<GameOverProps> = ({
               <span style={{ color: 'var(--enemy-glow)' }}>
                 <AnimatedNumber value={enemyScore} />
               </span>
+            </div>
+            <div
+              aria-hidden="true"
+              style={{
+                marginTop: 8,
+                width: 220,
+                height: 6,
+                borderRadius: 999,
+                background: 'var(--enemy)',
+                overflow: 'hidden',
+                border: '1px solid var(--line)',
+              }}
+            >
+              <div
+                style={{
+                  width: `${playerShare}%`,
+                  height: '100%',
+                  background: 'var(--player)',
+                  boxShadow: '0 0 10px rgba(34, 211, 238, 0.5)',
+                }}
+              />
             </div>
           </div>
 

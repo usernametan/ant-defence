@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PALETTE } from '../../render/palette';
+import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from '../../render/palette';
+import type { MapTheme } from '../../shared/types';
 import { Badge, Button, Icon, KeyCap, Panel, useMenuNavigation } from '../design';
 import { generatePreviewMap } from '../previewMap';
 import '../ui.css';
@@ -23,6 +24,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mouseRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const [hovered, setHovered] = useState<string>('Deploy into 3-zone tactical combat');
+  const [bgTheme, setBgTheme] = useState<MapTheme>('jungle');
 
   useMenuNavigation({ containerRef });
 
@@ -32,7 +34,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const map = generatePreviewMap(4242);
+    const map = generatePreviewMap(4242, bgTheme);
+    const tp = getThemePalette(map.theme);
     let rafId = 0;
     const start = performance.now();
 
@@ -59,7 +62,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       const mx = (mouseRef.current.x - 0.5) * 34;
       const my = (mouseRef.current.y - 0.5) * 24;
 
-      ctx.fillStyle = PALETTE.bg0;
+      ctx.fillStyle = tp.bgVoid;
       ctx.fillRect(0, 0, w, h);
 
       // Slow cinematic pan across preview map
@@ -88,19 +91,29 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         ctx.stroke();
       }
 
-      ctx.globalAlpha = 0.65;
+      ctx.globalAlpha = 0.72;
       for (let r = 0; r < map.height; r += 1) {
         for (let c = 0; c < map.width; c += 1) {
           const tile = map.tiles[r][c];
-          if (tile === 'wall') {
-            ctx.fillStyle = PALETTE.wallSide;
+          if (tile === 'water') {
+            ctx.fillStyle = tp.waterDeep;
             ctx.fillRect(c * ts, r * ts, ts, ts);
           } else if (tile === 'lowCover') {
-            ctx.fillStyle = PALETTE.crateBody;
-            ctx.fillRect(c * ts + 4, r * ts + 4, ts - 8, ts - 8);
-          } else if (tile === 'water') {
-            ctx.fillStyle = PALETTE.waterDeep;
-            ctx.fillRect(c * ts, r * ts, ts, ts);
+            ctx.fillStyle = tp.crateBody;
+            ctx.fillRect(c * ts + 4, r * ts + 2, ts - 8, ts - 8);
+          } else if (tile === 'wall') {
+            if (map.tiles[r + 1]?.[c] !== 'wall') {
+              ctx.fillStyle = tp.wallSide;
+              ctx.fillRect(c * ts, r * ts + 14, ts, 18);
+            }
+            ctx.fillStyle = tp.wallTop;
+            ctx.fillRect(c * ts, r * ts - 16, ts, ts);
+            if ((c + r) % 3 === 0) {
+              ctx.fillStyle = tp.foliageDark;
+              ctx.beginPath();
+              ctx.arc(c * ts + 16, r * ts - 4, 11, 0, Math.PI * 2);
+              ctx.fill();
+            }
           }
         }
       }
@@ -148,7 +161,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', resize);
     };
-  }, []);
+  }, [bgTheme]);
 
   return (
     <div
@@ -273,7 +286,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <div className="ht-menu-intel-grid">
               <div className="ht-menu-intel-cell">
                 <span className="ht-menu-intel-k">OBJECTIVE</span>
-                <span className="ht-menu-intel-v">Capture Z1–Z3 or breach Enemy Core</span>
+                <span className="ht-menu-intel-v">Capture A–C or breach Enemy Core</span>
               </div>
               <div className="ht-menu-intel-cell">
                 <span className="ht-menu-intel-k">COVER</span>
@@ -287,6 +300,34 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 <span className="ht-menu-intel-k">VITALITY</span>
                 <span className="ht-menu-intel-v">Regenerates after 4.5s out of combat</span>
               </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 4 }}>
+              {(['jungle', 'temple', 'fortress'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setBgTheme(t)}
+                  style={{
+                    flex: 1,
+                    padding: '5px 8px',
+                    borderRadius: 4,
+                    border:
+                      bgTheme === t
+                        ? `1px solid ${MAP_THEME_PALETTES[t].accent}`
+                        : '1px solid var(--line)',
+                    background:
+                      bgTheme === t ? 'rgba(34, 211, 238, 0.12)' : 'rgba(7, 11, 20, 0.6)',
+                    color: bgTheme === t ? 'var(--text-hi)' : 'var(--text-mid)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
             </div>
           </Panel>
         </div>

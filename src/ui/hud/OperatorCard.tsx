@@ -28,9 +28,9 @@ export const OperatorCard: React.FC<OperatorCardProps> = ({
 
   return (
     <div
-      className={`ht-operator-wrap ${isLowHp ? 'ht-is-lowhp' : ''} ${regenGlow ? 'ht-is-regen' : ''} ${damageFlash ? 'ht-is-damage-flash' : ''}`}
+      className={`ht-chamfer-panel ht-operator-wrap ${isLowHp ? 'ht-is-lowhp' : ''} ${regenGlow ? 'ht-is-regen' : ''} ${damageFlash ? 'ht-is-damage-flash' : ''}`}
     >
-      {/* Chamfered Operator Helmet Portrait */}
+      {/* Tactical Trooper Portrait */}
       <div className="ht-operator-portrait">
         <svg viewBox="0 0 64 64" width={54} height={54} aria-hidden="true">
           <defs>
@@ -39,56 +39,58 @@ export const OperatorCard: React.FC<OperatorCardProps> = ({
               <stop offset="100%" stopColor="#1D4ED8" />
             </linearGradient>
           </defs>
-          {/* Shoulders */}
+          {/* Pauldrons & Collar */}
           <path
-            d="M8 60 C10 46 20 42 32 42 C44 42 54 46 56 60 Z"
+            d="M6 60 C9 45 20 40 32 40 C44 40 55 45 58 60 Z"
             fill="url(#op-armor)"
             stroke="#070B14"
-            strokeWidth="2.5"
+            strokeWidth="2.4"
           />
-          {/* Helmet */}
+          <path d="M22 42 L32 49 L42 42" fill="#0F172A" />
+          {/* Helmet Crest & Shell */}
+          <rect x="28" y="6" width="8" height="7" rx="2" fill="#67E8F9" stroke="#070B14" strokeWidth="1.8" />
           <path
-            d="M17 30 C17 16 24 10 32 10 C40 10 47 16 47 30 L45 41 C40 45 24 45 19 41 Z"
+            d="M16 30 C16 15 23 9 32 9 C41 9 48 15 48 30 L45 41 C40 45 24 45 19 41 Z"
             fill="url(#op-armor)"
             stroke="#070B14"
-            strokeWidth="2.5"
+            strokeWidth="2.4"
           />
-          {/* Visor */}
-          <path
-            d="M20 24 L44 24 L42 33 C36 35 28 35 22 33 Z"
-            fill="#070B14"
-          />
-          <path
-            d="M23 26 L41 26"
-            stroke="#67E8F9"
-            strokeWidth="2"
-            strokeLinecap="round"
-            opacity="0.75"
-          />
+          {/* Ear Comm Pods */}
+          <rect x="13" y="24" width="4" height="9" rx="1.5" fill="#1E293B" stroke="#070B14" strokeWidth="1.5" />
+          <rect x="47" y="24" width="4" height="9" rx="1.5" fill="#1E293B" stroke="#070B14" strokeWidth="1.5" />
+          {/* Tactical Visor + Specular Glint */}
+          <path d="M19 23 L45 23 L43 33 C37 35 27 35 21 33 Z" fill="#070B14" />
+          <path d="M22 26.5 L42 26.5" stroke="#67E8F9" strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M36 24.5 L42 24.5" stroke="#EAF2FF" strokeWidth="1.4" strokeLinecap="round" opacity="0.85" />
         </svg>
-        <div className="ht-operator-lvl">Lv. {level}</div>
+        <div className="ht-operator-lvl">LV.{level}</div>
       </div>
 
-      {/* Vitals & Shield Bars */}
+      {/* Vitals & Base Core Shield Bars */}
       <div className="ht-operator-bars">
         <div className="ht-vital-row">
-          <span className="ht-vital-icon" style={{ color: isLowHp ? 'var(--danger)' : 'var(--success)' }}>
+          <span
+            className="ht-vital-icon"
+            style={{ color: isLowHp ? 'var(--danger)' : 'var(--success)' }}
+          >
             +
           </span>
           <div className="ht-vital-track-col">
             <div className="ht-vital-nums">
               <AnimatedNumber value={hp} className="ht-vital-cur" />
               <span className="ht-vital-max">/{maxHp}</span>
-              {isLowHp && (
-                <span className="ht-vital-tag" style={{ color: 'var(--danger)' }}>
-                  LOW
-                </span>
-              )}
-              {!isLowHp && regenGlow && (
-                <span className="ht-vital-tag" style={{ color: 'var(--success)' }}>
-                  REGEN
-                </span>
-              )}
+              <span
+                className="ht-vital-tag"
+                style={{
+                  color: isLowHp
+                    ? 'var(--danger)'
+                    : regenGlow
+                      ? 'var(--success)'
+                      : 'var(--text-low)',
+                }}
+              >
+                {isLowHp ? 'LOW HP' : regenGlow ? 'REGEN' : 'HP'}
+              </span>
             </div>
             <div className="ht-vital-track">
               <div
@@ -97,10 +99,10 @@ export const OperatorCard: React.FC<OperatorCardProps> = ({
                   width: `${hpPct}%`,
                   background: isLowHp
                     ? 'linear-gradient(90deg, #F43F5E, #FF8A6B)'
-                    : 'linear-gradient(90deg, #22C55E, #4ADE80)',
+                    : 'linear-gradient(90deg, #10B981, #34D399)',
                   boxShadow: isLowHp
                     ? '0 0 10px rgba(244,63,94,0.65)'
-                    : '0 0 10px rgba(52,211,153,0.5)',
+                    : '0 0 10px rgba(52,211,153,0.45)',
                 }}
               />
             </div>
@@ -121,14 +123,17 @@ export const OperatorCard: React.FC<OperatorCardProps> = ({
             <div className="ht-vital-nums">
               <AnimatedNumber value={shield} className="ht-vital-cur" />
               <span className="ht-vital-max">/{maxShield}</span>
+              <span className="ht-vital-tag" style={{ color: 'var(--text-low)' }}>
+                CORE
+              </span>
             </div>
             <div className="ht-vital-track">
               <div
                 className="ht-vital-fill"
                 style={{
                   width: `${shieldPct}%`,
-                  background: 'linear-gradient(90deg, #0EA5E9, #38BDF8)',
-                  boxShadow: '0 0 10px rgba(34,211,238,0.5)',
+                  background: 'linear-gradient(90deg, #0284C7, #38BDF8)',
+                  boxShadow: '0 0 10px rgba(34,211,238,0.4)',
                 }}
               />
             </div>

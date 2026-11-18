@@ -63,8 +63,11 @@ export interface BaseDef {
   coreHp: number;
 }
 
+export type MapTheme = 'fortress' | 'jungle' | 'temple';
+
 export interface MapData {
   seed: number;
+  theme?: MapTheme;
   /** Columns of the tile grid. */
   width: number;
   /** Rows of the tile grid. */
@@ -150,6 +153,7 @@ export interface MatchConfig {
   scoreToWin: number;
   enemyCount: number;
   startingWeapon: WeaponId;
+  mapTheme?: MapTheme;
 }
 
 export type MatchStatus = 'menu' | 'playing' | 'paused' | 'won' | 'lost';

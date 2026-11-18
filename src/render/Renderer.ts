@@ -5,8 +5,8 @@ import { Camera } from './camera';
 import type { ViewTransformHook } from './camera';
 import { EffectsSystem } from './effects';
 import { EnvironmentRenderer } from './environment';
-import { PALETTE, teamColor, teamGlowColor } from './palette';
-import { drawUnits } from './units';
+import { PALETTE, getThemePalette, teamColor, teamGlowColor } from './palette';
+import { drawUnitBody, drawUnitOverlay, drawUnitSilhouette } from './units';
 import { computeVisibilityPolygon, hasLineOfSight } from './visibility';
 
 export type RenderQuality = 'low' | 'med' | 'high';
@@ -148,7 +148,7 @@ export class Renderer {
     // Update enemy line-of-sight fade & base flashes
     this.baseFlash.player = Math.max(0, this.baseFlash.player - dt * 4);
     this.baseFlash.enemy = Math.max(0, this.baseFlash.enemy - dt * 4);
-    this.effects.update(dt, state.projectiles);
+    this.effects.update(dt, state.projectiles, state.map);
 
     for (const unit of state.units) {
       if (unit.team === 'player' || !player || player.dead) {
@@ -161,9 +161,10 @@ export class Renderer {
       }
     }
 
-    // Clear screen
+    // Clear screen with theme void backdrop
+    const themePal = getThemePalette(state.map.theme);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.fillStyle = PALETTE.bg0;
+    ctx.fillStyle = themePal.bgVoid;
     ctx.fillRect(0, 0, this.width, this.height);
 
     // Apply camera transform
@@ -180,20 +181,78 @@ export class Renderer {
     const maxX = vt.camX + viewHalfW;
     const maxY = vt.camY + viewHalfH;
 
-    this.environment.drawMap(ctx, state.map, state.time, minX, minY, maxX, maxY);
+    this.environment.drawGroundAndShadows(ctx, state.map, state.time, minX, minY, maxX, maxY);
     this.effects.drawScorchDecals(ctx);
     this.environment.drawZonesAndBases(ctx, state, this.baseFlash);
-    this.environment.drawPickups(ctx, state.pickups, state.time);
-    this.effects.drawProjectiles(ctx, state.projectiles);
-    drawUnits(
+
+    const ts = state.map.tileSize;
+    const minRow = Math.max(0, Math.floor(minY / ts) - 1);
+    const maxRow = Math.min(state.map.height - 1, Math.ceil(maxY / ts) + 2);
+    const clampRow = (y: number): number =>
+      Math.max(minRow, Math.min(maxRow, Math.floor(y / ts)));
+
+    const pickupsByRow = new Map<number, typeof state.pickups>();
+    for (const pickup of state.pickups) {
+      const row = clampRow(pickup.pos.y + 8);
+      const list = pickupsByRow.get(row);
+      if (list) list.push(pickup);
+      else pickupsByRow.set(row, [pickup]);
+    }
+
+    const livingVisible = state.units
+      .filter((u) => !u.dead && (this.visibilityAlpha.get(u.id) ?? 1) > 0.02)
+      .sort((a, b) => a.pos.y - b.pos.y);
+
+    const unitsByRow = new Map<number, typeof livingVisible>();
+    for (const unit of livingVisible) {
+      const row = clampRow(unit.pos.y + 12);
+      const list = unitsByRow.get(row);
+      if (list) list.push(unit);
+      else unitsByRow.set(row, [unit]);
+    }
+
+    this.environment.drawDepthSortedStructures(
       ctx,
-      state.units,
-      this.visibilityAlpha,
-      this.effects.unitHitFlash,
+      state.map,
       state.time,
-      this.options.colorblindAssist,
+      minX,
+      minY,
+      maxX,
+      maxY,
+      (row) => {
+        const rowPickups = pickupsByRow.get(row);
+        if (rowPickups) {
+          for (const p of rowPickups) {
+            this.environment.drawSinglePickup(ctx, p, state.time);
+          }
+        }
+        const rowUnits = unitsByRow.get(row);
+        if (rowUnits) {
+          for (const unit of rowUnits) {
+            const vis = this.visibilityAlpha.get(unit.id) ?? 1;
+            const flash = (this.effects.unitHitFlash.get(unit.id) ?? 0) > 0;
+            drawUnitBody(ctx, unit, vis, flash, state.time);
+          }
+        }
+      },
     );
+
+    this.effects.drawProjectiles(ctx, state.projectiles);
+    for (const unit of livingVisible) {
+      if (unit.team === 'player') {
+        const col = Math.floor(unit.pos.x / ts);
+        const footRow = Math.floor((unit.pos.y + 12) / ts);
+        if (state.map.tiles[footRow + 1]?.[col] === 'wall') {
+          drawUnitSilhouette(ctx, unit);
+        }
+      }
+      const vis = this.visibilityAlpha.get(unit.id) ?? 1;
+      drawUnitOverlay(ctx, unit, vis, this.options.colorblindAssist);
+    }
     this.effects.drawForegroundEffects(ctx);
+    if (this.options.quality !== 'low' && !this.options.reducedMotion) {
+      this.drawAmbientMotes(ctx, state.map.theme ?? 'fortress', minX, minY, maxX, maxY, state.time);
+    }
 
     ctx.restore();
 
@@ -230,6 +289,7 @@ export class Renderer {
         const color = teamGlowColor(unit?.team ?? 'player');
 
         this.effects.spawnMuzzleFlash(pos, angle, color, heavy);
+        this.effects.spawnShellCasing(pos, angle, weaponId);
         if (isPlayer) {
           this.camera.addTrauma(heavy ? 0.24 : 0.08);
           this.camera.addZoomKick(heavy ? 0.018 : 0.005);
@@ -261,6 +321,19 @@ export class Renderer {
         this.camera.addTrauma(0.48);
         this.camera.addZoomKick(0.024);
       }),
+      bus.on('cover:damaged', ({ tile }) => {
+        const [colStr, rowStr] = tile.split(',');
+        const ts = this.latestState?.map.tileSize ?? 32;
+        const pos = {
+          x: (Number(colStr) + 0.5) * ts,
+          y: (Number(rowStr) + 0.5) * ts,
+        };
+        this.effects.spawnImpactSparks(
+          pos,
+          getThemePalette(this.latestState?.map.theme).crateTrim,
+          5,
+        );
+      }),
       bus.on('cover:destroyed', ({ tile }) => {
         const [colStr, rowStr] = tile.split(',');
         const ts = this.latestState?.map.tileSize ?? 32;
@@ -268,7 +341,11 @@ export class Renderer {
           x: (Number(colStr) + 0.5) * ts,
           y: (Number(rowStr) + 0.5) * ts,
         };
-        this.effects.spawnImpactSparks(pos, PALETTE.wallEdge, 14);
+        this.effects.spawnImpactSparks(
+          pos,
+          getThemePalette(this.latestState?.map.theme).wallEdge,
+          14,
+        );
       }),
       bus.on('zone:captured', ({ zoneId, team }) => {
         const z = this.latestState?.map.zones.find((item) => item.id === zoneId);
@@ -405,6 +482,42 @@ export class Renderer {
     }
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, this.width, this.height);
+    ctx.restore();
+  }
+
+  private drawAmbientMotes(
+    ctx: CanvasRenderingContext2D,
+    theme: 'fortress' | 'jungle' | 'temple',
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    time: number,
+  ): void {
+    const spanW = Math.max(1, maxX - minX);
+    const spanH = Math.max(1, maxY - minY);
+    const count = theme === 'fortress' ? 14 : 26;
+    ctx.save();
+    for (let i = 0; i < count; i += 1) {
+      const seedX = ((i * 293 + 47) % 1000) / 1000;
+      const seedY = ((i * 461 + 83) % 1000) / 1000;
+      const driftX = Math.sin(time * 0.45 + i * 1.3) * 24 + time * (theme === 'temple' ? 14 : 7);
+      const driftY = Math.cos(time * 0.55 + i * 0.9) * 16 - time * (theme === 'jungle' ? 5 : 2);
+      const x = minX + (((seedX * spanW + driftX) % spanW) + spanW) % spanW;
+      const y = minY + (((seedY * spanH + driftY) % spanH) + spanH) % spanH;
+      const pulse = 0.28 + 0.32 * Math.sin(time * 2.4 + i * 1.7);
+      ctx.globalAlpha = Math.max(0.08, pulse);
+      if (theme === 'jungle') {
+        ctx.fillStyle = i % 3 === 0 ? '#A3E635' : '#FACC15';
+      } else if (theme === 'temple') {
+        ctx.fillStyle = i % 2 === 0 ? '#FDE68A' : '#E2B45A';
+      } else {
+        ctx.fillStyle = '#67E8F9';
+      }
+      ctx.beginPath();
+      ctx.arc(x, y, i % 4 === 0 ? 2.2 : 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 }

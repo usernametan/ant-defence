@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { PALETTE } from '../../render/palette';
+import { formatZoneCode } from '../../render/environment';
+import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from '../../render/palette';
 import { WEAPON_DEFS } from '../../shared/api';
-import type { MatchConfig, MatchDifficulty, WeaponId } from '../../shared/types';
+import type { MapTheme, MatchConfig, MatchDifficulty, WeaponId } from '../../shared/types';
 import {
   Badge,
   Button,
@@ -61,6 +62,61 @@ const WEAPON_LIST: WeaponId[] = [
   'rocket',
 ];
 
+const MAP_THEMES: Array<{
+  id: MapTheme;
+  label: string;
+  tagline: string;
+  tone: 'player' | 'success' | 'gold';
+}> = [
+  {
+    id: 'jungle',
+    label: 'Jungle Outpost',
+    tagline: 'Mossy ruins & river crossings',
+    tone: 'success',
+  },
+  {
+    id: 'temple',
+    label: 'Ancient Temple',
+    tagline: 'Sandstone sanctum & oasis',
+    tone: 'gold',
+  },
+  {
+    id: 'fortress',
+    label: 'Tactical Fortress',
+    tagline: 'Orbital deck & coolant basins',
+    tone: 'player',
+  },
+];
+
+const MapThemeEmblem: React.FC<{ theme: MapTheme }> = ({ theme }) => {
+  if (theme === 'jungle') {
+    return (
+      <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2" y="2" width="20" height="20" rx="4" fill="#1D2A1E" stroke="#368247" strokeWidth="1.4" />
+        <path d="M4 17 Q11 13 20 18" stroke="#176A7E" strokeWidth="3" fill="none" />
+        <circle cx="9" cy="10" r="4" fill="#255E3D" />
+        <circle cx="15" cy="9" r="3.5" fill="#3D8C52" />
+      </svg>
+    );
+  }
+  if (theme === 'temple') {
+    return (
+      <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2" y="2" width="20" height="20" rx="4" fill="#4A3C2A" stroke="#DFC79D" strokeWidth="1.4" />
+        <path d="M5 18 L12 6 L19 18 Z" fill="#BCA178" stroke="#14100A" strokeWidth="1" />
+        <rect x="10.5" y="13" width="3" height="5" fill="#1A7B8D" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="4" fill="#141D33" stroke="#22D3EE" strokeWidth="1.4" />
+      <polygon points="12,5 18,8.5 18,15.5 12,19 6,15.5 6,8.5" fill="#2A3347" stroke="#67E8F9" strokeWidth="1.2" />
+      <circle cx="12" cy="12" r="2.2" fill="#22D3EE" />
+    </svg>
+  );
+};
+
 export const MatchSetup: React.FC<MatchSetupProps> = ({
   initialConfig,
   onDeploy,
@@ -73,13 +129,17 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
 
   useMenuNavigation({ containerRef, onEscape: onBack });
 
-  const previewMap = useMemo(() => generatePreviewMap(config.seed), [config.seed]);
+  const activeTheme: MapTheme = config.mapTheme ?? 'fortress';
+  const previewMap = useMemo(
+    () => generatePreviewMap(config.seed, activeTheme),
+    [config.seed, activeTheme],
+  );
 
   useEffect(() => {
     setSeedFlash(true);
     const id = window.setTimeout(() => setSeedFlash(false), 260);
     return () => window.clearTimeout(id);
-  }, [config.seed]);
+  }, [config.seed, activeTheme]);
 
   useEffect(() => {
     const canvas = previewCanvasRef.current;
@@ -87,32 +147,73 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const tp = getThemePalette(previewMap.theme);
     const w = canvas.width;
     const h = canvas.height;
     const scaleX = w / previewMap.width;
     const scaleY = h / previewMap.height;
 
-    ctx.fillStyle = PALETTE.bg0;
+    ctx.fillStyle = tp.floorBase;
     ctx.fillRect(0, 0, w, h);
+
+    // Subtle thematic floor accents (drifted sand or mossy patches)
+    for (let r = 0; r < previewMap.height; r += 2) {
+      for (let c = 0; c < previewMap.width; c += 2) {
+        if (previewMap.tiles[r][c] !== 'floor') continue;
+        if ((c * 7 + r * 11 + previewMap.seed) % 13 !== 0) continue;
+        if (previewMap.theme === 'temple') {
+          ctx.fillStyle = 'rgba(212, 185, 134, 0.28)';
+          ctx.fillRect(c * scaleX, r * scaleY, scaleX * 2.2, scaleY * 1.4);
+        } else if (previewMap.theme === 'jungle') {
+          ctx.fillStyle = 'rgba(54, 130, 71, 0.25)';
+          ctx.fillRect(c * scaleX, r * scaleY, scaleX * 1.8, scaleY * 1.5);
+        }
+      }
+    }
 
     for (let r = 0; r < previewMap.height; r += 1) {
       for (let c = 0; c < previewMap.width; c += 1) {
         const tile = previewMap.tiles[r][c];
-        if (tile === 'wall') {
-          ctx.fillStyle = PALETTE.wallTop;
-          ctx.fillRect(c * scaleX, r * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
-        } else if (tile === 'lowCover') {
-          ctx.fillStyle = PALETTE.crateBody;
-          ctx.fillRect(c * scaleX, r * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
-        } else if (tile === 'water') {
-          ctx.fillStyle = '#102A49';
-          ctx.fillRect(c * scaleX, r * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
+        const px = c * scaleX;
+        const py = r * scaleY;
+        if (tile === 'water') {
+          ctx.fillStyle = tp.waterMid;
+          ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         } else if (tile === 'spawnPlayer') {
-          ctx.fillStyle = 'rgba(34, 211, 238, 0.25)';
-          ctx.fillRect(c * scaleX, r * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
+          ctx.fillStyle = 'rgba(34, 211, 238, 0.34)';
+          ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         } else if (tile === 'spawnEnemy') {
-          ctx.fillStyle = 'rgba(255, 90, 60, 0.25)';
-          ctx.fillRect(c * scaleX, r * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
+          ctx.fillStyle = 'rgba(255, 90, 60, 0.34)';
+          ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
+        }
+      }
+    }
+
+    // 3/4 oblique preview pass for lowCover, walls, and mini tree canopies
+    for (let r = 0; r < previewMap.height; r += 1) {
+      for (let c = 0; c < previewMap.width; c += 1) {
+        const tile = previewMap.tiles[r][c];
+        const px = c * scaleX;
+        const py = r * scaleY;
+        if (tile === 'lowCover') {
+          ctx.fillStyle = 'rgba(7, 11, 20, 0.45)';
+          ctx.fillRect(px + 1, py + 1.5, Math.ceil(scaleX), Math.ceil(scaleY));
+          ctx.fillStyle = tp.crateBody;
+          ctx.fillRect(px, py - 1, Math.ceil(scaleX), Math.ceil(scaleY));
+        } else if (tile === 'wall') {
+          const nDown = previewMap.tiles[r + 1]?.[c] === 'wall';
+          if (!nDown) {
+            ctx.fillStyle = tp.wallSide;
+            ctx.fillRect(px, py + scaleY * 0.45, Math.ceil(scaleX), Math.ceil(scaleY * 0.55));
+          }
+          ctx.fillStyle = tp.wallTop;
+          ctx.fillRect(px, py - 2.5, Math.ceil(scaleX), Math.ceil(scaleY));
+          if (previewMap.theme === 'jungle' && (r === 0 || r === previewMap.height - 1 || c === 0 || c === previewMap.width - 1) && (c + r) % 2 === 0) {
+            ctx.fillStyle = tp.foliageBright;
+            ctx.beginPath();
+            ctx.arc(px + scaleX * 0.5, py, scaleX * 0.55, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     }
@@ -120,13 +221,15 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
     for (const z of previewMap.zones) {
       const zx = (z.center.x / previewMap.tileSize) * scaleX;
       const zy = (z.center.y / previewMap.tileSize) * scaleY;
-      ctx.strokeStyle = PALETTE.gold;
-      ctx.lineWidth = 1.5;
+      ctx.fillStyle = 'rgba(34, 211, 238, 0.16)';
       ctx.beginPath();
-      ctx.arc(zx, zy, 12, 0, Math.PI * 2);
+      ctx.arc(zx, zy, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = previewMap.theme === 'fortress' ? PALETTE.gold : PALETTE.playerGlow;
+      ctx.lineWidth = 1.6;
       ctx.stroke();
 
-      const zoneLabel = z.id === 'A' ? 'Z1' : z.id === 'B' ? 'Z2' : z.id === 'C' ? 'Z3' : z.id.replace(/^zone-/i, 'Z');
+      const zoneLabel = formatZoneCode(z.id);
       ctx.fillStyle = PALETTE.textHi;
       ctx.font = '800 10px Bahnschrift, "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
@@ -168,26 +271,27 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
             <div className="ht-display" style={{ fontSize: 12, color: 'var(--text-mid)', marginBottom: 8 }}>
               Difficulty Tier
             </div>
-            <div className="ht-diff-grid">
-              {DIFFICULTIES.map((d) => (
-                <Card
-                  key={d.id}
-                  interactive
-                  selected={config.difficulty === d.id}
-                  onClick={() => setConfig((p) => ({ ...p, difficulty: d.id }))}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <Icon name={d.icon} size={18} color={`var(--${d.tone})`} />
-                    <span className="ht-display" style={{ fontSize: 13 }}>
-                      {d.label}
-                    </span>
-                  </div>
-                  <p style={{ fontSize: 11, color: 'var(--text-mid)', lineHeight: 1.4 }}>
-                    {d.desc}
-                  </p>
-                </Card>
-              ))}
+            <div className="ht-diff-segmented" role="radiogroup" aria-label="Difficulty Tier">
+              {DIFFICULTIES.map((d) => {
+                const isSel = config.difficulty === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSel}
+                    className={`ht-diff-pill ${isSel ? 'is-selected' : ''}`}
+                    onClick={() => setConfig((p) => ({ ...p, difficulty: d.id }))}
+                  >
+                    <Icon name={d.icon} size={14} color={`var(--${d.tone})`} />
+                    <span>{d.label}</span>
+                  </button>
+                );
+              })}
             </div>
+            <p style={{ fontSize: 11, color: 'var(--text-mid)', marginTop: 6 }}>
+              {DIFFICULTIES.find((d) => d.id === config.difficulty)?.desc}
+            </p>
           </div>
 
           <div
@@ -294,9 +398,39 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span className="ht-display" style={{ fontSize: 14 }}>
-                LIVE SECTOR PREVIEW
+                {MAP_THEME_PALETTES[activeTheme].name}
               </span>
               <Badge tone="gold">SEED #{config.seed}</Badge>
+            </div>
+
+            <div>
+              <div className="ht-display" style={{ fontSize: 11, color: 'var(--text-mid)', marginBottom: 6 }}>
+                Battleground Map
+              </div>
+              <div className="ht-diff-grid">
+                {MAP_THEMES.map((m) => {
+                  const isSel = activeTheme === m.id;
+                  return (
+                    <Card
+                      key={m.id}
+                      interactive
+                      selected={isSel}
+                      style={{ padding: 10 }}
+                      onClick={() => setConfig((p) => ({ ...p, mapTheme: m.id }))}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <MapThemeEmblem theme={m.id} />
+                        <span className="ht-display" style={{ fontSize: 11 }}>
+                          {m.label}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: 10, color: 'var(--text-mid)', lineHeight: 1.35 }}>
+                        {m.tagline}
+                      </p>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
 
             <div
@@ -358,7 +492,7 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
                 <Badge tone="enemy">ORANGE</Badge> Hostile Base
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                <Badge tone="gold">Z1 Z2 Z3</Badge> Capture Zones
+                <Badge tone="gold">A B C</Badge> Capture Zones
               </span>
             </div>
           </div>

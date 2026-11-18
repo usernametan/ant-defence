@@ -98,7 +98,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
           title={slot.title}
         >
           <div
-            className={`ht-action-slot ${slot.highlight ? 'is-highlight' : ''}`}
+            className={`ht-action-slot ${slot.highlight ? 'is-highlight' : ''} ${!slot.active ? 'is-dim' : ''}`}
           >
             {slot.icon}
             {slot.badge !== null && (

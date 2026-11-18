@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import type { RenderQuality } from '../../render';
+import { MAP_THEME_PALETTES } from '../../render/palette';
+import type { MapTheme } from '../../shared/types';
 import {
   Button,
   Icon,
@@ -32,6 +34,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [tab, setTab] = useState<SettingsTab>('gameplay');
   const [previewSpread, setPreviewSpread] = useState(8);
+  const [previewFloor, setPreviewFloor] = useState<MapTheme>('fortress');
 
   const patch = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => {
     onChange({ ...settings, [key]: value });
@@ -68,10 +71,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Panel
                 tone="subtle"
                 style={{
-                  height: 76,
-                  display: 'grid',
-                  placeItems: 'center',
+                  height: 88,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
                   cursor: 'pointer',
+                  background: MAP_THEME_PALETTES[previewFloor].floorBase,
+                  borderColor: MAP_THEME_PALETTES[previewFloor].wallEdge,
                 }}
                 onMouseEnter={() => setPreviewSpread(16)}
                 onMouseLeave={() => setPreviewSpread(8)}
@@ -82,6 +90,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   gap={previewSpread}
                   hitFlash={null}
                 />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['fortress', 'jungle', 'temple'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      aria-label={`Preview crosshair on ${t}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewFloor(t);
+                      }}
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 2,
+                        border:
+                          previewFloor === t
+                            ? '1.5px solid #EAF2FF'
+                            : '1px solid rgba(255,255,255,0.3)',
+                        background: MAP_THEME_PALETTES[t].floorAlt,
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    />
+                  ))}
+                </div>
               </Panel>
             </div>
 

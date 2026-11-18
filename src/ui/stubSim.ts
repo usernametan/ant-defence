@@ -18,6 +18,7 @@ const DEFAULT_CONFIG: MatchConfig = {
   scoreToWin: 1000,
   enemyCount: 4,
   startingWeapon: 'pistol',
+  mapTheme: 'jungle',
 };
 
 /**
@@ -98,11 +99,10 @@ export class StubSim implements SimApi {
           player.pos.x += player.vel.x * dt;
           player.pos.y += player.vel.y * dt;
         } else {
-          // Orbit gently around Zone B in showcase mode
-          const cx = 30.5 * 32;
-          const cy = 20.5 * 32;
-          const nx = cx + Math.cos(nextTime * 0.7) * 90;
-          const ny = cy + Math.sin(nextTime * 0.7) * 65;
+          // Orbit gently around center capture zone in showcase mode
+          const centerZone = this.state.map.zones[1]?.center ?? { x: 30.5 * 32, y: 20.5 * 32 };
+          const nx = centerZone.x + Math.cos(nextTime * 0.7) * 90;
+          const ny = centerZone.y + Math.sin(nextTime * 0.7) * 65;
           player.vel.x = (nx - player.pos.x) / dt;
           player.vel.y = (ny - player.pos.y) / dt;
           player.pos.x = nx;
@@ -225,9 +225,9 @@ export class StubSim implements SimApi {
       }
     }
 
-    // Animate Zone B progress
-    const zones = this.state.zones.map((z) => {
-      if (z.id === 'B') {
+    // Animate Zone 2 progress
+    const zones = this.state.zones.map((z, idx) => {
+      if (z.id === 'B' || idx === 1) {
         const progress = Math.sin(nextTime * 0.45);
         return {
           ...z,
@@ -291,9 +291,13 @@ export class StubSim implements SimApi {
     this.state = { ...this.state, units };
   }
 
-  triggerZoneCapture(zoneId = 'B', team: Team = 'player'): void {
+  triggerZoneCapture(zoneId = 'zone-2', team: Team = 'player'): void {
+    const resolvedId =
+      this.state.zones.some((z) => z.id === zoneId)
+        ? zoneId
+        : (this.state.zones[1]?.id ?? zoneId);
     const zones = this.state.zones.map((z) =>
-      z.id === zoneId
+      z.id === resolvedId
         ? { ...z, owner: team, progress: team === 'player' ? 1 : -1, contested: false }
         : z,
     );
@@ -305,15 +309,19 @@ export class StubSim implements SimApi {
         [team]: Math.min(this.state.matchConfig.scoreToWin, this.state.score[team] + 12),
       },
     };
-    bus.emit('zone:captured', { zoneId, team });
+    bus.emit('zone:captured', { zoneId: resolvedId, team });
   }
 
-  triggerZoneContested(zoneId = 'B'): void {
+  triggerZoneContested(zoneId = 'zone-2'): void {
+    const resolvedId =
+      this.state.zones.some((z) => z.id === zoneId)
+        ? zoneId
+        : (this.state.zones[1]?.id ?? zoneId);
     const zones = this.state.zones.map((z) =>
-      z.id === zoneId ? { ...z, contested: true } : z,
+      z.id === resolvedId ? { ...z, contested: true } : z,
     );
     this.state = { ...this.state, zones };
-    bus.emit('zone:contested', { zoneId });
+    bus.emit('zone:contested', { zoneId: resolvedId });
   }
 
   triggerKillStreak(): void {
@@ -399,7 +407,7 @@ export class StubSim implements SimApi {
   }
 
   private createInitialState(config: MatchConfig): GameState {
-    const map = generatePreviewMap(config.seed);
+    const map = generatePreviewMap(config.seed, config.mapTheme ?? 'jungle');
     const weapon = WEAPON_DEFS[config.startingWeapon];
     const playerUnit: Unit = {
       id: 'player',
@@ -485,11 +493,12 @@ export class StubSim implements SimApi {
           ttl: 18,
         },
       ],
-      zones: [
-        { id: 'A', owner: 'player', progress: 1, contested: false },
-        { id: 'B', owner: 'neutral', progress: 0, contested: true },
-        { id: 'C', owner: 'player', progress: 1, contested: false },
-      ],
+      zones: map.zones.map((z, idx) => ({
+        id: z.id,
+        owner: idx === 1 ? ('neutral' as const) : ('player' as const),
+        progress: idx === 1 ? 0 : 1,
+        contested: idx === 1,
+      })),
       score: { player: 120, enemy: 85 },
       baseHp: { player: 460, enemy: 410 },
       status: 'playing',

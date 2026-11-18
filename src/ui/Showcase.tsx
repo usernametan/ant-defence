@@ -58,6 +58,7 @@ export const Showcase: React.FC = () => {
     scoreToWin: 1000,
     enemyCount: 4,
     startingWeapon: 'pistol',
+    mapTheme: 'jungle',
   });
 
   // Apply settings & audio sink
@@ -248,6 +249,9 @@ export const Showcase: React.FC = () => {
 
       {screen === 'countdown' && (
         <CountdownOverlay
+          mapTheme={matchConfig.mapTheme}
+          difficulty={matchConfig.difficulty}
+          scoreToWin={matchConfig.scoreToWin}
           onTick={(rem) => audioRef.current?.playCountdownTick(rem <= 0)}
           onComplete={() => setScreen('hud')}
         />
@@ -255,6 +259,9 @@ export const Showcase: React.FC = () => {
 
       {screen === 'pause' && (
         <PauseMenu
+          score={gameState.score}
+          elapsedSeconds={gameState.time}
+          mapTheme={gameState.map.theme}
           onResume={() => setScreen('hud')}
           onSettings={() => setSettingsOpen(true)}
           onRestart={() => {
@@ -381,6 +388,21 @@ export const Showcase: React.FC = () => {
               <Button size="sm" variant="secondary" onClick={() => sim.triggerRespawnPreview()}>
                 Respawn Screen
               </Button>
+              {(['jungle', 'temple', 'fortress'] as const).map((theme) => (
+                <Button
+                  key={theme}
+                  size="sm"
+                  variant={matchConfig.mapTheme === theme ? 'primary' : 'secondary'}
+                  onClick={() => {
+                    const next = { ...matchConfig, mapTheme: theme };
+                    setMatchConfig(next);
+                    sim.start(next);
+                    setGameState(sim.getState());
+                  }}
+                >
+                  Map: {theme[0].toUpperCase() + theme.slice(1)}
+                </Button>
+              ))}
               <Button
                 size="sm"
                 variant="ghost"
