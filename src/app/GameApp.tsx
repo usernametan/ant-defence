@@ -26,8 +26,8 @@ import { GameProvider, useGameController, useGameState } from './useGameState';
 const INITIAL_CONFIG: MatchConfig = {
   seed: 4242,
   difficulty: 'normal',
-  scoreToWin: 100,
-  enemyCount: 6,
+  scoreToWin: 120,
+  enemyCount: 4,
   startingWeapon: 'rifle',
 };
 
@@ -99,7 +99,7 @@ function GameRoot() {
     });
 
     const audio = new AudioEngine();
-    audio.init('player');
+    audio.init('player-1');
     audioRef.current = audio;
     registerUiSoundSink({
       hover: () => audio.playUiHover(),
@@ -138,17 +138,45 @@ function GameRoot() {
     };
     rafId = requestAnimationFrame(frame);
 
+    let playerShots = 0;
+    let enemyHits = 0;
+    let totalEnemyDamage = 0;
+    let totalCaptures = 0;
+
+    const offStart = bus.on('match:start', () => {
+      playerShots = 0;
+      enemyHits = 0;
+      totalEnemyDamage = 0;
+      totalCaptures = 0;
+    });
+    const offShot = bus.on('shot', ({ unitId }) => {
+      if (unitId === controller.getState().playerId) playerShots += 1;
+    });
+    const offHit = bus.on('hit', ({ targetId, damage }) => {
+      const live = controller.getState();
+      const target = live.units.find((unit) => unit.id === targetId);
+      if (target && target.team === 'enemy') {
+        enemyHits += 1;
+        totalEnemyDamage += damage;
+      }
+    });
+    const offCap = bus.on('zone:captured', ({ team }) => {
+      if (team === 'player') totalCaptures += 1;
+    });
+
     const offEnd = bus.on('match:end', ({ winner }) => {
       const live = controller.getState();
       const player = live.units.find((unit) => unit.id === live.playerId);
-      const captures = live.zones.filter((zone) => zone.owner === 'player').length;
+      const ownedNow = live.zones.filter((zone) => zone.owner === 'player').length;
+      const accuracyPct =
+        playerShots > 0 ? Math.min(99, Math.round((enemyHits / playerShots) * 100)) : 0;
       setEndScore({ player: live.score.player, enemy: live.score.enemy });
       setEndStats({
         kills: player?.kills ?? 0,
         deaths: player?.deaths ?? 0,
-        accuracyPct: live.score.player > 0 ? Math.min(99, 40 + live.score.player * 2) : 0,
-        zonesCaptured: captures,
-        damageDealt: live.score.player * 24,
+        accuracyPct,
+        zonesCaptured: Math.max(totalCaptures, ownedNow),
+        damageDealt: Math.round(totalEnemyDamage),
         elapsedSeconds: live.time,
         bestWeapon: player?.weaponId ?? 'pistol',
       });
@@ -157,6 +185,10 @@ function GameRoot() {
 
     return () => {
       cancelAnimationFrame(rafId);
+      offStart();
+      offShot();
+      offHit();
+      offCap();
       offEnd();
       observer?.disconnect();
       window.removeEventListener('resize', onResize);
@@ -197,7 +229,12 @@ function GameRoot() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.code === 'Escape' || event.code === 'KeyP') {
+      if (
+        (event.code === 'Escape' || event.code === 'KeyP') &&
+        !settingsOpen &&
+        !howToOpen &&
+        (screen === 'playing' || screen === 'paused')
+      ) {
         event.preventDefault();
         togglePause();
       }
@@ -205,7 +242,7 @@ function GameRoot() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [screen, togglePause, playAgain]);
+  }, [screen, settingsOpen, howToOpen, togglePause, playAgain]);
 
   const onMouseMove = (event: ReactMouseEvent<HTMLDivElement>): void => {
     setAimScreenPos({ x: event.clientX, y: event.clientY });
@@ -216,7 +253,16 @@ function GameRoot() {
   const inMatch = screen === 'playing' || screen === 'paused';
 
   return (
-    <div className="ht-root" style={{ position: 'relative', width: '100vw', height: '100vh' }} onMouseMove={onMouseMove}>
+    <div
+      className="ht-root"
+      style={{
+        position: 'relative',
+        width: '100vw',
+        height: '100vh',
+        cursor: screen === 'playing' ? 'none' : undefined,
+      }}
+      onMouseMove={onMouseMove}
+    >
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} aria-label="Zone Control arena" />
 
       {inMatch && (

@@ -1,5 +1,6 @@
 import type { Unit } from '../shared/types';
 import {
+  BOT_MAX_SPEED,
   DASH_COOLDOWN,
   DASH_DURATION,
   DASH_SPEED,
@@ -45,18 +46,20 @@ export function updateUnits(world: SimWorld, dt: number): void {
 
     if (runtime.dashRemaining > 0) {
       runtime.dashRemaining -= dt;
-      unit.vel.x = runtime.dashDir.x * DASH_SPEED;
-      unit.vel.y = runtime.dashDir.y * DASH_SPEED;
+      const dashSpeed = unit.isPlayer ? DASH_SPEED : DASH_SPEED * 0.8;
+      unit.vel.x = runtime.dashDir.x * dashSpeed;
+      unit.vel.y = runtime.dashDir.y * dashSpeed;
     } else {
+      const maxSpeed = unit.isPlayer ? UNIT_MAX_SPEED : BOT_MAX_SPEED;
       unit.vel.x += moveX * UNIT_ACCEL * dt;
       unit.vel.y += moveY * UNIT_ACCEL * dt;
       const decay = Math.exp(-UNIT_FRICTION * dt);
       unit.vel.x *= decay;
       unit.vel.y *= decay;
       const speed = Math.hypot(unit.vel.x, unit.vel.y);
-      if (speed > UNIT_MAX_SPEED) {
-        unit.vel.x = (unit.vel.x / speed) * UNIT_MAX_SPEED;
-        unit.vel.y = (unit.vel.y / speed) * UNIT_MAX_SPEED;
+      if (speed > maxSpeed) {
+        unit.vel.x = (unit.vel.x / speed) * maxSpeed;
+        unit.vel.y = (unit.vel.y / speed) * maxSpeed;
       }
     }
 

@@ -2,7 +2,7 @@ import { WEAPON_DEFS } from '../../shared/api';
 import type { MapData, MatchConfig, MatchDifficulty, Team, Unit, Vec2, WeaponId } from '../../shared/types';
 import {
   BOT_AGGRO_RANGE,
-  PLAYER_MAX_HP,
+  BOT_MAX_HP,
   TILE_SIZE,
 } from '../constants';
 import { toDisplayState, type AiMode } from '../internal';
@@ -18,9 +18,9 @@ interface DifficultyProfile {
 }
 
 const DIFFICULTY: Record<MatchDifficulty, DifficultyProfile> = {
-  easy: { reactionTime: 0.55, aimError: 0.20, aggression: 0.35, aimSpeed: 4.5 },
-  normal: { reactionTime: 0.28, aimError: 0.09, aggression: 0.62, aimSpeed: 7.5 },
-  hard: { reactionTime: 0.12, aimError: 0.035, aggression: 0.88, aimSpeed: 12 },
+  easy: { reactionTime: 0.78, aimError: 0.26, aggression: 0.35, aimSpeed: 3.4 },
+  normal: { reactionTime: 0.48, aimError: 0.15, aggression: 0.58, aimSpeed: 5.2 },
+  hard: { reactionTime: 0.24, aimError: 0.075, aggression: 0.82, aimSpeed: 8.5 },
 };
 
 const RARITY_RANK = { common: 0, rare: 1, epic: 2 };
@@ -387,18 +387,20 @@ function updateBot(world: SimWorld, unit: Unit, profile: DifficultyProfile, dt: 
       ai.reactionTimer <= 0 &&
       aligned &&
       inRange &&
+      ai.firePulse % 50 < 32 &&
       hasLineOfSight(world.state.map, unit.pos, target.pos)
     ) {
-      // Pulse the trigger so semi-automatic weapons get a fresh edge each shot.
+      // Pulse the trigger in tactical bursts so semi-auto and automatic weapons pace cleanly.
       intent.firing = ai.firePulse % 2 === 0;
     }
   }
 
   if (unit.ammoInMag <= 0) intent.reload = true;
   if (
+    world.state.matchConfig.difficulty !== 'easy' &&
     (mode === 'retreat' || mode === 'engage' || mode === 'flank') &&
     runtime.dashCooldown <= 0 &&
-    world.rng.chance(0.012)
+    world.rng.chance(0.004)
   ) {
     intent.dash = true;
   }
@@ -426,8 +428,8 @@ function spawnBot(world: SimWorld, id: string, team: Team, weaponId: WeaponId): 
     pos: { x: pos.x, y: pos.y },
     vel: { x: 0, y: 0 },
     angle: team === 'player' ? 0 : Math.PI,
-    hp: PLAYER_MAX_HP,
-    maxHp: PLAYER_MAX_HP,
+    hp: BOT_MAX_HP,
+    maxHp: BOT_MAX_HP,
     weaponId,
     ammoInMag: def.magSize,
     reserveAmmo: def.magSize * 5,
