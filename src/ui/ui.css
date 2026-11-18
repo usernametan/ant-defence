@@ -67,6 +67,81 @@
   width: min(340px, 100%);
 }
 
+.ht-menu-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(20px, 4vw, 56px);
+  margin: auto 0;
+  width: min(1140px, 100%);
+}
+
+.ht-menu-briefing {
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ht-menu-intel-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.ht-menu-intel-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(7, 11, 20, 0.56);
+  border: 1px solid var(--glass-border-subtle);
+}
+
+.ht-menu-intel-k {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--player);
+}
+
+.ht-menu-intel-v {
+  font-size: 12px;
+  color: var(--text-mid);
+}
+
+.ht-menu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-mid);
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.ht-menu-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.ht-menu-keys > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 960px) {
+  .ht-menu-briefing {
+    display: none;
+  }
+}
+
 /* Match Setup */
 .ht-setup-grid {
   display: grid;
@@ -250,17 +325,29 @@
 
 /* Zone pips */
 .ht-zone-pip {
-  width: 30px;
-  height: 26px;
+  position: relative;
+  overflow: hidden;
+  width: 38px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
-  background: var(--bg-0);
-  font-size: 12px;
+  background: rgba(7, 11, 20, 0.88);
+  font-family: var(--font-display);
+  font-size: 11px;
   font-weight: 800;
+  letter-spacing: 0.04em;
   transition: transform var(--dur-fast) var(--ease-snappy), border-color var(--dur-fast);
+}
+
+.ht-zone-pip-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  transition: width 160ms var(--ease-standard);
 }
 
 .ht-zone-pip.is-contested {
@@ -386,6 +473,39 @@
 }
 
 /* Top-Center Winged Scoreboard */
+.ht-scoreboard-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ht-zone-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ht-score-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 44px;
+}
+
+.ht-score-bar {
+  width: 44px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ht-score-bar-fill {
+  height: 100%;
+  transition: width 180ms var(--ease-standard);
+}
+
 .ht-scoreboard-shell {
   display: flex;
   align-items: stretch;
@@ -570,8 +690,16 @@
 .ht-vital-nums {
   display: flex;
   align-items: baseline;
-  gap: 2px;
+  gap: 3px;
   line-height: 1;
+}
+
+.ht-vital-tag {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .ht-vital-cur {
@@ -586,11 +714,26 @@
 }
 
 .ht-vital-track {
-  height: 7px;
+  position: relative;
+  height: 8px;
   background: var(--bg-0);
   border: 1px solid var(--line);
   border-radius: 2px;
   overflow: hidden;
+}
+
+.ht-vital-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(25% - 1px),
+    rgba(7, 11, 20, 0.45) calc(25% - 1px),
+    rgba(7, 11, 20, 0.45) 25%
+  );
 }
 
 .ht-vital-fill {
@@ -700,17 +843,24 @@
   gap: 8px;
 }
 
-.ht-weapon-reload-bar {
-  width: 78px;
+.ht-weapon-reload-bar,
+.ht-weapon-mag-bar {
+  width: 84px;
   height: 4px;
   background: var(--bg-0);
   border: 1px solid var(--line);
   overflow: hidden;
+  border-radius: 2px;
 }
 
 .ht-weapon-reload-fill {
   height: 100%;
   background: var(--gold);
+}
+
+.ht-weapon-mag-fill {
+  height: 100%;
+  transition: width 120ms var(--ease-standard), background-color 150ms;
 }
 
 /* Respawn & Pause Backdrop */

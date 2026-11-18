@@ -71,6 +71,13 @@ export const WeaponCard: React.FC<WeaponCardProps> = ({
 }) => {
   const def = WEAPON_DEFS[weaponId];
   const isLowAmmo = ammoInMag <= Math.max(1, Math.floor(def.magSize * 0.25));
+  const magPct = def.magSize > 0 ? Math.max(0, Math.min(100, (ammoInMag / def.magSize) * 100)) : 0;
+  const rarityGlow =
+    def.rarity === 'epic'
+      ? 'var(--glow-epic)'
+      : def.rarity === 'rare'
+        ? 'var(--glow-rare)'
+        : 'var(--glow-player)';
 
   return (
     <div
@@ -83,6 +90,7 @@ export const WeaponCard: React.FC<WeaponCardProps> = ({
             : def.rarity === 'rare'
               ? 'var(--rare)'
               : 'var(--player)',
+        boxShadow: `0 6px 22px rgba(7, 11, 20, 0.72), ${rarityGlow}`,
       }}
     >
       <div className="ht-weapon-silhouette" title={def.name}>
@@ -128,11 +136,21 @@ export const WeaponCard: React.FC<WeaponCardProps> = ({
           )}
         </div>
 
-        {reloading && (
+        {reloading ? (
           <div className="ht-weapon-reload-bar">
             <div
               className="ht-weapon-reload-fill"
               style={{ width: `${Math.round(reloadProgress * 100)}%` }}
+            />
+          </div>
+        ) : (
+          <div className="ht-weapon-mag-bar">
+            <div
+              className="ht-weapon-mag-fill"
+              style={{
+                width: `${magPct}%`,
+                background: isLowAmmo ? 'var(--danger)' : 'var(--player-glow)',
+              }}
             />
           </div>
         )}

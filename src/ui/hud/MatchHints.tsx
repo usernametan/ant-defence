@@ -17,7 +17,7 @@ const HINTS: HintItem[] = [
   {
     id: 'zones',
     title: 'SECTOR CONTROL',
-    text: 'Stand in a zone (A, B, or C) to capture it and earn team score.',
+    text: 'Stand in a zone (Z1, Z2, or Z3) to capture it and earn team score.',
   },
   {
     id: 'pickups',

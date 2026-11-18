@@ -55,6 +55,10 @@ function formatClock(sec: number): string {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
+function formatZoneLabel(zoneId: string): string {
+  return zoneId.replace(/^zone-/i, 'Z');
+}
+
 export const HUD: React.FC<HUDProps> = ({
   state,
   viewTransform = null,
@@ -91,6 +95,11 @@ export const HUD: React.FC<HUDProps> = ({
     count: 0,
     expiresAt: 0,
   });
+  const seqRef = useRef(100);
+  const stateRef = useRef(state);
+  const onStreakRef = useRef(onStreak);
+  stateRef.current = state;
+  onStreakRef.current = onStreak;
 
   useEffect(() => {
     if (!player) return;
@@ -132,28 +141,30 @@ export const HUD: React.FC<HUDProps> = ({
   }, []);
 
   useEffect(() => {
-    let seq = 100;
     const offShot = bus.on('shot', ({ unitId }) => {
-      if (unitId === state.playerId) {
+      if (unitId === stateRef.current.playerId) {
         setShotKick((k) => Math.min(14, k + 5));
       }
     });
 
     const offHit = bus.on('hit', ({ targetId, pos, killed }) => {
-      if (targetId === state.playerId && player) {
-        const angle = Math.atan2(pos.y - player.pos.y, pos.x - player.pos.x);
-        const indId = seq++;
+      const curState = stateRef.current;
+      const curPlayer = curState.units.find((u) => u.id === curState.playerId);
+      if (targetId === curState.playerId && curPlayer) {
+        const angle = Math.atan2(pos.y - curPlayer.pos.y, pos.x - curPlayer.pos.x);
+        const indId = seqRef.current++;
         setDamageIndicators((prev) => [...prev.slice(-3), { id: indId, angleRad: angle, ttl: 0.9 }]);
-      } else if (targetId !== state.playerId) {
+      } else if (targetId !== curState.playerId) {
         setHitFlash(killed ? 'kill' : 'hit');
         window.setTimeout(() => setHitFlash(null), killed ? 240 : 120);
       }
     });
 
     const offKill = bus.on('kill', ({ killerId, victimId, weaponId }) => {
-      const k = unitLabel(state, killerId);
-      const v = unitLabel(state, victimId);
-      const entryId = seq++;
+      const curState = stateRef.current;
+      const k = unitLabel(curState, killerId);
+      const v = unitLabel(curState, victimId);
+      const entryId = seqRef.current++;
       setKillFeed((prev) => [
         {
           id: entryId,
@@ -169,12 +180,12 @@ export const HUD: React.FC<HUDProps> = ({
         setKillFeed((prev) => prev.filter((item) => item.id !== entryId));
       }, 5500);
 
-      if (victimId === state.playerId) {
+      if (victimId === curState.playerId) {
         setLastKiller({ name: k.name, weaponId });
         streakRef.current = { count: 0, expiresAt: 0 };
       }
 
-      if (killerId === state.playerId) {
+      if (killerId === curState.playerId) {
         const now = performance.now();
         const nextCount =
           now < streakRef.current.expiresAt ? streakRef.current.count + 1 : 1;
@@ -182,14 +193,14 @@ export const HUD: React.FC<HUDProps> = ({
         const label = streakTitle(nextCount);
         if (label) {
           setStreakText(label);
-          onStreak?.(nextCount);
+          onStreakRef.current?.(nextCount);
           window.setTimeout(() => setStreakText(null), 2200);
         }
       }
     });
 
     const offCap = bus.on('zone:captured', ({ zoneId, team }) => {
-      const bid = seq++;
+      const bid = seqRef.current++;
       setCaptureBanner({ id: bid, zoneId, team });
       window.setTimeout(() => {
         setCaptureBanner((cur) => (cur?.id === bid ? null : cur));
@@ -211,10 +222,10 @@ export const HUD: React.FC<HUDProps> = ({
       offCap();
       offContested();
     };
-  }, [state.playerId, state.units, player, onStreak]);
+  }, [state.playerId]);
 
-  const hp = player?.hp ?? 0;
-  const maxHp = player?.maxHp ?? 100;
+  const hp = player && !player.dead ? Math.ceil(player.hp) : 0;
+  const maxHp = player?.maxHp ?? 220;
   const hpRatio = maxHp > 0 ? hp / maxHp : 0;
   const isLowHp = Boolean(player && !player.dead && hpRatio > 0 && hpRatio < 0.3);
 
@@ -244,10 +255,20 @@ export const HUD: React.FC<HUDProps> = ({
   });
 
   const safeZone = state.zones.find((z) => z.owner === 'player')?.id ?? 'HQ';
+  const safeZoneLabel = safeZone === 'HQ' ? 'HQ' : `Zone ${formatZoneLabel(safeZone)}`;
 
-  // Shield / tactical capacitor bar derived cleanly from player vitality & base integrity
+  // Base core integrity meter scaled to the player's base max coreHp
+  const playerBaseCoreMax = Math.max(
+    1,
+    state.map.bases.find((b) => b.team === 'player')?.coreHp ?? 1000,
+  );
   const shieldMax = 50;
-  const shieldVal = player?.dead ? 0 : Math.min(shieldMax, Math.round((state.baseHp.player / 500) * 50));
+  const shieldVal = player?.dead
+    ? 0
+    : Math.min(shieldMax, Math.round((state.baseHp.player / playerBaseCoreMax) * shieldMax));
+  const goalScore = Math.max(1, state.matchConfig.scoreToWin);
+  const playerScorePct = Math.min(100, (state.score.player / goalScore) * 100);
+  const enemyScorePct = Math.min(100, (state.score.enemy / goalScore) * 100);
 
   return (
     <div className="ht-root">
@@ -285,7 +306,7 @@ export const HUD: React.FC<HUDProps> = ({
               }}
             >
               <Badge tone="gold">
-                <Icon name="warning" size={12} /> {def.id}
+                <Icon name="warning" size={12} /> {formatZoneLabel(def.id)}
               </Badge>
             </div>
           );
@@ -315,7 +336,7 @@ export const HUD: React.FC<HUDProps> = ({
                     : 'var(--enemy-glow)',
               }}
             >
-              ZONE {captureBanner.zoneId} CAPTURED
+              ZONE {formatZoneLabel(captureBanner.zoneId)} CAPTURED
             </span>
           </Panel>
         </div>
@@ -328,33 +349,87 @@ export const HUD: React.FC<HUDProps> = ({
           <MatchHints enabled={showHints} />
         </div>
 
-        {/* Top Center: Winged Scoreboard + Timer */}
+        {/* Top Center: Winged Scoreboard + Timer + Zone Control Pips */}
         <div className="ht-hud-top-center ht-hud-scaled">
-          <div className="ht-scoreboard-shell">
-            <div className="ht-score-wing ht-score-wing--player">
-              <svg width={20} height={20} viewBox="0 0 24 24" fill="var(--player)" aria-hidden="true">
-                <path d="M12 2L4 5v6.5c0 5 3.4 9.5 8 10.5 4.6-1 8-5.5 8-10.5V5l-8-3z" />
-              </svg>
-              <span className="ht-display ht-score-val" style={{ color: 'var(--player-glow)' }}>
-                <AnimatedNumber value={state.score.player} />
-              </span>
+          <div className="ht-scoreboard-stack">
+            <div className="ht-scoreboard-shell">
+              <div className="ht-score-wing ht-score-wing--player">
+                <svg width={20} height={20} viewBox="0 0 24 24" fill="var(--player)" aria-hidden="true">
+                  <path d="M12 2L4 5v6.5c0 5 3.4 9.5 8 10.5 4.6-1 8-5.5 8-10.5V5l-8-3z" />
+                </svg>
+                <div className="ht-score-metric">
+                  <span className="ht-display ht-score-val" style={{ color: 'var(--player-glow)' }}>
+                    <AnimatedNumber value={state.score.player} />
+                  </span>
+                  <div className="ht-score-bar">
+                    <div
+                      className="ht-score-bar-fill"
+                      style={{ width: `${playerScorePct}%`, background: 'var(--player)' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="ht-score-center">
+                <div className="ht-display ht-score-clock">
+                  {formatClock(state.time)}
+                </div>
+                <div className="ht-score-goal">
+                  Score to Win: {state.matchConfig.scoreToWin}
+                </div>
+              </div>
+
+              <div className="ht-score-wing ht-score-wing--enemy">
+                <div className="ht-score-metric" style={{ alignItems: 'flex-end' }}>
+                  <span className="ht-display ht-score-val" style={{ color: 'var(--enemy-glow)' }}>
+                    <AnimatedNumber value={state.score.enemy} />
+                  </span>
+                  <div className="ht-score-bar">
+                    <div
+                      className="ht-score-bar-fill"
+                      style={{ width: `${enemyScorePct}%`, background: 'var(--enemy)' }}
+                    />
+                  </div>
+                </div>
+                <Icon name="skull" size={20} color="var(--enemy)" />
+              </div>
             </div>
 
-            <div className="ht-score-center">
-              <div className="ht-display ht-score-clock">
-                {formatClock(state.time)}
+            {state.zones.length > 0 && (
+              <div className="ht-zone-strip" aria-label="Zone Control Status">
+                {state.zones.map((zone) => {
+                  const color =
+                    zone.owner === 'player'
+                      ? 'var(--player)'
+                      : zone.owner === 'enemy'
+                        ? 'var(--enemy)'
+                        : 'var(--neutral)';
+                  const absProg = Math.min(1, Math.abs(zone.progress));
+                  const barColor =
+                    zone.progress >= 0 ? 'var(--player-glow)' : 'var(--enemy-glow)';
+                  return (
+                    <div
+                      key={zone.id}
+                      className={`ht-zone-pip ${zone.contested ? 'is-contested' : ''}`}
+                      style={{
+                        borderColor: zone.contested ? 'var(--gold)' : color,
+                        color: zone.owner === 'neutral' ? 'var(--text-hi)' : color,
+                      }}
+                      title={`${formatZoneLabel(zone.id)} — ${zone.contested ? 'Contested' : zone.owner}`}
+                    >
+                      <span>{formatZoneLabel(zone.id)}</span>
+                      <span
+                        className="ht-zone-pip-bar"
+                        style={{
+                          width: `${Math.round(absProg * 100)}%`,
+                          background: barColor,
+                        }}
+                      />
+                    </div>
+                  );
+                })}
               </div>
-              <div className="ht-score-goal">
-                Score to Win: {state.matchConfig.scoreToWin}
-              </div>
-            </div>
-
-            <div className="ht-score-wing ht-score-wing--enemy">
-              <span className="ht-display ht-score-val" style={{ color: 'var(--enemy-glow)' }}>
-                <AnimatedNumber value={state.score.enemy} />
-              </span>
-              <Icon name="skull" size={20} color="var(--enemy)" />
-            </div>
+            )}
           </div>
         </div>
 
@@ -464,7 +539,7 @@ export const HUD: React.FC<HUDProps> = ({
               </text>
             </svg>
             <div className="ht-display" style={{ fontSize: 15, color: 'var(--player-glow)' }}>
-              Respawning at Zone {safeZone}
+              Respawning at {safeZoneLabel}
             </div>
             {lastKiller && (
               <div style={{ fontSize: 12, color: 'var(--text-mid)' }}>

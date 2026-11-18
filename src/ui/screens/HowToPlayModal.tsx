@@ -45,7 +45,7 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
                 { key: 'MOUSE', label: 'AIM & FIRE' },
                 { key: 'R', label: 'RELOAD' },
                 { key: 'E', label: 'SWAP WEAPON' },
-                { key: 'SHIFT', label: 'DASH' },
+                { key: 'Q / SHIFT', label: 'DASH' },
               ].map((item, i) => (
                 <div key={item.key} style={{ display: 'grid', gap: 4, justifyItems: 'center' }}>
                   <KeyCap label={item.key} active={step === i} />

@@ -79,6 +79,16 @@ export const OperatorCard: React.FC<OperatorCardProps> = ({
             <div className="ht-vital-nums">
               <AnimatedNumber value={hp} className="ht-vital-cur" />
               <span className="ht-vital-max">/{maxHp}</span>
+              {isLowHp && (
+                <span className="ht-vital-tag" style={{ color: 'var(--danger)' }}>
+                  LOW
+                </span>
+              )}
+              {!isLowHp && regenGlow && (
+                <span className="ht-vital-tag" style={{ color: 'var(--success)' }}>
+                  REGEN
+                </span>
+              )}
             </div>
             <div className="ht-vital-track">
               <div

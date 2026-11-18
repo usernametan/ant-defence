@@ -126,11 +126,12 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
       ctx.arc(zx, zy, 12, 0, Math.PI * 2);
       ctx.stroke();
 
+      const zoneLabel = z.id === 'A' ? 'Z1' : z.id === 'B' ? 'Z2' : z.id === 'C' ? 'Z3' : z.id.replace(/^zone-/i, 'Z');
       ctx.fillStyle = PALETTE.textHi;
       ctx.font = '800 10px Bahnschrift, "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(z.id, zx, zy + 0.5);
+      ctx.fillText(zoneLabel, zx, zy + 0.5);
     }
   }, [previewMap]);
 
@@ -207,12 +208,21 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
             />
             <Slider
               label="Score To Win"
-              min={30}
-              max={200}
+              min={50}
+              max={250}
               step={10}
               value={config.scoreToWin}
               onChange={(scoreToWin) => setConfig((p) => ({ ...p, scoreToWin }))}
             />
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--text-mid)' }}>
+            <Badge tone="player">
+              BLUE SQUAD: YOU + {Math.floor(config.enemyCount / 2)} ALLIES
+            </Badge>
+            <Badge tone="enemy">
+              RED SQUAD: {config.enemyCount} BOTS
+            </Badge>
           </div>
 
           <div className="ht-stagger" style={{ ['--stagger-i' as string]: 3 }}>
@@ -340,10 +350,16 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
               </Button>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-mid)' }}>
-              <span><Badge tone="player">BLUE</Badge> Friendly Base</span>
-              <span><Badge tone="enemy">ORANGE</Badge> Hostile Base</span>
-              <span><Badge tone="gold">A B C</Badge> Capture Zones</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 11, color: 'var(--text-mid)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                <Badge tone="player">BLUE</Badge> Friendly Base
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                <Badge tone="enemy">ORANGE</Badge> Hostile Base
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                <Badge tone="gold">Z1 Z2 Z3</Badge> Capture Zones
+              </span>
             </div>
           </div>
 

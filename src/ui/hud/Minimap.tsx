@@ -93,11 +93,12 @@ export const Minimap: React.FC<MinimapProps> = ({
         ctx.globalAlpha = 1;
       }
 
+      const label = def.id.replace(/^zone-/i, 'Z');
       ctx.fillStyle = PALETTE.textHi;
       ctx.font = '800 9px Bahnschrift, "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(def.id, zx, zy + 0.5);
+      ctx.fillText(label, zx, zy + 0.5);
     }
 
     // Pickups
@@ -106,7 +107,21 @@ export const Minimap: React.FC<MinimapProps> = ({
       ctx.fillRect(p.pos.x * sx - 1.5, p.pos.y * sy - 1.5, 3, 3);
     }
 
-    // Units
+    // Player aim cone & unit markers
+    const playerUnit = state.units.find((u) => u.id === state.playerId && !u.dead);
+    if (playerUnit) {
+      const px = playerUnit.pos.x * sx;
+      const py = playerUnit.pos.y * sy;
+      ctx.save();
+      ctx.fillStyle = 'rgba(103, 232, 249, 0.16)';
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.arc(px, py, 24, playerUnit.angle - 0.42, playerUnit.angle + 0.42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
     const pipR = colorblindAssist ? 4.2 : 3;
     for (const u of state.units) {
       if (u.dead) continue;

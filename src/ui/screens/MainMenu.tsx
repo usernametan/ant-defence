@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PALETTE } from '../../render/palette';
-import { Badge, Button, Icon, Panel, useMenuNavigation } from '../design';
+import { Badge, Button, Icon, KeyCap, Panel, useMenuNavigation } from '../design';
 import { generatePreviewMap } from '../previewMap';
 import '../ui.css';
 
@@ -106,11 +106,25 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       }
 
       for (const z of map.zones) {
-        ctx.strokeStyle = z.id === 'A' ? PALETTE.player : z.id === 'C' ? PALETTE.enemy : PALETTE.gold;
+        const col = z.id === 'A' ? PALETTE.player : z.id === 'C' ? PALETTE.enemy : PALETTE.gold;
+        ctx.strokeStyle = col;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(z.center.x, z.center.y, z.radius, 0, Math.PI * 2);
         ctx.stroke();
+
+        // Subtle sweeping radar arc
+        ctx.save();
+        ctx.translate(z.center.x, z.center.y);
+        ctx.rotate(t * 0.55 + (z.id === 'B' ? 1.5 : 0));
+        ctx.strokeStyle = col;
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([14, 10]);
+        ctx.beginPath();
+        ctx.arc(0, 0, z.radius * 0.72, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
       ctx.restore();
 
@@ -140,6 +154,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     <div
       ref={containerRef}
       className="ht-root ht-screen-enter"
+      style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-menu)' }}
       onMouseMove={(e) => {
         mouseRef.current = {
           x: e.clientX / Math.max(1, window.innerWidth),
@@ -150,112 +165,141 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       <canvas ref={canvasRef} className="ht-living-bg" aria-hidden="true" />
       <div className="ht-menu-scrim" aria-hidden="true" />
 
-      <div className="ht-screen-full" style={{ position: 'relative', zIndex: 2 }}>
+      <div className="ht-screen-full" style={{ zIndex: 2 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Badge tone="player">SECTOR COMMAND // ONLINE</Badge>
           <Badge tone="gold">{version}</Badge>
         </div>
 
-        <div style={{ maxWidth: 680, margin: 'auto 0' }}>
-          <div className="ht-stagger" style={{ ['--stagger-i' as string]: 0 }}>
-            <div
-              className="ht-display"
-              style={{ fontSize: 12, color: 'var(--player-glow)', marginBottom: 8 }}
+        <div className="ht-menu-grid">
+          <div style={{ maxWidth: 620 }}>
+            <div className="ht-stagger" style={{ ['--stagger-i' as string]: 0 }}>
+              <div
+                className="ht-display"
+                style={{ fontSize: 12, color: 'var(--player-glow)', marginBottom: 8 }}
+              >
+                TACTICAL ARENA PROTOCOL
+              </div>
+              <h1 className="ht-display ht-title-sweep">ZONE CONTROL</h1>
+              <p style={{ color: 'var(--text-mid)', marginTop: 12, fontSize: 14, maxWidth: 480, lineHeight: 1.55 }}>
+                Capture three tactical sectors, shatter enemy cover, and hold the line until your squad hits the score limit.
+              </p>
+            </div>
+
+            <div className="ht-menu-stack" style={{ marginTop: 28 }}>
+              <div className="ht-stagger" style={{ ['--stagger-i' as string]: 1 }}>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  style={{ width: '100%', justifyContent: 'space-between' }}
+                  onMouseEnter={() => setHovered('Launch match configuration & sector seed')}
+                  onClick={onPlay}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <Icon name="play" size={16} /> Play
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--player-glow)' }}>DEPLOY</span>
+                </Button>
+              </div>
+
+              <div className="ht-stagger" style={{ ['--stagger-i' as string]: 2 }}>
+                <Button
+                  variant="secondary"
+                  style={{ width: '100%', justifyContent: 'space-between' }}
+                  onMouseEnter={() => setHovered('Inspect & pick starting firearm')}
+                  onClick={onLoadout}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <Icon name="rifle" size={16} /> Loadout
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>ARMORY</span>
+                </Button>
+              </div>
+
+              <div className="ht-stagger" style={{ ['--stagger-i' as string]: 3 }}>
+                <Button
+                  variant="secondary"
+                  style={{ width: '100%', justifyContent: 'space-between' }}
+                  onMouseEnter={() => setHovered('Audio, graphics quality, crosshair & accessibility')}
+                  onClick={onSettings}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <Icon name="settings" size={16} /> Settings
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>SYSTEM</span>
+                </Button>
+              </div>
+
+              <div className="ht-stagger" style={{ ['--stagger-i' as string]: 4 }}>
+                <Button
+                  variant="ghost"
+                  style={{ width: '100%', justifyContent: 'space-between' }}
+                  onMouseEnter={() => setHovered('Controls, cover mechanics & zone rules')}
+                  onClick={onHowToPlay}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <Icon name="zone" size={16} /> How to Play
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>BRIEFING</span>
+                </Button>
+              </div>
+            </div>
+
+            <Panel
+              tone="subtle"
+              style={{
+                marginTop: 20,
+                padding: '10px 14px',
+                width: 'min(420px, 100%)',
+                fontSize: 12,
+                color: 'var(--text-mid)',
+              }}
             >
-              TACTICAL ARENA PROTOCOL
-            </div>
-            <h1 className="ht-display ht-title-sweep">ZONE CONTROL</h1>
-            <p style={{ color: 'var(--text-mid)', marginTop: 12, fontSize: 14, maxWidth: 480 }}>
-              Capture three tactical sectors, shatter enemy cover, and hold the line until your squad hits the score limit.
-            </p>
-          </div>
-
-          <div className="ht-menu-stack" style={{ marginTop: 28 }}>
-            <div className="ht-stagger" style={{ ['--stagger-i' as string]: 1 }}>
-              <Button
-                variant="primary"
-                size="lg"
-                style={{ width: '100%', justifyContent: 'space-between' }}
-                onMouseEnter={() => setHovered('Launch match configuration & sector seed')}
-                onClick={onPlay}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                  <Icon name="play" size={16} /> Play
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--player-glow)' }}>DEPLOY</span>
-              </Button>
-            </div>
-
-            <div className="ht-stagger" style={{ ['--stagger-i' as string]: 2 }}>
-              <Button
-                variant="secondary"
-                style={{ width: '100%', justifyContent: 'space-between' }}
-                onMouseEnter={() => setHovered('Inspect & pick starting firearm')}
-                onClick={onLoadout}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                  <Icon name="rifle" size={16} /> Loadout
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>ARMORY</span>
-              </Button>
-            </div>
-
-            <div className="ht-stagger" style={{ ['--stagger-i' as string]: 3 }}>
-              <Button
-                variant="secondary"
-                style={{ width: '100%', justifyContent: 'space-between' }}
-                onMouseEnter={() => setHovered('Audio, graphics quality, crosshair & accessibility')}
-                onClick={onSettings}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                  <Icon name="settings" size={16} /> Settings
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>SYSTEM</span>
-              </Button>
-            </div>
-
-            <div className="ht-stagger" style={{ ['--stagger-i' as string]: 4 }}>
-              <Button
-                variant="ghost"
-                style={{ width: '100%', justifyContent: 'space-between' }}
-                onMouseEnter={() => setHovered('Controls, cover mechanics & zone rules')}
-                onClick={onHowToPlay}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                  <Icon name="zone" size={16} /> How to Play
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>BRIEFING</span>
-              </Button>
-            </div>
+              {hovered}
+            </Panel>
           </div>
 
           <Panel
-            tone="subtle"
-            style={{
-              marginTop: 20,
-              padding: '10px 14px',
-              width: 'min(420px, 100%)',
-              fontSize: 12,
-              color: 'var(--text-mid)',
-            }}
+            bracketed
+            className="ht-menu-briefing ht-stagger"
+            style={{ ['--stagger-i' as string]: 3, padding: 20 }}
           >
-            {hovered}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="ht-display" style={{ fontSize: 12, color: 'var(--player-glow)' }}>
+                SECTOR INTEL
+              </span>
+              <Badge tone="gold">3 ZONES · 6 WEAPONS</Badge>
+            </div>
+            <div className="ht-menu-intel-grid">
+              <div className="ht-menu-intel-cell">
+                <span className="ht-menu-intel-k">OBJECTIVE</span>
+                <span className="ht-menu-intel-v">Capture Z1–Z3 or breach Enemy Core</span>
+              </div>
+              <div className="ht-menu-intel-cell">
+                <span className="ht-menu-intel-k">COVER</span>
+                <span className="ht-menu-intel-v">Crates block gunfire until shattered</span>
+              </div>
+              <div className="ht-menu-intel-cell">
+                <span className="ht-menu-intel-k">DROPS</span>
+                <span className="ht-menu-intel-v">Press E over fallen rare/epic arms</span>
+              </div>
+              <div className="ht-menu-intel-cell">
+                <span className="ht-menu-intel-k">VITALITY</span>
+                <span className="ht-menu-intel-v">Regenerates after 4.5s out of combat</span>
+              </div>
+            </div>
           </Panel>
         </div>
 
-        <footer
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'space-between',
-            gap: 12,
-            fontSize: 12,
-            color: 'var(--text-mid)',
-            borderTop: '1px solid var(--line)',
-            paddingTop: 12,
-          }}
-        >
-          <span>WASD Move · Mouse Aim & Fire · R Reload · E Pickup · Shift Dash</span>
+        <footer className="ht-menu-footer">
+          <div className="ht-menu-keys">
+            <span><KeyCap label="WASD" /> Move</span>
+            <span><KeyCap label="MOUSE" /> Aim & Fire</span>
+            <span><KeyCap label="R" /> Reload</span>
+            <span><KeyCap label="E" /> Swap</span>
+            <span><KeyCap label="Q / SHIFT" /> Dash</span>
+            <span><KeyCap label="ESC" /> Pause</span>
+          </div>
           <span>Arrow Keys / Gamepad D-Pad to Navigate · {version}</span>
         </footer>
       </div>

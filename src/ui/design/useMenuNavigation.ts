@@ -43,6 +43,11 @@ export function useMenuNavigation({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const activeDialog = document.querySelector('[role="dialog"][aria-modal="true"]');
+      if (activeDialog && containerRef.current && !containerRef.current.contains(activeDialog)) {
+        return;
+      }
+
       const target = e.target as HTMLElement | null;
       const isRangeOrInput =
         target?.tagName === 'INPUT' &&
