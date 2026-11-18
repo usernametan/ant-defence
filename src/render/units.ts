@@ -78,14 +78,30 @@ export function drawUnits(
     ctx.globalAlpha = vis;
     ctx.translate(unit.pos.x, unit.pos.y);
 
+    // Dash motion wake when boosting
+    if (speed > 240) {
+      const dashAngle = Math.atan2(unit.vel.y, unit.vel.x);
+      ctx.save();
+      ctx.rotate(dashAngle);
+      const wakeGrad = ctx.createLinearGradient(-34, 0, 0, 0);
+      wakeGrad.addColorStop(0, 'transparent');
+      wakeGrad.addColorStop(1, glow);
+      ctx.globalAlpha = vis * 0.45;
+      ctx.fillStyle = wakeGrad;
+      ctx.beginPath();
+      ctx.ellipse(-14, 0, 20, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Subtle ground selection ring under the player
     if (unit.isPlayer) {
       const pulse = 1 + 0.04 * Math.sin(time * 4);
       ctx.strokeStyle = PALETTE.player;
       ctx.lineWidth = 2;
-      ctx.globalAlpha = vis * 0.8;
+      ctx.globalAlpha = vis * 0.85;
       ctx.beginPath();
-      ctx.ellipse(0, 11, 15 * pulse, 7 * pulse, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 11, 16 * pulse, 7.5 * pulse, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = vis;
     }
@@ -119,18 +135,18 @@ export function drawUnits(
     ctx.fill();
     ctx.stroke();
 
-    // Armored human torso
+    // Armored human torso & shoulder pauldrons
     ctx.fillStyle = flash ? PALETTE.textHi : armorColor;
     ctx.beginPath();
-    ctx.roundRect(-6.5, -6.5, 13, 12, 4);
+    ctx.roundRect(-7.5, -6.5, 15, 12, 4.5);
     ctx.fill();
     ctx.stroke();
 
     // Chest plate highlight
     if (!flash) {
       ctx.fillStyle = glow;
-      ctx.globalAlpha = vis * 0.32;
-      ctx.fillRect(-3.5, -4, 7, 3);
+      ctx.globalAlpha = vis * 0.36;
+      ctx.fillRect(-4, -4.5, 8, 3);
       ctx.globalAlpha = vis;
     }
 
@@ -194,15 +210,30 @@ export function drawUnits(
       ctx.stroke();
     }
 
-    // Overhead crisp bordered health bar
-    const bw = 32;
+    // Overhead crisp bordered health bar with subtle glass frame
+    const bw = 34;
     const bh = 5;
     const barY = -27;
     const ratio = Math.max(0, Math.min(1, unit.hp / unit.maxHp));
-    ctx.fillStyle = PALETTE.bg0;
-    ctx.fillRect(-bw / 2 - 1, barY - 1, bw + 2, bh + 2);
-    ctx.fillStyle = unit.team === 'player' ? PALETTE.success : PALETTE.danger;
-    ctx.fillRect(-bw / 2, barY, bw * ratio, bh);
+    ctx.fillStyle = 'rgba(7, 11, 20, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(-bw / 2 - 1.5, barY - 1.5, bw + 3, bh + 3, 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(159, 176, 207, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle =
+      unit.team === 'player'
+        ? ratio < 0.3
+          ? PALETTE.gold
+          : PALETTE.success
+        : PALETTE.danger;
+    if (ratio > 0) {
+      ctx.beginPath();
+      ctx.roundRect(-bw / 2, barY, Math.max(2, bw * ratio), bh, 1.2);
+      ctx.fill();
+    }
 
     // Overhead label ("You" for player, shape pip for others)
     if (unit.isPlayer) {

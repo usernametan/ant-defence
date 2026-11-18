@@ -337,13 +337,13 @@ export class EffectsSystem {
         ctx.closePath();
         ctx.fill();
       } else {
-        // Golden-white luminous tracer streak
-        const grad = ctx.createLinearGradient(-16, 0, 6, 0);
+        // Team-tinted luminous tracer streak
+        const grad = ctx.createLinearGradient(-18, 0, 7, 0);
         grad.addColorStop(0, 'transparent');
-        grad.addColorStop(0.45, PALETTE.gold);
+        grad.addColorStop(0.45, p.team === 'player' ? PALETTE.playerGlow : PALETTE.gold);
         grad.addColorStop(1, PALETTE.textHi);
         ctx.fillStyle = grad;
-        ctx.fillRect(-16, -1.8, 22, 3.6);
+        ctx.fillRect(-18, -1.9, 25, 3.8);
       }
       ctx.restore();
     }
@@ -362,7 +362,11 @@ export class EffectsSystem {
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.ellipse(m.radius * 0.3, 0, m.radius, m.radius * 0.48, 0, 0, Math.PI * 2);
+      ctx.ellipse(m.radius * 0.35, 0, m.radius * 1.15, m.radius * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = PALETTE.textHi;
+      ctx.beginPath();
+      ctx.ellipse(m.radius * 0.15, 0, m.radius * 0.42, m.radius * 0.22, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }

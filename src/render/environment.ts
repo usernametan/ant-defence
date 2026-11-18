@@ -9,28 +9,45 @@ export class EnvironmentRenderer {
     if (typeof document === 'undefined') return null;
 
     const tile = document.createElement('canvas');
-    tile.width = 64;
-    tile.height = 64;
+    tile.width = 128;
+    tile.height = 128;
     const tctx = tile.getContext('2d');
     if (!tctx) return null;
 
     tctx.fillStyle = PALETTE.floorBase;
-    tctx.fillRect(0, 0, 64, 64);
-    tctx.fillStyle = PALETTE.floorAlt;
-    tctx.fillRect(0, 0, 32, 32);
-    tctx.fillRect(32, 32, 32, 32);
+    tctx.fillRect(0, 0, 128, 128);
 
-    tctx.strokeStyle = PALETTE.floorSeam;
-    tctx.lineWidth = 1;
-    tctx.strokeRect(0.5, 0.5, 31, 31);
-    tctx.strokeRect(32.5, 0.5, 31, 31);
-    tctx.strokeRect(0.5, 32.5, 31, 31);
-    tctx.strokeRect(32.5, 32.5, 31, 31);
+    // Alternating tactical deck tiles (32px)
+    for (let r = 0; r < 4; r += 1) {
+      for (let c = 0; c < 4; c += 1) {
+        const x = c * 32;
+        const y = r * 32;
+        if ((r + c) % 2 === 0) {
+          tctx.fillStyle = PALETTE.floorAlt;
+          tctx.fillRect(x, y, 32, 32);
+        }
+        // Subtle top-left bevel sheen & dark seam
+        tctx.fillStyle = 'rgba(234, 242, 255, 0.025)';
+        tctx.fillRect(x + 1, y + 1, 30, 1);
+        tctx.fillRect(x + 1, y + 1, 1, 30);
 
-    // Subtle stone texture speckles
-    tctx.fillStyle = 'rgba(234, 242, 255, 0.035)';
-    for (let i = 0; i < 28; i += 1) {
-      tctx.fillRect((i * 19 + 5) % 64, (i * 29 + 9) % 64, 2, 1);
+        tctx.strokeStyle = PALETTE.floorSeam;
+        tctx.lineWidth = 1;
+        tctx.strokeRect(x + 0.5, y + 0.5, 31, 31);
+
+        // Corner micro-rivets on every 2nd tile
+        if ((r + c) % 2 === 1) {
+          tctx.fillStyle = 'rgba(159, 176, 207, 0.09)';
+          tctx.fillRect(x + 4, y + 4, 2, 2);
+          tctx.fillRect(x + 26, y + 26, 2, 2);
+        }
+      }
+    }
+
+    // Subtle stone/deck micro-grain
+    tctx.fillStyle = 'rgba(234, 242, 255, 0.03)';
+    for (let i = 0; i < 48; i += 1) {
+      tctx.fillRect((i * 23 + 7) % 128, (i * 37 + 11) % 128, 2, 1);
     }
 
     this.floorPattern = ctx.createPattern(tile, 'repeat');
@@ -120,9 +137,11 @@ export class EnvironmentRenderer {
         ctx.fillRect(x + 5, y + 7, ts - 4, ts - 3);
 
         if (isCrate) {
-          // Gold-trimmed wooden supply crate
+          // Gold-trimmed wooden supply crate with cross-brace & corner brackets
           ctx.fillStyle = PALETTE.crateBody;
           ctx.fillRect(x + 2, y + 2, ts - 4, ts - 4);
+          ctx.fillStyle = '#B88338';
+          ctx.fillRect(x + 3, y + 3, ts - 6, 4);
           ctx.fillStyle = '#734F1E';
           ctx.fillRect(x + 2, y + ts - 7, ts - 4, 5);
           ctx.strokeStyle = PALETTE.crateTrim;
@@ -131,15 +150,23 @@ export class EnvironmentRenderer {
           ctx.beginPath();
           ctx.moveTo(x + 5, y + 5);
           ctx.lineTo(x + ts - 5, y + ts - 7);
+          ctx.moveTo(x + ts - 5, y + 5);
+          ctx.lineTo(x + 5, y + ts - 7);
           ctx.stroke();
+          // Corner rivets
+          ctx.fillStyle = '#E8C574';
+          ctx.fillRect(x + 4, y + 4, 2, 2);
+          ctx.fillRect(x + ts - 6, y + 4, 2, 2);
         } else {
-          // Low stone barrier connected with neighbors
+          // Low armored barricade connected with neighbors
           const leftCover = map.tiles[r]?.[c - 1] === 'lowCover';
           const rightCover = map.tiles[r]?.[c + 1] === 'lowCover';
           const padL = leftCover ? 0 : 2;
           const padR = rightCover ? 0 : 2;
           ctx.fillStyle = PALETTE.sandbagBody;
           ctx.fillRect(x + padL, y + 4, ts - padL - padR, ts - 8);
+          ctx.fillStyle = '#7B8AA8';
+          ctx.fillRect(x + padL + 1, y + 5, ts - padL - padR - 2, 3);
           ctx.fillStyle = PALETTE.wallSide;
           ctx.fillRect(x + padL, y + ts - 9, ts - padL - padR, 5);
           ctx.strokeStyle = PALETTE.wallEdge;
@@ -274,13 +301,24 @@ export class EnvironmentRenderer {
 
       const zoneR = Math.min(def.radius, 76);
 
-      const grad = ctx.createRadialGradient(0, 0, 8, 0, 0, zoneR + 18);
-      grad.addColorStop(0, `${ringColor}36`);
-      grad.addColorStop(0.65, `${ringColor}18`);
+      // True capture radius perimeter ring (dashed) so boundary is unmistakable
+      ctx.save();
+      ctx.strokeStyle = ringColor;
+      ctx.globalAlpha = contested ? 0.48 : 0.24;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, def.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      const grad = ctx.createRadialGradient(0, 0, 8, 0, 0, def.radius);
+      grad.addColorStop(0, `${ringColor}40`);
+      grad.addColorStop(0.55, `${ringColor}1A`);
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(0, 0, zoneR + 18, 0, Math.PI * 2);
+      ctx.arc(0, 0, def.radius, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.save();
@@ -303,11 +341,17 @@ export class EnvironmentRenderer {
       }
       ctx.restore();
 
+      // Counter-rotating inner tactical ring
+      ctx.save();
+      ctx.rotate(-time * 0.32);
       ctx.strokeStyle = glow;
-      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.65;
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([12, 8]);
       ctx.beginPath();
-      ctx.arc(0, 0, zoneR - 12, 0, Math.PI * 2);
+      ctx.arc(0, 0, zoneR - 13, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
 
       const absProg = Math.min(1, Math.abs(progress));
       if (absProg > 0.02) {
@@ -324,13 +368,14 @@ export class EnvironmentRenderer {
         ctx.stroke();
       }
 
-      ctx.font = '900 30px Bahnschrift, "Segoe UI", system-ui, sans-serif';
+      const label = def.id.replace(/^zone-/i, 'Z');
+      ctx.font = '900 28px Bahnschrift, "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = PALETTE.bg0;
-      ctx.fillText(def.id, 1.5, 2.5);
+      ctx.fillText(label, 1.5, 2.5);
       ctx.fillStyle = PALETTE.textHi;
-      ctx.fillText(def.id, 0, 1);
+      ctx.fillText(label, 0, 1);
 
       ctx.restore();
     }
@@ -406,6 +451,16 @@ export class EnvironmentRenderer {
       }
 
       const pulse = 1 + 0.12 * Math.sin(time * 4.5 + p.pos.y);
+
+      // Ground halo disc
+      const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 22 * pulse);
+      halo.addColorStop(0, `${color}55`);
+      halo.addColorStop(1, 'transparent');
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(0, 0, 22 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -413,16 +468,18 @@ export class EnvironmentRenderer {
       ctx.stroke();
 
       ctx.fillStyle = PALETTE.bg1;
-      ctx.fillRect(-9, -7, 18, 14);
+      ctx.beginPath();
+      ctx.roundRect(-12, -8, 24, 16, 3);
+      ctx.fill();
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.8;
-      ctx.strokeRect(-9, -7, 18, 14);
+      ctx.stroke();
 
       ctx.font = '800 9px Bahnschrift, "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = color;
-      ctx.fillText(p.weaponId.slice(0, 3).toUpperCase(), 0, 1);
+      ctx.fillText(p.weaponId.slice(0, 3).toUpperCase(), 0, 0.5);
 
       ctx.restore();
     }
