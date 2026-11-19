@@ -8,17 +8,107 @@ export interface ObjectivesCardProps {
 
 export const ObjectivesCard: React.FC<ObjectivesCardProps> = ({ state }) => {
   const theme = getThemePalette(state.map.theme);
+  const isRampage = state.matchConfig.mode === 'rampage';
+
+  if (isRampage) {
+    const sorted = [...state.units].sort((a, b) => {
+      if (b.kills !== a.kills) return b.kills - a.kills;
+      if (a.deaths !== b.deaths) return a.deaths - b.deaths;
+      return a.isPlayer ? -1 : 1;
+    });
+    const playerRank = Math.max(1, sorted.findIndex((u) => u.id === state.playerId) + 1);
+    const killGoal = state.matchConfig.scoreToWin;
+    const topUnits = sorted.slice(0, 4);
+
+    return (
+      <div className="ht-chamfer-panel ht-objectives-card">
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <div className="ht-objectives-title">RAMPAGE RANK #{playerRank}</div>
+          <span
+            className="ht-display"
+            style={{
+              fontSize: 9,
+              letterSpacing: '0.08em',
+              color: 'var(--gold)',
+              textTransform: 'uppercase',
+            }}
+          >
+            GOAL {killGoal} KILLS
+          </span>
+        </div>
+        <div className="ht-objectives-list">
+          {topUnits.map((u, idx) => (
+            <div
+              key={u.id}
+              className="ht-objective-row"
+              style={{ justifyContent: 'space-between', width: '100%' }}
+            >
+              <span
+                style={{
+                  color: u.isPlayer ? 'var(--player-glow)' : 'var(--text-hi)',
+                  fontWeight: u.isPlayer ? 800 : 600,
+                }}
+              >
+                {idx + 1}. {u.isPlayer ? 'YOU' : (u.name ?? u.id)}
+              </span>
+              <span className="ht-num" style={{ color: 'var(--gold)', fontWeight: 700 }}>
+                {u.kills}K
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const ownedZones = state.zones.filter((z) => z.owner === 'player').length;
   const scoreGoal = state.matchConfig.scoreToWin;
   const reachedScore = state.score.player >= scoreGoal;
   const coreDestroyed = state.baseHp.enemy <= 0;
   const allZonesHeld = ownedZones === state.zones.length && state.zones.length > 0;
+  const bossActive = Boolean(state.hellcell?.isCeasefireActive && state.hellcell?.boss);
+  const awaitingHellcellTrigger = Boolean(
+    state.matchConfig.mode === 'hellcell' && state.hellcell && !state.hellcell.hasTriggered,
+  );
+  const nextMonsterSec =
+    state.matchConfig.mode === 'hellcell' &&
+    state.hellcell &&
+    state.hellcell.phase === 'NORMAL' &&
+    (state.hellcell.nextSpawnIn ?? 0) > 0
+      ? Math.ceil(state.hellcell.nextSpawnIn ?? 0)
+      : 0;
+  const zoneA = state.zones.find((z) => z.id === 'zone-1' || z.id === 'A') ?? state.zones[0];
+  const zoneC = state.zones.find((z) => z.id === 'zone-3' || z.id === 'C') ?? state.zones[2];
+  const outerCaptured =
+    (zoneA && zoneA.owner !== 'neutral' ? 1 : 0) + (zoneC && zoneC.owner !== 'neutral' ? 1 : 0);
 
   const rows = [
-    {
-      label: `Hold Zones (${ownedZones}/${state.zones.length})`,
-      done: allZonesHeld,
-    },
+    bossActive
+      ? {
+          label: 'Defeat Boss (0/1)',
+          done: false,
+        }
+      : awaitingHellcellTrigger
+        ? {
+            label: `Capture A & C (${outerCaptured}/2) → Zone B Boss`,
+            done: outerCaptured >= 2,
+          }
+        : nextMonsterSec > 0
+          ? {
+              label: `Next Monster in ${nextMonsterSec}s`,
+              done: false,
+            }
+          : {
+              label: `Hold Zones (${ownedZones}/${state.zones.length})`,
+              done: allZonesHeld,
+            },
     {
       label: `Reach ${scoreGoal} Score`,
       done: reachedScore,

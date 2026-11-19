@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getThemePalette } from '../../render/palette';
-import type { MapTheme, MatchDifficulty } from '../../shared/types';
+import type { GameMode, MapTheme, MatchDifficulty } from '../../shared/types';
 import { Badge, Panel } from '../design';
 import '../ui.css';
 
 export interface CountdownOverlayProps {
   seconds?: number;
+  mode?: GameMode;
   mapTheme?: MapTheme;
   difficulty?: MatchDifficulty;
   scoreToWin?: number;
@@ -15,6 +16,7 @@ export interface CountdownOverlayProps {
 
 export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
   seconds = 3,
+  mode = 'zoneControl',
   mapTheme = 'fortress',
   difficulty = 'normal',
   scoreToWin = 120,
@@ -66,7 +68,7 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
             className="ht-display"
             style={{ fontSize: 'clamp(28px, 5vw, 52px)', marginTop: 6 }}
           >
-            ZONE CONTROL
+            {mode === 'rampage' ? 'RAMPAGE' : mode === 'hellcell' ? 'HELLCELL' : 'ZONE CONTROL'}
           </h1>
           <div
             style={{
@@ -77,8 +79,16 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
               flexWrap: 'wrap',
             }}
           >
-            <Badge tone="player">CAPTURE A · B · C</Badge>
-            <Badge tone="gold">{scoreToWin} SCORE TO WIN</Badge>
+            <Badge tone={mode === 'rampage' ? 'enemy' : mode === 'hellcell' ? 'gold' : 'player'}>
+              {mode === 'rampage'
+                ? 'FREE FOR ALL · NO TEAMS'
+                : mode === 'hellcell'
+                  ? 'PVPVE · BOSS CEASEFIRE BREACH'
+                  : 'CAPTURE A · B · C'}
+            </Badge>
+            <Badge tone="gold">
+              {mode === 'rampage' ? `${scoreToWin} KILLS TO WIN` : `${scoreToWin} SCORE TO WIN`}
+            </Badge>
             <Badge tone="common">{difficulty.toUpperCase()}</Badge>
           </div>
         </Panel>

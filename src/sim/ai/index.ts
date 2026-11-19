@@ -1,4 +1,4 @@
-import { WEAPON_DEFS } from '../../shared/api';
+import { GRENADE_DEF, WEAPON_DEFS } from '../../shared/api';
 import type { MapData, MatchConfig, MatchDifficulty, Team, Unit, Vec2, WeaponId } from '../../shared/types';
 import {
   BOT_AGGRO_RANGE,
@@ -7,7 +7,7 @@ import {
 } from '../constants';
 import { toDisplayState, type AiMode } from '../internal';
 import { isPassable, tileCenter, worldToTile } from '../map';
-import { hasLineOfSight } from '../physics';
+import { hasLineOfSight, raycast } from '../physics';
 import type { SimWorld } from '../world';
 
 interface DifficultyProfile {
@@ -15,12 +15,13 @@ interface DifficultyProfile {
   aimError: number;
   aggression: number;
   aimSpeed: number;
+  grenadeChance: number;
 }
 
 const DIFFICULTY: Record<MatchDifficulty, DifficultyProfile> = {
-  easy: { reactionTime: 0.78, aimError: 0.26, aggression: 0.35, aimSpeed: 3.4 },
-  normal: { reactionTime: 0.48, aimError: 0.15, aggression: 0.58, aimSpeed: 5.2 },
-  hard: { reactionTime: 0.24, aimError: 0.075, aggression: 0.82, aimSpeed: 8.5 },
+  easy: { reactionTime: 0.78, aimError: 0.26, aggression: 0.35, aimSpeed: 3.4, grenadeChance: 0.008 },
+  normal: { reactionTime: 0.48, aimError: 0.15, aggression: 0.58, aimSpeed: 5.2, grenadeChance: 0.018 },
+  hard: { reactionTime: 0.24, aimError: 0.075, aggression: 0.82, aimSpeed: 8.5, grenadeChance: 0.032 },
 };
 
 const RARITY_RANK = { common: 0, rare: 1, epic: 2 };
@@ -46,6 +47,21 @@ function normalizeAngle(angle: number): number {
   return result;
 }
 
+const RAMPAGE_CALLSIGNS = [
+  'Viper',
+  'Reaper',
+  'Ghost',
+  'Apex',
+  'Nova',
+  'Talon',
+  'Cipher',
+  'Kodiak',
+  'Specter',
+  'Blitz',
+  'Havoc',
+  'Valkyrie',
+];
+
 /** Nearest enemy the bot can actually see, with short-lived memory after LoS loss. */
 function findVisibleTarget(
   world: SimWorld,
@@ -55,7 +71,7 @@ function findVisibleTarget(
   let best: Unit | undefined;
   let bestDistance = BOT_AGGRO_RANGE;
   for (const candidate of world.livingUnits()) {
-    if (candidate.team === unit.team) continue;
+    if (!world.areHostile(unit, candidate)) continue;
     const range = distance(unit.pos, candidate.pos);
     if (range >= bestDistance) continue;
     if (!hasLineOfSight(world.state.map, unit.pos, candidate.pos)) continue;
@@ -78,7 +94,7 @@ function findVisibleTarget(
 
   if (ai.targetId && world.state.time - ai.lastSeenAt < 1.5) {
     const remembered = world.unitById(ai.targetId);
-    if (remembered && !remembered.dead) return remembered;
+    if (remembered && !remembered.dead && world.areHostile(unit, remembered)) return remembered;
   }
   return undefined;
 }
@@ -99,6 +115,7 @@ function findBetterPickup(world: SimWorld, unit: Unit) {
 }
 
 function shouldDefend(world: SimWorld, unit: Unit): boolean {
+  if (world.isRampage()) return false;
   const base = world.state.map.bases.find((candidate) => candidate.team === unit.team);
   if (!base) return false;
   return world.livingUnits().some(
@@ -108,9 +125,36 @@ function shouldDefend(world: SimWorld, unit: Unit): boolean {
 
 function captureGoal(world: SimWorld, unit: Unit): Vec2 {
   const map = world.state.map;
-  const candidates = map.zones.filter((zone) =>
+  if (world.isRampage()) {
+    let closest: Unit | undefined;
+    let closestDist = Infinity;
+    for (const candidate of world.livingUnits()) {
+      if (!world.areHostile(unit, candidate)) continue;
+      const d = distance(unit.pos, candidate.pos);
+      if (d < closestDist) {
+        closestDist = d;
+        closest = candidate;
+      }
+    }
+    if (closest) return closest.pos;
+    return map.zones[1]?.center ?? map.zones[0]?.center ?? unit.pos;
+  }
+  let candidates = map.zones.filter((zone) =>
     world.state.zones.find((state) => state.id === zone.id)?.owner !== unit.team,
   );
+  if (world.isHellcell() && !world.state.hellcell?.hasTriggered) {
+    const outerUncaptured = map.zones.filter((zone) => {
+      if (zone.id === 'zone-2' || zone.id === 'B') return false;
+      const st = world.state.zones.find((s) => s.id === zone.id);
+      return st !== undefined && st.owner === 'neutral';
+    });
+    if (outerUncaptured.length > 0) {
+      candidates = outerUncaptured;
+    } else {
+      const outerContest = candidates.filter((z) => z.id !== 'zone-2' && z.id !== 'B');
+      if (outerContest.length > 0) candidates = outerContest;
+    }
+  }
   if (candidates.length === 0) {
     const enemyBase = map.bases.find((base) => base.team !== unit.team);
     return enemyBase?.center ?? map.zones[0]?.center ?? unit.pos;
@@ -279,6 +323,10 @@ function flank(world: SimWorld, unit: Unit, target: Unit, dt: number): void {
 
 function seekCover(world: SimWorld, unit: Unit, target: Unit | undefined, dt: number): void {
   if (!target) {
+    if (world.isRampage()) {
+      moveToward(world, unit, captureGoal(world, unit), dt);
+      return;
+    }
     const base = world.state.map.bases.find((candidate) => candidate.team === unit.team);
     if (base) moveToward(world, unit, base.center, dt);
     return;
@@ -310,6 +358,10 @@ function advanceMode(
       seekCover(world, unit, target, dt);
       break;
     case 'retreat': {
+      if (world.isRampage()) {
+        seekCover(world, unit, target, dt);
+        break;
+      }
       const base = world.state.map.bases.find((candidate) => candidate.team === unit.team);
       if (base) moveToward(world, unit, base.center, dt);
       break;
@@ -354,10 +406,65 @@ function updateBot(world: SimWorld, unit: Unit, profile: DifficultyProfile, dt: 
   intent.dash = false;
   intent.interact = false;
   intent.swapWeapon = false;
+  intent.throwGrenade = false;
 
   const target = findVisibleTarget(world, unit, profile);
   ai.firePulse += 1;
   if (ai.reactionTimer > 0) ai.reactionTimer = Math.max(0, ai.reactionTimer - dt);
+
+  // During Hellcell Ceasefire, both Blue and Red bots focus fire on the central Boss!
+  const boss = world.isCeasefireActive() ? world.state.hellcell?.boss : null;
+  if (boss && boss.hp > 0) {
+    unit.aiState = 'engage';
+    const range = distance(unit.pos, boss.pos);
+    const ideal = Math.min(310, Math.max(boss.radius + 115, IDEAL_RANGE[unit.weaponId] * 0.8));
+    if (range > ideal * 1.18 || !hasLineOfSight(world.state.map, unit.pos, boss.pos)) {
+      moveToward(world, unit, boss.pos, dt);
+    } else {
+      if (world.rng.chance(0.01)) ai.strafeSign *= -1;
+      const toBossX = (boss.pos.x - unit.pos.x) / Math.max(range, 1);
+      const toBossY = (boss.pos.y - unit.pos.y) / Math.max(range, 1);
+      let dirX = -toBossY * ai.strafeSign;
+      let dirY = toBossX * ai.strafeSign;
+      if (range < boss.radius + 95) {
+        dirX -= toBossX;
+        dirY -= toBossY;
+      }
+      const len = Math.hypot(dirX, dirY) || 1;
+      intent.moveX = dirX / len;
+      intent.moveY = dirY / len;
+    }
+
+    const aimAngle = Math.atan2(boss.pos.y - unit.pos.y, boss.pos.x - unit.pos.x) + ai.aimError * 0.5;
+    intent.aimX = boss.pos.x;
+    intent.aimY = boss.pos.y;
+    const turn = normalizeAngle(aimAngle - unit.angle);
+    const maxTurn = profile.aimSpeed * dt;
+    unit.angle += Math.max(-maxTurn, Math.min(maxTurn, turn));
+
+    const def = WEAPON_DEFS[unit.weaponId];
+    const aligned = Math.abs(normalizeAngle(aimAngle - unit.angle)) < 0.24;
+    if (
+      aligned &&
+      range <= def.range &&
+      ai.firePulse % 48 < 36 &&
+      hasLineOfSight(world.state.map, unit.pos, boss.pos)
+    ) {
+      intent.firing = ai.firePulse % 2 === 0;
+    }
+    if (
+      (unit.grenades ?? 0) > 0 &&
+      runtime.grenadeCooldown <= 0 &&
+      aligned &&
+      range <= 460 &&
+      hasLineOfSight(world.state.map, unit.pos, boss.pos) &&
+      world.rng.chance(profile.grenadeChance)
+    ) {
+      intent.throwGrenade = true;
+    }
+    if (unit.ammoInMag <= 0) intent.reload = true;
+    return;
+  }
 
   const mode = chooseMode(world, unit, target, profile);
   if (mode !== ai.mode) {
@@ -393,6 +500,21 @@ function updateBot(world: SimWorld, unit: Unit, profile: DifficultyProfile, dt: 
       // Pulse the trigger in tactical bursts so semi-auto and automatic weapons pace cleanly.
       intent.firing = ai.firePulse % 2 === 0;
     }
+
+    const hitCheck = raycast(world.state.map, unit.pos, target.pos);
+    const canHitOrBlastCover = hitCheck === null || hitCheck.kind === 'cover';
+    if (
+      (unit.grenades ?? 0) > 0 &&
+      runtime.grenadeCooldown <= 0 &&
+      ai.reactionTimer <= 0 &&
+      aligned &&
+      range >= 100 &&
+      range <= 470 &&
+      canHitOrBlastCover &&
+      world.rng.chance(profile.grenadeChance)
+    ) {
+      intent.throwGrenade = true;
+    }
   }
 
   if (unit.ammoInMag <= 0) intent.reload = true;
@@ -406,10 +528,17 @@ function updateBot(world: SimWorld, unit: Unit, profile: DifficultyProfile, dt: 
   }
 }
 
-/** Spawn enemy bots plus allied bots (floor(enemyCount / 2)) at their bases. */
+/** Spawn enemy bots plus allied bots (enemyCount - 1) for equal team sizes, or FFA bots in Rampage. */
 export function spawnBots(world: SimWorld, config: MatchConfig): void {
   const enemyCount = Math.max(0, Math.floor(config.enemyCount));
-  const allyCount = Math.floor(enemyCount / 2);
+  if (config.mode === 'rampage') {
+    for (let index = 0; index < enemyCount; index += 1) {
+      const name = RAMPAGE_CALLSIGNS[index % RAMPAGE_CALLSIGNS.length];
+      spawnBot(world, `bot-${index + 1}`, 'enemy', config.startingWeapon, name, true);
+    }
+    return;
+  }
+  const allyCount = Math.max(0, enemyCount - 1);
   for (let index = 0; index < enemyCount; index += 1) {
     spawnBot(world, `enemy-${index + 1}`, 'enemy', config.startingWeapon);
   }
@@ -418,13 +547,26 @@ export function spawnBots(world: SimWorld, config: MatchConfig): void {
   }
 }
 
-function spawnBot(world: SimWorld, id: string, team: Team, weaponId: WeaponId): void {
-  const base = world.state.map.bases.find((candidate) => candidate.team === team);
-  const pos = base ? world.findFreeSpot(base.center, 5) : { x: 320, y: 320 };
+function spawnBot(
+  world: SimWorld,
+  id: string,
+  team: Team,
+  weaponId: WeaponId,
+  name?: string,
+  rampageSpread = false,
+): void {
+  let pos: Vec2;
+  if (rampageSpread) {
+    pos = world.findRampageSpawnSpot();
+  } else {
+    const base = world.state.map.bases.find((candidate) => candidate.team === team);
+    pos = base ? world.findFreeSpot(base.center, 5) : { x: 320, y: 320 };
+  }
   const def = WEAPON_DEFS[weaponId];
   const unit: Unit = {
     id,
     team,
+    ...(name ? { name } : {}),
     pos: { x: pos.x, y: pos.y },
     vel: { x: 0, y: 0 },
     angle: team === 'player' ? 0 : Math.PI,
@@ -433,6 +575,7 @@ function spawnBot(world: SimWorld, id: string, team: Team, weaponId: WeaponId): 
     weaponId,
     ammoInMag: def.magSize,
     reserveAmmo: def.magSize * 5,
+    grenades: GRENADE_DEF.defaultCount,
     reloading: false,
     reloadProgress: 0,
     isPlayer: false,

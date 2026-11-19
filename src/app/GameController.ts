@@ -16,6 +16,7 @@ const KEY_MOVE_LEFT = 'KeyA';
 const KEY_MOVE_RIGHT = 'KeyD';
 const KEY_RELOAD = 'KeyR';
 const KEY_INTERACT = 'KeyE';
+const KEY_GRENADE = 'KeyG';
 /** The HUD labels Q as Tactical Dash; Shift/Space remain aliases. */
 const KEY_DASH = ['KeyQ', 'ShiftLeft', 'ShiftRight', 'Space'];
 
@@ -44,6 +45,7 @@ export class GameController {
     interact: false,
     swapWeapon: false,
     dash: false,
+    throwGrenade: false,
   };
 
   constructor(sim: SimApi) {
@@ -170,6 +172,7 @@ export class GameController {
     this.input.interact = this.keys.has(KEY_INTERACT);
     this.input.swapWeapon = false;
     this.input.dash = KEY_DASH.some((code) => this.keys.has(code));
+    this.input.throwGrenade = this.keys.has(KEY_GRENADE);
     return this.input;
   }
 

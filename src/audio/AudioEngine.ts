@@ -1,10 +1,28 @@
 import { bus } from '../shared/events';
-import type { MapTheme, Vec2, WeaponId } from '../shared/types';
+import type { BossKind, GameMode, HellcellBoss, MapTheme, MatchStatus, Vec2, WeaponId } from '../shared/types';
 
 export interface AudioVolumes {
   master: number; // 0..1
   sfx: number; // 0..1
   music: number; // 0..1
+}
+
+export interface AudioUpdateContext {
+  status?: MatchStatus;
+  mode?: GameMode;
+  score?: { player: number; enemy: number };
+  scoreToWin?: number;
+  boss?: Pick<HellcellBoss, 'kind' | 'pos' | 'hp' | 'maxHp'> | null;
+}
+
+export function computeBossProximity(
+  bossPos: Vec2,
+  listenerPos: Vec2,
+  maxRange = 760,
+): number {
+  const dist = Math.hypot(bossPos.x - listenerPos.x, bossPos.y - listenerPos.y);
+  const raw = clamp01(1 - dist / maxRange);
+  return Math.pow(raw, 1.35);
 }
 
 export class AudioEngine {
@@ -19,13 +37,32 @@ export class AudioEngine {
   private ambientFilter: BiquadFilterNode | null = null;
   private ambientStarted = false;
 
+  // Continuous proximity-faded Hellcell monster audio nodes
+  private bossLoopKind: BossKind | null = null;
+  private bossLoopGain: GainNode | null = null;
+  private bossLoopPanner: StereoPannerNode | null = null;
+  private bossLoopOscA: OscillatorNode | null = null;
+  private bossLoopOscB: OscillatorNode | null = null;
+  private bossLoopLfo: OscillatorNode | null = null;
+  private bossLoopLfoGain: GainNode | null = null;
+  private bossLoopNoise: AudioBufferSourceNode | null = null;
+  private bossLoopFilter: BiquadFilterNode | null = null;
+  private lastBossVocalAt = 0;
+
+  // Tactical score/lead alert tracking
+  private lastAnnounceAt = 0;
+  private lastLeader: 'player' | 'enemy' | 'tied' = 'tied';
+  private endgameAnnounced = { player: false, enemy: false };
+  private activeMode: GameMode = 'zoneControl';
+
   private volumes: AudioVolumes = { master: 0.8, sfx: 0.85, music: 0.45 };
   private listenerPos: Vec2 = { x: 960, y: 640 };
   private playerId = 'player';
   private mapTheme: MapTheme = 'fortress';
   private activeVoices = 0;
-  private readonly maxVoices = 22;
+  private readonly maxVoices = 24;
   private lastShotAt = new Map<string, number>();
+  private lastEventAt = new Map<string, number>();
   private lastHeartbeatAt = 0;
   private combatHeat = 0;
   private unsubscribers: Array<() => void> = [];
@@ -102,7 +139,12 @@ export class AudioEngine {
     }
   }
 
-  update(dt: number, playerHpRatio: number, combatActive: boolean): void {
+  update(
+    dt: number,
+    playerHpRatio: number,
+    combatActive: boolean,
+    context?: AudioUpdateContext,
+  ): void {
     this.combatHeat = Math.max(
       0,
       Math.min(1, this.combatHeat + (combatActive ? 0.45 : -0.22) * dt),
@@ -126,6 +168,23 @@ export class AudioEngine {
         this.lastHeartbeatAt = nowMs;
         this.playHeartbeat();
       }
+    }
+
+    if (!context) return;
+
+    const isPlaying = context.status === undefined || context.status === 'playing';
+    if (!isPlaying) {
+      this.fadeOutBossLoop();
+      return;
+    }
+
+    this.updateBossProximity(context.boss ?? null);
+    if (context.score && context.scoreToWin) {
+      this.updateMatchAlerts(
+        context.mode ?? this.activeMode,
+        context.score,
+        context.scoreToWin,
+      );
     }
   }
 
@@ -199,6 +258,66 @@ export class AudioEngine {
     }
   }
 
+  playGrenadeThrow(pan = 0): void {
+    this.playNoiseBurst(0.11, 1400, 0.18, pan);
+    this.playTone(420, 190, 0.12, 'triangle', 0.16, pan);
+  }
+
+  playHellcellWarning(): void {
+    this.playTone(220, 440, 0.28, 'sawtooth', 0.16, 0);
+    this.playTone(220, 440, 0.28, 'sawtooth', 0.16, 0, 0.34);
+    this.playTone(110, 82, 0.45, 'triangle', 0.18, 0, 0.05);
+  }
+
+  playBossRoar(pan = 0): void {
+    this.playNoiseBurst(0.5, 520, 0.34, pan);
+    this.playTone(145, 48, 0.55, 'sawtooth', 0.26, pan);
+    this.playTone(92, 38, 0.6, 'square', 0.14, pan, 0.06);
+  }
+
+  /** Play synthesized monster-specific audio scaled smoothly by proximity (0..1) and stereo pan. */
+  playMonsterVocal(kind: BossKind, proximity: number, pan = 0): void {
+    const level = clamp01(proximity);
+    if (level <= 0.02) return;
+
+    if (kind === 'rocketSiegeBot') {
+      // Heavy mechanical servo pulses & robotic alarm cadence
+      const vol = 0.15 * level;
+      this.playTone(170, 125, 0.11, 'square', vol, pan);
+      this.playTone(150, 92, 0.18, 'sawtooth', vol * 1.15, pan, 0.13);
+      this.playTone(170, 125, 0.11, 'square', vol, pan, 0.42);
+      this.playTone(150, 88, 0.2, 'sawtooth', vol * 1.2, pan, 0.55);
+      this.playNoiseBurst(0.12, 1100, vol * 0.8, pan);
+    } else if (kind === 'pharaohSkeleton') {
+      // Deep ancient tomb resonance + eerie bone rattle chime
+      const vol = 0.17 * level;
+      this.playTone(76, 48, 0.48, 'triangle', vol, pan);
+      this.playTone(108, 66, 0.44, 'sawtooth', vol * 0.65, pan, 0.08);
+      this.playTone(540, 360, 0.16, 'sine', vol * 0.45, pan, 0.18);
+      this.playTone(430, 290, 0.14, 'sine', vol * 0.35, pan, 0.3);
+    } else {
+      // Giant Venom Cobra sibilant snake whisper ("sssss... sssss...")
+      const vol = 0.2 * level;
+      this.playNoiseSweep(0.28, 2800, 4900, vol, pan, 0);
+      this.playNoiseSweep(0.36, 4400, 2300, vol * 0.9, pan, 0.32);
+    }
+  }
+
+  playBossDefeated(): void {
+    this.stopBossLoop();
+    this.playNoiseBurst(0.45, 760, 0.34, 0);
+    this.playTone(130, 42, 0.45, 'sawtooth', 0.24, 0);
+    // Victory & refuel chime arpeggio
+    this.playTone(523.25, 659.25, 0.16, 'triangle', 0.18, 0, 0.12);
+    this.playTone(659.25, 783.99, 0.18, 'triangle', 0.18, 0, 0.22);
+    this.playTone(783.99, 1046.5, 0.28, 'sine', 0.2, 0, 0.32);
+  }
+
+  playDash(): void {
+    this.playNoiseBurst(0.09, 1900, 0.16, 0);
+    this.playTone(320, 640, 0.09, 'sine', 0.12, 0);
+  }
+
   computePan(worldPos: Vec2): number {
     return computeStereoPan(worldPos.x, this.listenerPos.x);
   }
@@ -206,6 +325,7 @@ export class AudioEngine {
   destroy(): void {
     for (const off of this.unsubscribers) off();
     this.unsubscribers = [];
+    this.stopBossLoop();
     if (this.unlockHandler && typeof window !== 'undefined') {
       window.removeEventListener('pointerdown', this.unlockHandler);
       window.removeEventListener('keydown', this.unlockHandler);
@@ -232,9 +352,261 @@ export class AudioEngine {
     this.activeVoices = 0;
   }
 
+  private updateBossProximity(
+    boss: Pick<HellcellBoss, 'kind' | 'pos' | 'hp' | 'maxHp'> | null,
+  ): void {
+    if (!boss || boss.hp <= 0) {
+      this.stopBossLoop();
+      return;
+    }
+
+    const proximity = computeBossProximity(boss.pos, this.listenerPos, 780);
+    const pan = this.computePan(boss.pos);
+
+    if (this.ctx && this.sfxGain) {
+      if (this.bossLoopKind !== boss.kind) {
+        this.startBossLoop(boss.kind);
+      }
+      const now = this.ctx.currentTime;
+      if (this.bossLoopGain && this.bossLoopPanner) {
+        const maxVol = boss.kind === 'venomCobra' ? 0.34 : 0.24;
+        this.bossLoopGain.gain.setTargetAtTime(proximity * maxVol, now, 0.08);
+        this.bossLoopPanner.pan.setTargetAtTime(pan, now, 0.06);
+      }
+      if (this.bossLoopFilter && boss.kind === 'venomCobra') {
+        this.bossLoopFilter.frequency.setTargetAtTime(2200 + proximity * 2400, now, 0.1);
+      }
+    }
+
+    const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const interval = boss.kind === 'venomCobra' ? 2800 : 3400;
+    if (proximity > 0.1 && nowMs - this.lastBossVocalAt > interval) {
+      this.lastBossVocalAt = nowMs;
+      this.playMonsterVocal(boss.kind, proximity, pan);
+    }
+  }
+
+  private startBossLoop(kind: BossKind): void {
+    this.stopBossLoop();
+    if (!this.ctx || !this.sfxGain) return;
+
+    this.bossLoopKind = kind;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.0001;
+    const panner = this.ctx.createStereoPanner();
+    panner.pan.value = 0;
+    gain.connect(panner);
+    panner.connect(this.sfxGain);
+
+    this.bossLoopGain = gain;
+    this.bossLoopPanner = panner;
+
+    if (kind === 'venomCobra' && this.noiseBuffer) {
+      // Continuous slithering snake whisper ("ssss... ssss...") modulated by LFO
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noiseBuffer;
+      src.loop = true;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 3400;
+      filter.Q.value = 3.2;
+
+      const modGain = this.ctx.createGain();
+      modGain.gain.value = 0.55;
+
+      const lfo = this.ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 5.5;
+      const lfoGain = this.ctx.createGain();
+      lfoGain.gain.value = 0.4;
+
+      src.connect(filter);
+      filter.connect(modGain);
+      lfo.connect(lfoGain);
+      lfoGain.connect(modGain.gain);
+      modGain.connect(gain);
+
+      src.start();
+      lfo.start();
+      this.bossLoopNoise = src;
+      this.bossLoopFilter = filter;
+      this.bossLoopLfo = lfo;
+      this.bossLoopLfoGain = lfoGain;
+      return;
+    }
+
+    // Mechanical servo drone (Robo) or deep ancient tomb hum (Skeleton)
+    const oscA = this.ctx.createOscillator();
+    const oscB = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+
+    const lfo = this.ctx.createOscillator();
+    lfo.type = 'sine';
+    const lfoGain = this.ctx.createGain();
+
+    if (kind === 'rocketSiegeBot') {
+      oscA.type = 'sawtooth';
+      oscA.frequency.value = 72;
+      oscB.type = 'square';
+      oscB.frequency.value = 108;
+      filter.frequency.value = 460;
+      lfo.frequency.value = 6.2;
+      lfoGain.gain.value = 180;
+    } else {
+      oscA.type = 'triangle';
+      oscA.frequency.value = 58;
+      oscB.type = 'sine';
+      oscB.frequency.value = 87;
+      filter.frequency.value = 300;
+      lfo.frequency.value = 2.1;
+      lfoGain.gain.value = 90;
+    }
+
+    oscA.connect(filter);
+    oscB.connect(filter);
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+    filter.connect(gain);
+
+    oscA.start();
+    oscB.start();
+    lfo.start();
+
+    this.bossLoopOscA = oscA;
+    this.bossLoopOscB = oscB;
+    this.bossLoopFilter = filter;
+    this.bossLoopLfo = lfo;
+    this.bossLoopLfoGain = lfoGain;
+  }
+
+  private fadeOutBossLoop(): void {
+    if (!this.ctx || !this.bossLoopGain) return;
+    this.bossLoopGain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.08);
+  }
+
+  private stopBossLoop(): void {
+    this.bossLoopKind = null;
+    for (const node of [
+      this.bossLoopOscA,
+      this.bossLoopOscB,
+      this.bossLoopLfo,
+      this.bossLoopNoise,
+    ]) {
+      if (!node) continue;
+      try {
+        node.stop();
+        node.disconnect();
+      } catch {
+        // Ignore already stopped audio nodes
+      }
+    }
+    for (const node of [this.bossLoopFilter, this.bossLoopLfoGain, this.bossLoopGain, this.bossLoopPanner]) {
+      node?.disconnect();
+    }
+    this.bossLoopOscA = null;
+    this.bossLoopOscB = null;
+    this.bossLoopLfo = null;
+    this.bossLoopLfoGain = null;
+    this.bossLoopNoise = null;
+    this.bossLoopFilter = null;
+    this.bossLoopGain = null;
+    this.bossLoopPanner = null;
+  }
+
+  private updateMatchAlerts(
+    mode: GameMode,
+    score: { player: number; enemy: number },
+    scoreToWin: number,
+  ): void {
+    const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const goal = Math.max(1, scoreToWin);
+
+    if (mode === 'rampage') {
+      if (score.enemy >= score.player + 2 && this.lastLeader !== 'enemy') {
+        this.lastLeader = 'enemy';
+        if (nowMs - this.lastAnnounceAt > 11000) {
+          this.lastAnnounceAt = nowMs;
+          this.playLeadAlert(false);
+        }
+      } else if (score.player > score.enemy && this.lastLeader === 'enemy') {
+        this.lastLeader = 'player';
+        if (nowMs - this.lastAnnounceAt > 11000) {
+          this.lastAnnounceAt = nowMs;
+          this.playLeadAlert(true);
+        }
+      }
+      if (!this.endgameAnnounced.enemy && Math.max(score.player, score.enemy) >= goal * 0.8) {
+        this.endgameAnnounced.enemy = true;
+        this.lastAnnounceAt = nowMs;
+        this.playEndgameAlert(score.player >= score.enemy);
+      }
+      return;
+    }
+
+    const leadThreshold = goal >= 500 ? 60 : Math.max(10, Math.round(goal * 0.1));
+    if (score.enemy >= score.player + leadThreshold && this.lastLeader !== 'enemy') {
+      this.lastLeader = 'enemy';
+      if (nowMs - this.lastAnnounceAt > 12000) {
+        this.lastAnnounceAt = nowMs;
+        this.playLeadAlert(false);
+      }
+    } else if (score.player >= score.enemy + leadThreshold && this.lastLeader === 'enemy') {
+      this.lastLeader = 'player';
+      if (nowMs - this.lastAnnounceAt > 12000) {
+        this.lastAnnounceAt = nowMs;
+        this.playLeadAlert(true);
+      }
+    }
+
+    if (!this.endgameAnnounced.enemy && score.enemy >= goal * 0.8) {
+      this.endgameAnnounced.enemy = true;
+      this.lastAnnounceAt = nowMs;
+      this.playEndgameAlert(false);
+    } else if (!this.endgameAnnounced.player && score.player >= goal * 0.8) {
+      this.endgameAnnounced.player = true;
+      this.lastAnnounceAt = nowMs;
+      this.playEndgameAlert(true);
+    }
+  }
+
+  private playLeadAlert(playerAhead: boolean): void {
+    if (playerAhead) {
+      this.playTone(523.25, 659.25, 0.1, 'triangle', 0.14, 0);
+      this.playTone(659.25, 783.99, 0.14, 'sine', 0.14, 0, 0.09);
+    } else {
+      this.playTone(440, 330, 0.12, 'sawtooth', 0.12, 0);
+      this.playTone(392, 293.66, 0.15, 'sawtooth', 0.12, 0, 0.13);
+    }
+  }
+
+  private playEndgameAlert(playerAhead: boolean): void {
+    if (playerAhead) {
+      this.playTone(587.33, 880, 0.14, 'triangle', 0.16, 0);
+      this.playTone(880, 1174.66, 0.2, 'sine', 0.16, 0, 0.12);
+    } else {
+      this.playTone(349.23, 261.63, 0.16, 'sawtooth', 0.14, 0);
+      this.playTone(349.23, 261.63, 0.16, 'sawtooth', 0.14, 0, 0.2);
+    }
+  }
+
+  private throttleEvent(key: string, minMs: number): boolean {
+    const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const prev = this.lastEventAt.get(key) ?? 0;
+    if (nowMs - prev < minMs) return false;
+    this.lastEventAt.set(key, nowMs);
+    return true;
+  }
+
   private bindBus(): void {
     this.unsubscribers.push(
       bus.on('match:start', ({ config }) => {
+        this.activeMode = config.mode ?? 'zoneControl';
+        this.lastLeader = 'tied';
+        this.endgameAnnounced = { player: false, enemy: false };
+        this.lastAnnounceAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        this.stopBossLoop();
         this.setMapTheme(config.mapTheme ?? 'fortress');
       }),
       bus.on('shot', ({ unitId, weaponId, pos }) => {
@@ -243,6 +615,9 @@ export class AudioEngine {
           this.combatHeat = Math.min(1, this.combatHeat + 0.25);
         }
         this.playWeaponShot(weaponId, this.computePan(pos));
+      }),
+      bus.on('grenade:thrown', ({ pos }) => {
+        this.playGrenadeThrow(this.computePan(pos));
       }),
       bus.on('hit', ({ pos, killed }) => {
         const pan = this.computePan(pos);
@@ -257,11 +632,30 @@ export class AudioEngine {
           this.playTone(580, 1160, 0.16, 'triangle', 0.2, 0);
         }
       }),
-      bus.on('explosion', ({ pos }) => {
+      bus.on('explosion', ({ pos, radius }) => {
         const pan = this.computePan(pos);
-        this.playNoiseBurst(0.45, 420, 0.42, pan);
-        this.playTone(110, 32, 0.42, 'sawtooth', 0.36, pan);
+        const dist = Math.hypot(pos.x - this.listenerPos.x, pos.y - this.listenerPos.y);
+        const att = Math.max(0.28, 1 - dist / 950);
+        const scale = Math.min(1.15, Math.max(0.75, radius / 130)) * att;
+        this.playNoiseBurst(0.42, 480, 0.34 * scale, pan);
+        this.playTone(105, 30, 0.4, 'sawtooth', 0.3 * scale, pan);
+        this.playTone(65, 24, 0.36, 'sine', 0.28 * scale, pan);
         this.combatHeat = Math.min(1, this.combatHeat + 0.35);
+      }),
+      bus.on('cover:damaged', () => {
+        if (!this.throttleEvent('cover:damaged', 90)) return;
+        this.playNoiseBurst(0.045, 950, 0.11, 0);
+        this.playTone(210, 120, 0.045, 'triangle', 0.09, 0);
+      }),
+      bus.on('cover:destroyed', () => {
+        if (!this.throttleEvent('cover:destroyed', 75)) return;
+        this.playNoiseBurst(0.14, 680, 0.22, 0);
+        this.playTone(165, 58, 0.16, 'sawtooth', 0.16, 0);
+      }),
+      bus.on('pickup:spawned', ({ pickup }) => {
+        if (!this.throttleEvent('pickup:spawned', 300)) return;
+        const pan = this.computePan(pickup.pos);
+        this.playTone(620, 940, 0.1, 'sine', 0.08, pan);
       }),
       bus.on('pickup:collected', ({ unitId }) => {
         const isMe = unitId === this.playerId;
@@ -274,6 +668,53 @@ export class AudioEngine {
           this.playTone(660, 880, 0.22, 'sine', 0.18, 0, 0.1);
         } else {
           this.playTone(340, 220, 0.22, 'sawtooth', 0.16, 0);
+        }
+      }),
+      bus.on('zone:contested', () => {
+        if (!this.throttleEvent('zone:contested', 1800)) return;
+        this.playTone(740, 560, 0.11, 'triangle', 0.12, 0);
+        this.playTone(560, 740, 0.11, 'triangle', 0.1, 0, 0.12);
+      }),
+      bus.on('base:damaged', ({ team }) => {
+        if (team !== 'player' || !this.throttleEvent('base:damaged', 1400)) return;
+        this.playTone(320, 240, 0.16, 'sawtooth', 0.14, 0);
+        this.playTone(320, 240, 0.16, 'sawtooth', 0.12, 0, 0.18);
+      }),
+      bus.on('unit:respawned', ({ unitId }) => {
+        if (unitId !== this.playerId) return;
+        this.playDash();
+        this.playTone(440, 880, 0.16, 'triangle', 0.14, 0, 0.05);
+      }),
+      bus.on('ceasefire:spark', ({ pos }) => {
+        if (!this.throttleEvent('ceasefire:spark', 120)) return;
+        this.playTone(1350, 920, 0.04, 'sine', 0.07, this.computePan(pos));
+      }),
+      bus.on('hellcell:warning', () => {
+        this.playHellcellWarning();
+      }),
+      bus.on('hellcell:start', ({ boss }) => {
+        const pan = this.computePan(boss.pos);
+        const prox = Math.max(0.45, computeBossProximity(boss.pos, this.listenerPos));
+        this.playBossRoar(pan);
+        this.lastBossVocalAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        this.playMonsterVocal(boss.kind, prox, pan);
+        this.startBossLoop(boss.kind);
+      }),
+      bus.on('hellcell:defeated', () => {
+        this.playBossDefeated();
+      }),
+      bus.on('hellcell:resumed', () => {
+        this.playTone(523.25, 783.99, 0.16, 'triangle', 0.16, 0);
+      }),
+      bus.on('match:end', ({ winner }) => {
+        this.stopBossLoop();
+        if (winner === 'player') {
+          this.playTone(523.25, 659.25, 0.18, 'triangle', 0.2, 0);
+          this.playTone(659.25, 783.99, 0.18, 'triangle', 0.2, 0, 0.14);
+          this.playTone(783.99, 1046.5, 0.35, 'sine', 0.22, 0, 0.28);
+        } else {
+          this.playTone(330, 220, 0.24, 'sawtooth', 0.16, 0);
+          this.playTone(220, 146.83, 0.4, 'sawtooth', 0.16, 0, 0.2);
         }
       }),
       bus.on('reload:start', () => {
@@ -425,6 +866,58 @@ export class AudioEngine {
 
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    const panner = this.ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan));
+
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(panner);
+    panner.connect(this.sfxGain);
+
+    src.onended = () => {
+      this.activeVoices = Math.max(0, this.activeVoices - 1);
+      src.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+      panner.disconnect();
+    };
+    src.start(now);
+    src.stop(now + duration + 0.01);
+  }
+
+  private playNoiseSweep(
+    duration: number,
+    freqStart: number,
+    freqEnd: number,
+    volume: number,
+    pan: number,
+    delay = 0,
+  ): void {
+    if (
+      !this.ctx ||
+      !this.sfxGain ||
+      !this.noiseBuffer ||
+      this.activeVoices >= this.maxVoices
+    ) {
+      return;
+    }
+    this.activeVoices += 1;
+
+    const now = this.ctx.currentTime + delay;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 3.2;
+    filter.frequency.setValueAtTime(freqStart, now);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(100, freqEnd), now + duration);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(volume, now + 0.03);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
     const panner = this.ctx.createStereoPanner();

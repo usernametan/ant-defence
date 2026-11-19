@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Team, WeaponId } from '../../shared/types';
+import type { KillSource, Team } from '../../shared/types';
 import { Icon, Panel } from '../design';
 
 export interface KillFeedEntry {
@@ -8,7 +8,7 @@ export interface KillFeedEntry {
   killerTeam: Team;
   victimName: string;
   victimTeam: Team;
-  weaponId: WeaponId;
+  weaponId: KillSource;
 }
 
 export interface KillFeedProps {

@@ -69,6 +69,7 @@ describe('GameController', () => {
     controller.keyDown('KeyW');
     controller.keyDown('KeyR');
     controller.keyDown('KeyE');
+    controller.keyDown('KeyG');
     controller.keyDown('ShiftLeft');
     controller.mouseDown(0);
 
@@ -80,12 +81,15 @@ describe('GameController', () => {
     expect(input.firing).toBe(true);
     expect(input.reload).toBe(true);
     expect(input.interact).toBe(true);
+    expect(input.throwGrenade).toBe(true);
     expect(input.dash).toBe(true);
 
     controller.mouseUp(0);
     controller.keyUp('KeyD');
+    controller.keyUp('KeyG');
     expect(controller.getInput().firing).toBe(false);
     expect(controller.getInput().moveX).toBe(0);
+    expect(controller.getInput().throwGrenade).toBe(false);
   });
 
   it('rejects a non-positive camera scale', () => {

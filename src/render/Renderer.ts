@@ -5,6 +5,7 @@ import { Camera } from './camera';
 import type { ViewTransformHook } from './camera';
 import { EffectsSystem } from './effects';
 import { EnvironmentRenderer } from './environment';
+import { drawHellcellEntities, drawHellcellGroundLayer } from './hellcell';
 import { PALETTE, getThemePalette, teamColor, teamGlowColor } from './palette';
 import { drawUnitBody, drawUnitOverlay, drawUnitSilhouette } from './units';
 import { computeVisibilityPolygon, hasLineOfSight } from './visibility';
@@ -150,8 +151,9 @@ export class Renderer {
     this.baseFlash.enemy = Math.max(0, this.baseFlash.enemy - dt * 4);
     this.effects.update(dt, state.projectiles, state.map);
 
+    const isRampage = state.matchConfig.mode === 'rampage';
     for (const unit of state.units) {
-      if (unit.team === 'player' || !player || player.dead) {
+      if (unit.isPlayer || (!isRampage && unit.team === 'player') || !player || player.dead) {
         this.visibilityAlpha.set(unit.id, 1);
       } else {
         const visible = hasLineOfSight(state.map, player.pos, unit.pos);
@@ -184,6 +186,10 @@ export class Renderer {
     this.environment.drawGroundAndShadows(ctx, state.map, state.time, minX, minY, maxX, maxY);
     this.effects.drawScorchDecals(ctx);
     this.environment.drawZonesAndBases(ctx, state, this.baseFlash);
+    const zoneBCenter =
+      state.map.zones.find((z) => z.id === 'zone-2' || z.id === 'B')?.center ??
+      state.map.zones[1]?.center;
+    drawHellcellGroundLayer(ctx, state.hellcell, state.map.tileSize, state.time, zoneBCenter);
 
     const ts = state.map.tileSize;
     const minRow = Math.max(0, Math.floor(minY / ts) - 1);
@@ -231,23 +237,25 @@ export class Renderer {
           for (const unit of rowUnits) {
             const vis = this.visibilityAlpha.get(unit.id) ?? 1;
             const flash = (this.effects.unitHitFlash.get(unit.id) ?? 0) > 0;
-            drawUnitBody(ctx, unit, vis, flash, state.time);
+            drawUnitBody(ctx, unit, vis, flash, state.time, isRampage);
           }
         }
       },
     );
 
+    drawHellcellEntities(ctx, state.hellcell, state.time);
     this.effects.drawProjectiles(ctx, state.projectiles);
+    this.effects.drawGrenades(ctx, state.grenades ?? [], state.time);
     for (const unit of livingVisible) {
-      if (unit.team === 'player') {
+      if (unit.isPlayer || (!isRampage && unit.team === 'player')) {
         const col = Math.floor(unit.pos.x / ts);
         const footRow = Math.floor((unit.pos.y + 12) / ts);
         if (state.map.tiles[footRow + 1]?.[col] === 'wall') {
-          drawUnitSilhouette(ctx, unit);
+          drawUnitSilhouette(ctx, unit, isRampage);
         }
       }
       const vis = this.visibilityAlpha.get(unit.id) ?? 1;
-      drawUnitOverlay(ctx, unit, vis, this.options.colorblindAssist);
+      drawUnitOverlay(ctx, unit, vis, this.options.colorblindAssist, isRampage);
     }
     this.effects.drawForegroundEffects(ctx);
     if (this.options.quality !== 'low' && !this.options.reducedMotion) {
@@ -266,8 +274,13 @@ export class Renderer {
       this.drawBloomPass(ctx);
     }
 
-    // Vignette + low-HP subtle danger pulse
-    this.drawVignette(ctx, player ? player.hp / Math.max(1, player.maxHp) : 1, state.time);
+    // Vignette + low-HP subtle danger pulse + Hellcell boss atmosphere
+    this.drawVignette(
+      ctx,
+      player ? player.hp / Math.max(1, player.maxHp) : 1,
+      state.time,
+      Boolean(state.hellcell?.isCeasefireActive),
+    );
   }
 
   destroy(): void {
@@ -286,40 +299,60 @@ export class Renderer {
         const heavy = weaponId === 'shotgun' || weaponId === 'sniper' || weaponId === 'rocket';
         const isPlayer = this.latestState?.playerId === unitId;
         const unit = this.latestState?.units.find((u) => u.id === unitId);
-        const color = teamGlowColor(unit?.team ?? 'player');
+        const rampage = this.latestState?.matchConfig.mode === 'rampage';
+        const color = rampage
+          ? unit?.isPlayer
+            ? '#FFFFFF'
+            : '#9CA3AF'
+          : teamGlowColor(unit?.team ?? 'player');
 
         this.effects.spawnMuzzleFlash(pos, angle, color, heavy);
         this.effects.spawnShellCasing(pos, angle, weaponId);
         if (isPlayer) {
-          this.camera.addTrauma(heavy ? 0.24 : 0.08);
-          this.camera.addZoomKick(heavy ? 0.018 : 0.005);
+          this.camera.addTrauma(heavy ? 0.1 : 0.03);
+          this.camera.addZoomKick(heavy ? 0.007 : 0.002);
         } else if (def.splashRadius > 0) {
-          this.camera.addTrauma(0.1);
+          this.camera.addTrauma(0.035);
         }
       }),
       bus.on('hit', ({ targetId, damage, pos, killed }) => {
         this.effects.unitHitFlash.set(targetId, 0.11);
         const target = this.latestState?.units.find((u) => u.id === targetId);
+        const rampage = this.latestState?.matchConfig.mode === 'rampage';
+        const sparkColor = rampage
+          ? target?.isPlayer
+            ? '#FFFFFF'
+            : '#9CA3AF'
+          : teamGlowColor(target?.team ?? 'enemy');
         this.effects.spawnImpactSparks(
           pos,
-          killed ? PALETTE.gold : teamGlowColor(target?.team ?? 'enemy'),
+          killed ? PALETTE.gold : sparkColor,
           killed ? 14 : 7,
         );
         this.effects.spawnFloatingDamage(pos, damage, killed || damage >= 50);
         if (this.latestState?.playerId === targetId) {
-          this.camera.addTrauma(Math.min(0.45, 0.14 + damage / 180));
+          this.camera.addTrauma(Math.min(0.18, 0.06 + damage / 360));
         }
       }),
       bus.on('kill', ({ victimId }) => {
         const victim = this.latestState?.units.find((u) => u.id === victimId);
         if (victim) {
-          this.effects.spawnDeathDissolve(victim.pos, teamGlowColor(victim.team));
+          const rampage = this.latestState?.matchConfig.mode === 'rampage';
+          const dissolveColor = rampage
+            ? victim.isPlayer
+              ? '#FFFFFF'
+              : '#1F2937'
+            : teamGlowColor(victim.team);
+          this.effects.spawnDeathDissolve(victim.pos, dissolveColor);
         }
       }),
       bus.on('explosion', ({ pos, radius }) => {
         this.effects.spawnExplosion(pos, radius);
-        this.camera.addTrauma(0.48);
-        this.camera.addZoomKick(0.024);
+        const listener = this.latestState?.units.find((u) => u.id === this.latestState?.playerId)?.pos;
+        const dist = listener ? Math.hypot(pos.x - listener.x, pos.y - listener.y) : 0;
+        const falloff = Math.max(0.2, 1 - dist / 760);
+        this.camera.addTrauma(0.18 * falloff);
+        this.camera.addZoomKick(0.007 * falloff);
       }),
       bus.on('cover:damaged', ({ tile }) => {
         const [colStr, rowStr] = tile.split(',');
@@ -370,7 +403,17 @@ export class Renderer {
       }),
       bus.on('base:damaged', ({ team }) => {
         this.baseFlash[team] = 1;
-        this.camera.addTrauma(0.18);
+        this.camera.addTrauma(0.06);
+      }),
+      bus.on('hellcell:start', ({ boss }) => {
+        this.effects.spawnZoneBeam(boss.pos, PALETTE.danger);
+        this.camera.addTrauma(0.2);
+      }),
+      bus.on('hellcell:defeated', () => {
+        this.camera.addTrauma(0.16);
+      }),
+      bus.on('ceasefire:spark', ({ pos }) => {
+        this.effects.spawnImpactSparks(pos, '#94A3B8', 4);
       }),
       bus.on('match:start', () => {
         this.effects.clear();
@@ -461,6 +504,7 @@ export class Renderer {
     ctx: CanvasRenderingContext2D,
     hpRatio: number,
     time: number,
+    hellcellActive = false,
   ): void {
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -477,6 +521,9 @@ export class Renderer {
     if (hpRatio < 0.3) {
       const pulse = 0.28 + 0.14 * Math.sin(time * 7);
       grad.addColorStop(1, `rgba(244, 63, 94, ${pulse.toFixed(2)})`);
+    } else if (hellcellActive) {
+      const pulse = 0.22 + 0.08 * Math.sin(time * 4.5);
+      grad.addColorStop(1, `rgba(185, 28, 28, ${pulse.toFixed(2)})`);
     } else {
       grad.addColorStop(1, 'rgba(7, 11, 20, 0.58)');
     }

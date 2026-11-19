@@ -46,6 +46,17 @@ describe('Renderer math & palette', () => {
     expect(world.y).toBeCloseTo(120, 4);
   });
 
+  it('keeps camera shake subtle even at max trauma', () => {
+    const cam = new Camera();
+    cam.reset({ x: 320, y: 240 });
+    cam.addTrauma(1);
+    cam.update({ x: 320, y: 240 }, { x: 0, y: 0 }, 0.016, 0);
+    const vt = cam.getTransform(1280, 720, 1, 1, false);
+    expect(Math.abs(vt.shakeX)).toBeLessThanOrEqual(7);
+    expect(Math.abs(vt.shakeY)).toBeLessThanOrEqual(7);
+    expect(Math.abs(vt.shakeAngle)).toBeLessThanOrEqual(0.003);
+  });
+
   it('Line of sight detects walls and visibility polygon returns closed perimeter', () => {
     const map = makeMiniMap();
     expect(hasLineOfSight(map, { x: 48, y: 144 }, { x: 112, y: 144 })).toBe(true);

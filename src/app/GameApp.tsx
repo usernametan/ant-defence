@@ -19,7 +19,7 @@ import {
   registerUiSoundSink,
   saveSettings,
 } from '../ui';
-import type { GameSettings, MatchStats } from '../ui';
+import type { GameSettings, MatchStats, RampageStanding } from '../ui';
 import { GameController } from './GameController';
 import { GameProvider, useGameController, useGameState } from './useGameState';
 
@@ -64,6 +64,8 @@ function GameRoot() {
     player: 0,
     enemy: 0,
   });
+  const [endStandings, setEndStandings] = useState<RampageStanding[]>([]);
+  const [endWinnerName, setEndWinnerName] = useState<string | undefined>(undefined);
 
   // Apply persisted settings to the DOM, renderer and audio engine.
   useEffect(() => {
@@ -129,7 +131,13 @@ function GameRoot() {
       const player = live.units.find((unit) => unit.id === live.playerId);
       if (player) {
         audio.setListenerPos(player.pos);
-        audio.update(dt, player.hp / Math.max(1, player.maxHp), live.projectiles.length > 0);
+        audio.update(dt, player.hp / Math.max(1, player.maxHp), live.projectiles.length > 0, {
+          status: live.status,
+          mode: live.matchConfig.mode ?? 'zoneControl',
+          score: live.score,
+          scoreToWin: live.matchConfig.scoreToWin,
+          boss: live.hellcell?.boss ?? null,
+        });
       }
       if (viewRef.current && now - lastViewPublish >= 50) {
         lastViewPublish = now;
@@ -156,7 +164,12 @@ function GameRoot() {
     const offHit = bus.on('hit', ({ targetId, damage }) => {
       const live = controller.getState();
       const target = live.units.find((unit) => unit.id === targetId);
-      if (target && target.team === 'enemy') {
+      const isHostile =
+        target &&
+        (live.matchConfig.mode === 'rampage'
+          ? target.id !== live.playerId
+          : target.team === 'enemy');
+      if (isHostile) {
         enemyHits += 1;
         totalEnemyDamage += damage;
       }
@@ -165,12 +178,28 @@ function GameRoot() {
       if (team === 'player') totalCaptures += 1;
     });
 
-    const offEnd = bus.on('match:end', ({ winner }) => {
+    const offEnd = bus.on('match:end', ({ winner, winnerId }) => {
       const live = controller.getState();
       const player = live.units.find((unit) => unit.id === live.playerId);
       const ownedNow = live.zones.filter((zone) => zone.owner === 'player').length;
       const accuracyPct =
         playerShots > 0 ? Math.min(99, Math.round((enemyHits / playerShots) * 100)) : 0;
+      const sorted = [...live.units].sort((a, b) => {
+        if (b.kills !== a.kills) return b.kills - a.kills;
+        if (a.deaths !== b.deaths) return a.deaths - b.deaths;
+        return a.isPlayer ? -1 : 1;
+      });
+      setEndStandings(
+        sorted.map((u) => ({
+          id: u.id,
+          name: u.isPlayer ? 'YOU' : (u.name ?? u.id),
+          kills: u.kills,
+          deaths: u.deaths,
+          isPlayer: u.isPlayer,
+        })),
+      );
+      const winUnit = winnerId ? live.units.find((u) => u.id === winnerId) : sorted[0];
+      setEndWinnerName(winUnit ? (winUnit.isPlayer ? 'YOU' : (winUnit.name ?? winUnit.id)) : undefined);
       setEndScore({ player: live.score.player, enemy: live.score.enemy });
       setEndStats({
         kills: player?.kills ?? 0,
@@ -297,6 +326,7 @@ function GameRoot() {
 
       {screen === 'countdown' && (
         <CountdownOverlay
+          mode={matchConfig.mode}
           mapTheme={matchConfig.mapTheme}
           difficulty={matchConfig.difficulty}
           scoreToWin={matchConfig.scoreToWin}
@@ -310,6 +340,7 @@ function GameRoot() {
 
       {screen === 'paused' && (
         <PauseMenu
+          mode={state.matchConfig.mode}
           score={state.score}
           elapsedSeconds={state.time}
           mapTheme={state.map.theme}
@@ -325,7 +356,10 @@ function GameRoot() {
 
       {(screen === 'won' || screen === 'lost') && endStats && (
         <GameOver
+          mode={matchConfig.mode}
           winner={(screen === 'won' ? 'player' : 'enemy') as Team}
+          winnerName={endWinnerName}
+          standings={endStandings}
           playerScore={endScore.player}
           enemyScore={endScore.enemy}
           stats={endStats}

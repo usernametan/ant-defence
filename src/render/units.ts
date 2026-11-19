@@ -165,12 +165,35 @@ export function drawUnitBody(
   vis: number,
   flash: boolean,
   time: number,
+  isRampage = false,
 ): void {
-  const armorColor =
-    unit.team === 'player' ? PALETTE.playerArmor : PALETTE.enemyArmor;
-  const armorShade = unit.team === 'player' ? '#124D85' : '#962413';
-  const armorHighlight = unit.team === 'player' ? '#38BDF8' : '#FF7B59';
-  const glow = teamGlowColor(unit.team);
+  const armorColor = isRampage
+    ? unit.isPlayer
+      ? '#F1F5F9'
+      : '#0B0E14'
+    : unit.team === 'player'
+      ? PALETTE.playerArmor
+      : PALETTE.enemyArmor;
+  const armorShade = isRampage
+    ? unit.isPlayer
+      ? '#CBD5E1'
+      : '#04060A'
+    : unit.team === 'player'
+      ? '#124D85'
+      : '#962413';
+  const armorHighlight = isRampage
+    ? unit.isPlayer
+      ? '#FFFFFF'
+      : '#1F2937'
+    : unit.team === 'player'
+      ? '#38BDF8'
+      : '#FF7B59';
+  const glow = isRampage
+    ? unit.isPlayer
+      ? '#FFFFFF'
+      : '#9CA3AF'
+    : teamGlowColor(unit.team);
+  const outlineColor = isRampage && !unit.isPlayer ? '#374151' : PALETTE.bg0;
 
   const facingRight = Math.cos(unit.angle) >= 0;
   const dir = facingRight ? 1 : -1;
@@ -201,7 +224,7 @@ export function drawUnitBody(
   // Subtle ground selection ring under the player
   if (unit.isPlayer) {
     const pulse = 1 + 0.04 * Math.sin(time * 4);
-    ctx.strokeStyle = PALETTE.player;
+    ctx.strokeStyle = isRampage ? '#FFFFFF' : PALETTE.player;
     ctx.lineWidth = 2;
     ctx.globalAlpha = vis * 0.85;
     ctx.beginPath();
@@ -220,7 +243,7 @@ export function drawUnitBody(
 
   // --- Detailed Upright 3/4 Tactical Trooper ---
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = PALETTE.bg0;
+  ctx.strokeStyle = outlineColor;
   ctx.lineWidth = 1.9;
 
   // Articulated legs, knee pads & combat boots
@@ -264,7 +287,7 @@ export function drawUnitBody(
   }
 
   // Armored chest rig & contoured waist belt
-  ctx.strokeStyle = PALETTE.bg0;
+  ctx.strokeStyle = outlineColor;
   ctx.lineWidth = 1.9;
   ctx.fillStyle = flash ? PALETTE.textHi : armorColor;
   ctx.beginPath();
@@ -303,7 +326,7 @@ export function drawUnitBody(
 
   // Support arm reaching forward to handguard
   ctx.fillStyle = flash ? PALETTE.textHi : armorShade;
-  ctx.strokeStyle = PALETTE.bg0;
+  ctx.strokeStyle = outlineColor;
   ctx.lineWidth = 1.6;
   ctx.beginPath();
   ctx.roundRect(1, 0.5, 11.5, 4.2, 2);
@@ -322,7 +345,7 @@ export function drawUnitBody(
 
   // Detailed 3/4 Helmet with crest ridge, ear comms & reflective visor
   ctx.fillStyle = flash ? PALETTE.textHi : armorColor;
-  ctx.strokeStyle = PALETTE.bg0;
+  ctx.strokeStyle = outlineColor;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(0, -11.5, 7.6, 0, Math.PI * 2);
@@ -373,14 +396,33 @@ export function drawUnitBody(
     ctx.stroke();
   }
 
+  // Translucent energy shield bubble when unit carries active shield charge
+  if ((unit.shield ?? 0) > 0) {
+    const shieldPulse = 0.85 + 0.15 * Math.sin(time * 6 + unit.pos.x * 0.05);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.72)';
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.1)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(0, -3, 18.5 * shieldPulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 
 export function drawUnitSilhouette(
   ctx: CanvasRenderingContext2D,
   unit: Unit,
+  isRampage = false,
 ): void {
-  const color = unit.team === 'player' ? PALETTE.playerGlow : PALETTE.enemyGlow;
+  const color = isRampage
+    ? unit.isPlayer
+      ? '#FFFFFF'
+      : '#9CA3AF'
+    : unit.team === 'player'
+      ? PALETTE.playerGlow
+      : PALETTE.enemyGlow;
   ctx.save();
   ctx.translate(unit.pos.x, unit.pos.y);
   ctx.globalAlpha = 0.28;
@@ -403,6 +445,7 @@ export function drawUnitOverlay(
   unit: Unit,
   vis: number,
   colorblindAssist: boolean,
+  isRampage = false,
 ): void {
   const glow = teamGlowColor(unit.team);
   ctx.save();
@@ -421,8 +464,13 @@ export function drawUnitOverlay(
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  ctx.fillStyle =
-    unit.team === 'player'
+  ctx.fillStyle = isRampage
+    ? unit.isPlayer
+      ? ratio < 0.3
+        ? PALETTE.gold
+        : '#FFFFFF'
+      : '#9CA3AF'
+    : unit.team === 'player'
       ? ratio < 0.3
         ? PALETTE.gold
         : PALETTE.success
@@ -433,13 +481,32 @@ export function drawUnitOverlay(
     ctx.fill();
   }
 
+  // Crisp cyan shield bar right below the HP bar when shielded
+  const shield = unit.shield ?? 0;
+  const maxShield = unit.maxShield ?? 50;
+  if (shield > 0 && maxShield > 0) {
+    const sRatio = Math.max(0, Math.min(1, shield / maxShield));
+    ctx.fillStyle = 'rgba(7, 11, 20, 0.88)';
+    ctx.fillRect(-bw / 2, barY + bh + 1, bw, 2.5);
+    ctx.fillStyle = '#38BDF8';
+    ctx.fillRect(-bw / 2, barY + bh + 1, Math.max(2, bw * sRatio), 2.5);
+  }
+
   if (unit.isPlayer) {
     ctx.font = '800 11px Bahnschrift, "Segoe UI", system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = PALETTE.bg0;
-    ctx.fillText('You', 1, barY - 5);
-    ctx.fillStyle = PALETTE.playerGlow;
-    ctx.fillText('You', 0, barY - 6);
+    ctx.fillText(isRampage ? `You (${unit.kills})` : 'You', 1, barY - 5);
+    ctx.fillStyle = isRampage ? '#FFFFFF' : PALETTE.playerGlow;
+    ctx.fillText(isRampage ? `You (${unit.kills})` : 'You', 0, barY - 6);
+  } else if (isRampage) {
+    const tag = `${unit.name ?? 'Bot'} · ${unit.kills}`;
+    ctx.font = '700 10px Bahnschrift, "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#05070B';
+    ctx.fillText(tag, 1, barY - 5);
+    ctx.fillStyle = '#D1D5DB';
+    ctx.fillText(tag, 0, barY - 6);
   } else {
     const pipY = barY - 7;
     const pipSize = colorblindAssist ? 5.5 : 4;
@@ -472,13 +539,14 @@ export function drawUnits(
   hitFlash: Map<string, number>,
   time: number,
   colorblindAssist: boolean,
+  isRampage = false,
 ): void {
   for (const unit of units) {
     if (unit.dead) continue;
     const vis = visibilityAlpha.get(unit.id) ?? 1;
     if (vis <= 0.02) continue;
     const flash = (hitFlash.get(unit.id) ?? 0) > 0;
-    drawUnitBody(ctx, unit, vis, flash, time);
-    drawUnitOverlay(ctx, unit, vis, colorblindAssist);
+    drawUnitBody(ctx, unit, vis, flash, time, isRampage);
+    drawUnitOverlay(ctx, unit, vis, colorblindAssist, isRampage);
   }
 }

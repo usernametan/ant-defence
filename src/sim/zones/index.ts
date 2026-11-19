@@ -4,6 +4,7 @@ import {
   BASE_DAMAGE_EVENT_INTERVAL,
   BASE_CORE_DPS,
   MATCH_TIME_LIMIT,
+  RAMPAGE_TIME_LIMIT,
   ZONE_CAPTURE_RATE,
   ZONE_SCORE_RATE,
 } from '../constants';
@@ -15,9 +16,23 @@ function clampProgress(value: number): number {
 
 /** Presence-based capture, contest detection, and per-second score for owners. */
 export function updateZones(world: SimWorld, dt: number): void {
+  if (world.isRampage()) return;
   const state = world.state;
+  const hellcellSealed =
+    world.isHellcell() &&
+    state.hellcell !== undefined &&
+    (!state.hellcell.bossDefeated || state.hellcell.phase !== 'NORMAL');
+  const scoreRate =
+    world.isHellcell() && state.matchConfig.scoreToWin >= 500
+      ? ZONE_SCORE_RATE * 6
+      : ZONE_SCORE_RATE;
 
   for (const zoneState of state.zones) {
+    // Zone B (zone-2) is sealed until Zones A & C unleash the Boss and the Boss is defeated
+    if (hellcellSealed && (zoneState.id === 'zone-2' || zoneState.id === 'B')) {
+      zoneState.contested = false;
+      continue;
+    }
     const zoneDef = state.map.zones.find((zone) => zone.id === zoneState.id);
     if (!zoneDef) continue;
 
@@ -63,7 +78,7 @@ export function updateZones(world: SimWorld, dt: number): void {
     }
 
     if (owner !== 'neutral') {
-      const carry = (world.zoneScoreCarry[zoneState.id] ?? 0) + ZONE_SCORE_RATE * dt;
+      const carry = (world.zoneScoreCarry[zoneState.id] ?? 0) + scoreRate * dt;
       const whole = Math.floor(carry);
       world.zoneScoreCarry[zoneState.id] = carry - whole;
       if (whole > 0) state.score[owner] += whole;
@@ -73,6 +88,7 @@ export function updateZones(world: SimWorld, dt: number): void {
 
 /** A base core takes damage only while enemies are inside and defenders are not. */
 export function updateBaseCores(world: SimWorld, dt: number): void {
+  if (world.isRampage() || world.isCeasefireActive()) return;
   const state = world.state;
   for (const base of state.map.bases) {
     let friendly = 0;
@@ -98,6 +114,27 @@ export function updateBaseCores(world: SimWorld, dt: number): void {
 export function checkWin(world: SimWorld): void {
   const state = world.state;
   if (state.status !== 'playing') return;
+
+  if (world.isRampage()) {
+    const sorted = [...state.units].sort((a, b) => {
+      if (b.kills !== a.kills) return b.kills - a.kills;
+      if (a.deaths !== b.deaths) return a.deaths - b.deaths;
+      if (a.isPlayer !== b.isPlayer) return a.isPlayer ? -1 : 1;
+      return a.id.localeCompare(b.id);
+    });
+    const leader = sorted[0];
+    if (!leader) return;
+    const timeLimit = state.timeLimit ?? RAMPAGE_TIME_LIMIT;
+    const hitKillCap = leader.kills >= state.matchConfig.scoreToWin;
+    const timedOut = state.time >= timeLimit;
+    if (!hitKillCap && !timedOut) return;
+
+    state.winnerId = leader.id;
+    const winner: Team = leader.isPlayer ? 'player' : 'enemy';
+    state.status = leader.isPlayer ? 'won' : 'lost';
+    bus.emit('match:end', { winner, winnerId: leader.id });
+    return;
+  }
 
   let winner: Team | null = null;
   if (state.score.player >= state.matchConfig.scoreToWin) winner = 'player';

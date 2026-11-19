@@ -158,4 +158,36 @@ describe('zones and objectives', () => {
     checkWin(world);
     expect(world.state.status).toBe('menu');
   });
+
+  it('disables zones and base damage in Rampage and crowns the max-kill unit', () => {
+    const world = new SimWorld(
+      { seed: 5, mode: 'rampage', difficulty: 'normal', scoreToWin: 10, enemyCount: 3, startingWeapon: 'pistol' },
+      makeMap(),
+    );
+    const player = addUnit(world, 'player-1', 'player', 480, 320);
+    player.isPlayer = true;
+    const bot1 = addUnit(world, 'bot-1', 'enemy', 800, 320);
+    const bot2 = addUnit(world, 'bot-2', 'enemy', 160, 320);
+    world.state.status = 'playing';
+
+    tickZones(world, 180);
+    updateBaseCores(world, 2);
+    expect(world.state.zones[0].owner).toBe('neutral');
+    expect(world.state.zones[0].progress).toBe(0);
+    expect(world.state.baseHp.player).toBe(1000);
+    expect(world.state.baseHp.enemy).toBe(1000);
+
+    // Bot 1 reaches max kills at time limit -> bot wins (player loses)
+    player.kills = 4;
+    bot1.kills = 7;
+    bot2.kills = 2;
+    world.state.time = (world.state.timeLimit ?? 180) + 1;
+    const ended = vi.fn();
+    unsubscribers.push(bus.on('match:end', ended));
+
+    checkWin(world);
+    expect(world.state.status).toBe('lost');
+    expect(world.state.winnerId).toBe('bot-1');
+    expect(ended).toHaveBeenCalledWith({ winner: 'enemy', winnerId: 'bot-1' });
+  });
 });

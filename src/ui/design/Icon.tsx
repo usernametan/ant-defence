@@ -7,6 +7,8 @@ export type IconName =
   | 'rifle'
   | 'sniper'
   | 'rocket'
+  | 'grenade'
+  | 'boss'
   | 'zone'
   | 'health'
   | 'ammo'
@@ -93,6 +95,7 @@ export const Icon: React.FC<IconProps> = ({
         </svg>
       );
     case 'skull':
+    case 'boss':
       return (
         <svg {...common}>
           <path d="M6 14v-3a6 6 0 1 1 12 0v3l-2 2v3H8v-3l-2-2z" />
@@ -205,6 +208,13 @@ export const Icon: React.FC<IconProps> = ({
         <svg {...common}>
           <rect x="3" y="8" width="15" height="7" rx="1" />
           <path d="M18 9l3 2.5L18 14M6 15l-2 3M13 15l1 3" />
+        </svg>
+      );
+    case 'grenade':
+      return (
+        <svg {...common}>
+          <rect x="7" y="8" width="10" height="12" rx="4" />
+          <path d="M10 8V5h4v3M14 5l3 1.5M8 13h8M8 16h8" />
         </svg>
       );
   }

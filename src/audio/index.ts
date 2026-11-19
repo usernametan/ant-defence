@@ -1,2 +1,2 @@
-export { AudioEngine, computeStereoPan } from './AudioEngine';
-export type { AudioVolumes } from './AudioEngine';
+export { AudioEngine, computeBossProximity, computeStereoPan } from './AudioEngine';
+export type { AudioUpdateContext, AudioVolumes } from './AudioEngine';

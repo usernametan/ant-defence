@@ -4,6 +4,7 @@ import {
   DASH_COOLDOWN,
   DASH_DURATION,
   DASH_SPEED,
+  HELLCELL_UNIT_SPEED_MULT,
   REGEN_DELAY,
   REGEN_RATE,
   UNIT_ACCEL,
@@ -44,15 +45,16 @@ export function updateUnits(world: SimWorld, dt: number): void {
       }
     }
 
+    const hellcellMult = world.isHellcell() ? HELLCELL_UNIT_SPEED_MULT : 1;
     if (runtime.dashRemaining > 0) {
       runtime.dashRemaining -= dt;
-      const dashSpeed = unit.isPlayer ? DASH_SPEED : DASH_SPEED * 0.8;
+      const dashSpeed = (unit.isPlayer ? DASH_SPEED : DASH_SPEED * 0.8) * hellcellMult;
       unit.vel.x = runtime.dashDir.x * dashSpeed;
       unit.vel.y = runtime.dashDir.y * dashSpeed;
     } else {
-      const maxSpeed = unit.isPlayer ? UNIT_MAX_SPEED : BOT_MAX_SPEED;
-      unit.vel.x += moveX * UNIT_ACCEL * dt;
-      unit.vel.y += moveY * UNIT_ACCEL * dt;
+      const maxSpeed = (unit.isPlayer ? UNIT_MAX_SPEED : BOT_MAX_SPEED) * hellcellMult;
+      unit.vel.x += moveX * UNIT_ACCEL * hellcellMult * dt;
+      unit.vel.y += moveY * UNIT_ACCEL * hellcellMult * dt;
       const decay = Math.exp(-UNIT_FRICTION * dt);
       unit.vel.x *= decay;
       unit.vel.y *= decay;
@@ -106,7 +108,7 @@ export function nearestEnemy(world: SimWorld, unit: Unit, radius: number): Unit 
   let best: Unit | undefined;
   let bestDistance = radius;
   for (const candidate of world.livingUnits()) {
-    if (candidate.team === unit.team) continue;
+    if (!world.areHostile(unit, candidate)) continue;
     const distance = Math.hypot(candidate.pos.x - unit.pos.x, candidate.pos.y - unit.pos.y);
     if (distance < bestDistance) {
       bestDistance = distance;

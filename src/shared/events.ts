@@ -1,4 +1,6 @@
 import type {
+  HellcellBoss,
+  KillSource,
   MatchConfig,
   Pickup,
   Team,
@@ -9,8 +11,9 @@ import type {
 /** All gameplay events. Payloads are the single source of truth for emitters and listeners. */
 export interface EventMap {
   'shot': { unitId: string; weaponId: WeaponId; pos: Vec2; angle: number };
+  'grenade:thrown': { unitId: string; pos: Vec2; angle: number };
   'hit': { targetId: string; damage: number; pos: Vec2; killed: boolean };
-  'kill': { killerId: string; victimId: string; weaponId: WeaponId };
+  'kill': { killerId: string; victimId: string; weaponId: KillSource };
   'cover:damaged': { tile: string; hpLeft: number };
   'cover:destroyed': { tile: string };
   'explosion': { pos: Vec2; radius: number };
@@ -21,9 +24,14 @@ export interface EventMap {
   'unit:respawned': { unitId: string };
   'base:damaged': { team: Team; hpLeft: number };
   'match:start': { config: MatchConfig };
-  'match:end': { winner: Team };
+  'match:end': { winner: Team; winnerId?: string };
   'reload:start': undefined;
   'reload:end': undefined;
+  'hellcell:warning': { countdown: number };
+  'hellcell:start': { boss: HellcellBoss };
+  'hellcell:defeated': { winner: Team; blueDamage: number; redDamage: number };
+  'hellcell:resumed': undefined;
+  'ceasefire:spark': { pos: Vec2 };
 }
 
 export type EventKey = keyof EventMap;

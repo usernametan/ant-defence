@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { formatZoneCode } from '../../render/environment';
 import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from '../../render/palette';
 import { WEAPON_DEFS } from '../../shared/api';
-import type { MapTheme, MatchConfig, MatchDifficulty, WeaponId } from '../../shared/types';
+import type { GameMode, MapTheme, MatchConfig, MatchDifficulty, WeaponId } from '../../shared/types';
 import {
   Badge,
   Button,
@@ -69,22 +69,22 @@ const MAP_THEMES: Array<{
   tone: 'player' | 'success' | 'gold';
 }> = [
   {
+    id: 'fortress',
+    label: 'Sci-Fi Arena',
+    tagline: 'Steel walls, hazard stripes & yellow crates',
+    tone: 'player',
+  },
+  {
     id: 'jungle',
     label: 'Jungle Outpost',
-    tagline: 'Mossy ruins & river crossings',
+    tagline: 'Mossy stone walls, vines & brown crates',
     tone: 'success',
   },
   {
     id: 'temple',
     label: 'Ancient Temple',
-    tagline: 'Sandstone sanctum & oasis',
+    tagline: 'Glyph sandstone walls & dark-brown crates',
     tone: 'gold',
-  },
-  {
-    id: 'fortress',
-    label: 'Tactical Fortress',
-    tagline: 'Orbital deck & coolant basins',
-    tone: 'player',
   },
 ];
 
@@ -189,31 +189,21 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
       }
     }
 
-    // 3/4 oblique preview pass for lowCover, walls, and mini tree canopies
+    // Flat 2D top-down preview pass for 1x1 crates and flat block walls
     for (let r = 0; r < previewMap.height; r += 1) {
       for (let c = 0; c < previewMap.width; c += 1) {
         const tile = previewMap.tiles[r][c];
         const px = c * scaleX;
         const py = r * scaleY;
         if (tile === 'lowCover') {
-          ctx.fillStyle = 'rgba(7, 11, 20, 0.45)';
-          ctx.fillRect(px + 1, py + 1.5, Math.ceil(scaleX), Math.ceil(scaleY));
           ctx.fillStyle = tp.crateBody;
-          ctx.fillRect(px, py - 1, Math.ceil(scaleX), Math.ceil(scaleY));
+          ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
+          ctx.strokeStyle = PALETTE.bg0;
+          ctx.lineWidth = 0.8;
+          ctx.strokeRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         } else if (tile === 'wall') {
-          const nDown = previewMap.tiles[r + 1]?.[c] === 'wall';
-          if (!nDown) {
-            ctx.fillStyle = tp.wallSide;
-            ctx.fillRect(px, py + scaleY * 0.45, Math.ceil(scaleX), Math.ceil(scaleY * 0.55));
-          }
           ctx.fillStyle = tp.wallTop;
-          ctx.fillRect(px, py - 2.5, Math.ceil(scaleX), Math.ceil(scaleY));
-          if (previewMap.theme === 'jungle' && (r === 0 || r === previewMap.height - 1 || c === 0 || c === previewMap.width - 1) && (c + r) % 2 === 0) {
-            ctx.fillStyle = tp.foliageBright;
-            ctx.beginPath();
-            ctx.arc(px + scaleX * 0.5, py, scaleX * 0.55, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         }
       }
     }
@@ -237,6 +227,36 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
       ctx.fillText(zoneLabel, zx, zy + 0.5);
     }
   }, [previewMap]);
+
+  const activeMode: GameMode = config.mode ?? 'zoneControl';
+  const isRampage = activeMode === 'rampage';
+  const isHellcell = activeMode === 'hellcell';
+
+  const switchMode = (nextMode: GameMode) => {
+    setConfig((prev) => {
+      if ((prev.mode ?? 'zoneControl') === nextMode) return prev;
+      if (nextMode === 'rampage') {
+        return {
+          ...prev,
+          mode: 'rampage',
+          enemyCount: Math.max(4, Math.min(10, prev.enemyCount)),
+          scoreToWin: prev.scoreToWin > 50 ? 15 : prev.scoreToWin,
+        };
+      }
+      if (nextMode === 'hellcell') {
+        return {
+          ...prev,
+          mode: 'hellcell',
+          scoreToWin: 1000,
+        };
+      }
+      return {
+        ...prev,
+        mode: 'zoneControl',
+        scoreToWin: prev.scoreToWin <= 40 || prev.scoreToWin >= 500 ? 120 : prev.scoreToWin,
+      };
+    });
+  };
 
   const randomizeSeed = () => {
     const next = Math.floor(1000 + Math.random() * 89999);
@@ -268,6 +288,49 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
           </div>
 
           <div className="ht-stagger" style={{ ['--stagger-i' as string]: 1 }}>
+            <div className="ht-display" style={{ fontSize: 12, color: 'var(--text-mid)', marginBottom: 8 }}>
+              Combat Mode
+            </div>
+            <div className="ht-diff-segmented" role="radiogroup" aria-label="Combat Mode" style={{ marginBottom: 14 }}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={activeMode === 'zoneControl'}
+                className={`ht-diff-pill ${activeMode === 'zoneControl' ? 'is-selected' : ''}`}
+                onClick={() => switchMode('zoneControl')}
+              >
+                <Icon name="zone" size={14} color="var(--player)" />
+                <span>Zone Control</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isHellcell}
+                className={`ht-diff-pill ${isHellcell ? 'is-selected' : ''}`}
+                onClick={() => switchMode('hellcell')}
+              >
+                <Icon name="boss" size={14} color="var(--gold)" />
+                <span>Hellcell (PvPvE)</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isRampage}
+                className={`ht-diff-pill ${isRampage ? 'is-selected' : ''}`}
+                onClick={() => switchMode('rampage')}
+              >
+                <Icon name="skull" size={14} color="var(--enemy)" />
+                <span>Rampage (FFA)</span>
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-mid)', marginBottom: 14 }}>
+              {isRampage
+                ? 'No teams. All bots fight each other — highest kill count wins!'
+                : isHellcell
+                  ? 'PvPvE 1000-pt battle: capturing Zones A & C unleashes a fast wall-crushing Boss from Zone B, followed by random-location monsters every 15s! Defeating a Boss refuels HP/ammo & restores walls.'
+                  : 'Squad vs squad tactical battle for zones A, B, and C.'}
+            </p>
+
             <div className="ht-display" style={{ fontSize: 12, color: 'var(--text-mid)', marginBottom: 8 }}>
               Difficulty Tier
             </div>
@@ -304,29 +367,42 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
             }}
           >
             <Slider
-              label="Enemy Bots"
-              min={2}
-              max={10}
+              label={isRampage ? 'Arena Bots' : 'Team Size'}
+              min={isRampage ? 3 : 2}
+              max={isRampage ? 12 : 10}
               value={config.enemyCount}
               onChange={(enemyCount) => setConfig((p) => ({ ...p, enemyCount }))}
             />
             <Slider
-              label="Score To Win"
-              min={50}
-              max={250}
-              step={10}
+              label={isRampage ? 'Kills To Win' : 'Score To Win'}
+              min={isRampage ? 5 : isHellcell ? 300 : 50}
+              max={isRampage ? 50 : isHellcell ? 1500 : 250}
+              step={isRampage ? 5 : isHellcell ? 50 : 10}
               value={config.scoreToWin}
               onChange={(scoreToWin) => setConfig((p) => ({ ...p, scoreToWin }))}
             />
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--text-mid)' }}>
-            <Badge tone="player">
-              BLUE SQUAD: YOU + {Math.floor(config.enemyCount / 2)} ALLIES
-            </Badge>
-            <Badge tone="enemy">
-              RED SQUAD: {config.enemyCount} BOTS
-            </Badge>
+            {isRampage ? (
+              <>
+                <Badge tone="enemy">
+                  FREE-FOR-ALL: YOU VS {config.enemyCount} BOTS
+                </Badge>
+                <Badge tone="gold">
+                  NO TEAMS · MAX KILLS WINS · 2 GRENADES (G)
+                </Badge>
+              </>
+            ) : (
+              <>
+                <Badge tone="player">
+                  BLUE SQUAD: YOU + {Math.max(0, config.enemyCount - 1)} ALLIES
+                </Badge>
+                <Badge tone="enemy">
+                  RED SQUAD: {config.enemyCount} BOTS
+                </Badge>
+              </>
+            )}
           </div>
 
           <div className="ht-stagger" style={{ ['--stagger-i' as string]: 3 }}>

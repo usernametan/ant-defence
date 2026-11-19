@@ -43,12 +43,13 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               {[
                 { key: 'MOUSE', label: 'AIM & FIRE' },
+                { key: 'G', label: 'GRENADE (2x)' },
                 { key: 'R', label: 'RELOAD' },
                 { key: 'E', label: 'SWAP WEAPON' },
                 { key: 'Q / SHIFT', label: 'DASH' },
               ].map((item, i) => (
                 <div key={item.key} style={{ display: 'grid', gap: 4, justifyItems: 'center' }}>
-                  <KeyCap label={item.key} active={step === i} />
+                  <KeyCap label={item.key} active={step === i % 4} />
                   <span style={{ fontSize: 10, color: 'var(--text-mid)' }}>{item.label}</span>
                 </div>
               ))}

@@ -7,6 +7,8 @@ export interface Vec2 {
 
 export type Team = 'player' | 'enemy';
 
+export type GameMode = 'zoneControl' | 'rampage' | 'hellcell';
+
 export type WeaponId =
   | 'pistol'
   | 'smg'
@@ -14,6 +16,8 @@ export type WeaponId =
   | 'rifle'
   | 'sniper'
   | 'rocket';
+
+export type KillSource = WeaponId | 'grenade' | 'boss';
 
 export type Rarity = 'common' | 'rare' | 'epic';
 
@@ -76,6 +80,8 @@ export interface MapData {
   tiles: TileKind[][];
   /** Remaining hit points for destructible cover, keyed by "col,row". */
   coverHp: Record<string, number>;
+  /** Incremented when interior walls are crushed or restored (e.g. Hellcell bosses). */
+  wallRevision?: number;
   zones: ZoneDef[];
   bases: BaseDef[];
   crateSpawns: Vec2[];
@@ -94,15 +100,19 @@ export type AiState =
 export interface Unit {
   id: string;
   team: Team;
+  name?: string;
   pos: Vec2;
   vel: Vec2;
   /** Facing / aim angle in radians. */
   angle: number;
   hp: number;
   maxHp: number;
+  shield?: number;
+  maxShield?: number;
   weaponId: WeaponId;
   ammoInMag: number;
   reserveAmmo: number;
+  grenades?: number;
   reloading: boolean;
   /** 0..1 while reloading. */
   reloadProgress: number;
@@ -128,6 +138,19 @@ export interface Projectile {
   splashRadius: number;
 }
 
+export interface Grenade {
+  id: string;
+  ownerId: string;
+  team: Team;
+  pos: Vec2;
+  vel: Vec2;
+  /** Remaining fuse / travel time in seconds before detonation. */
+  fuse: number;
+  maxFuse: number;
+  damage: number;
+  splashRadius: number;
+}
+
 export interface Pickup {
   id: string;
   pos: Vec2;
@@ -135,6 +158,99 @@ export interface Pickup {
   rarity: Rarity;
   /** Remaining lifetime in seconds. */
   ttl: number;
+  kind?: 'weapon' | 'shield';
+  shieldAmount?: number;
+}
+
+export type HellcellPhase = 'NORMAL' | 'WARNING' | 'CEASEFIRE_BOSS' | 'RESUME_COUNTDOWN';
+
+export type BossKind = 'rocketSiegeBot' | 'venomCobra' | 'pharaohSkeleton';
+
+export interface HellcellBoss {
+  id: string;
+  kind: BossKind;
+  name: string;
+  pos: Vec2;
+  radius: number;
+  angle: number;
+  targetAngle: number;
+  moveAngle?: number;
+  moveTimer?: number;
+  hp: number;
+  maxHp: number;
+  attackTimer: number;
+  /** 0..1 recoil/punch animation timer. */
+  attackAnim: number;
+}
+
+export interface BossReticle {
+  id: string;
+  startPos: Vec2;
+  targetPos: Vec2;
+  timer: number;
+  maxTimer: number;
+  splashRadius: number;
+  damage: number;
+}
+
+export interface AcidPool {
+  id: string;
+  pos: Vec2;
+  tileX: number;
+  tileY: number;
+  ttl: number;
+  maxTtl: number;
+  dps: number;
+}
+
+export interface VenomCone {
+  pos: Vec2;
+  angle: number;
+  halfArc: number;
+  range: number;
+  ttl: number;
+  maxTtl: number;
+}
+
+export interface BossProjectile {
+  id: string;
+  kind: 'rocket' | 'venomBlob' | 'bone';
+  pos: Vec2;
+  vel: Vec2;
+  targetPos?: Vec2;
+  rotation: number;
+  spinSpeed: number;
+  bouncesLeft: number;
+  life: number;
+  damage: number;
+  splashRadius: number;
+}
+
+export interface CrushedTileRecord {
+  x: number;
+  y: number;
+  prevKind: TileKind;
+}
+
+export interface HellcellState {
+  phase: HellcellPhase;
+  isCeasefireActive: boolean;
+  hasTriggered: boolean;
+  bossDefeated: boolean;
+  bossCount?: number;
+  nextSpawnIn?: number;
+  spawnPos?: Vec2;
+  crushedTiles?: CrushedTileRecord[];
+  triggerTime: number;
+  countdown: number;
+  blueBossDamage: number;
+  redBossDamage: number;
+  majorityWinner?: Team;
+  boss: HellcellBoss | null;
+  reticles: BossReticle[];
+  acidPools: AcidPool[];
+  bossProjectiles: BossProjectile[];
+  venomCone: VenomCone | null;
 }
 
 export interface ZoneState {
@@ -149,6 +265,7 @@ export type MatchDifficulty = 'easy' | 'normal' | 'hard';
 
 export interface MatchConfig {
   seed: number;
+  mode?: GameMode;
   difficulty: MatchDifficulty;
   scoreToWin: number;
   enemyCount: number;
@@ -162,15 +279,19 @@ export interface GameState {
   tick: number;
   /** Elapsed simulation time in seconds. */
   time: number;
+  timeLimit?: number;
   map: MapData;
   units: Unit[];
   projectiles: Projectile[];
+  grenades?: Grenade[];
   pickups: Pickup[];
   zones: ZoneState[];
   score: { player: number; enemy: number };
   baseHp: { player: number; enemy: number };
   status: MatchStatus;
   playerId: string;
+  winnerId?: string;
+  hellcell?: HellcellState;
   matchConfig: MatchConfig;
 }
 
@@ -189,4 +310,5 @@ export interface InputState {
   interact: boolean;
   swapWeapon: boolean;
   dash: boolean;
+  throwGrenade?: boolean;
 }

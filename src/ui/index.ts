@@ -21,7 +21,7 @@ export { generatePreviewMap } from './previewMap';
 export { CountdownOverlay } from './screens/CountdownOverlay';
 export type { CountdownOverlayProps } from './screens/CountdownOverlay';
 export { GameOver } from './screens/GameOver';
-export type { GameOverProps, MatchStats } from './screens/GameOver';
+export type { GameOverProps, MatchStats, RampageStanding } from './screens/GameOver';
 export { HowToPlayModal } from './screens/HowToPlayModal';
 export type { HowToPlayModalProps } from './screens/HowToPlayModal';
 export { MainMenu } from './screens/MainMenu';

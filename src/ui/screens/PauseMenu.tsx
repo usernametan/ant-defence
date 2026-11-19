@@ -1,10 +1,11 @@
 import React, { useRef } from 'react';
 import { getThemePalette } from '../../render/palette';
-import type { MapTheme } from '../../shared/types';
+import type { GameMode, MapTheme } from '../../shared/types';
 import { Badge, Button, Icon, Panel, useMenuNavigation } from '../design';
 import '../ui.css';
 
 export interface PauseMenuProps {
+  mode?: GameMode;
   score?: { player: number; enemy: number };
   elapsedSeconds?: number;
   mapTheme?: MapTheme;
@@ -22,6 +23,7 @@ function formatClock(sec: number): string {
 }
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
+  mode = 'zoneControl',
   score,
   elapsedSeconds,
   mapTheme,
@@ -65,11 +67,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             }}
           >
             <span className="ht-display" style={{ fontSize: 14, color: 'var(--player-glow)' }}>
-              {score.player}
+              {mode === 'rampage' ? `${score.player}K` : score.player}
             </span>
             <div style={{ textAlign: 'center' }}>
               <div className="ht-display" style={{ fontSize: 10, color: theme.accent }}>
-                {theme.name}
+                {mode === 'rampage' ? `RAMPAGE · ${theme.name}` : theme.name}
               </div>
               {elapsedSeconds !== undefined && (
                 <div className="ht-num" style={{ fontSize: 11, color: 'var(--text-mid)' }}>
@@ -78,7 +80,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
               )}
             </div>
             <span className="ht-display" style={{ fontSize: 14, color: 'var(--enemy-glow)' }}>
-              {score.enemy}
+              {mode === 'rampage' ? `${score.enemy}K` : score.enemy}
             </span>
           </Panel>
         )}

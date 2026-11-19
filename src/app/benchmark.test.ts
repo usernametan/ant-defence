@@ -8,8 +8,8 @@ describe('headless benchmark', () => {
     const result = runBenchmark(2000, 20);
     console.log(formatBenchmark(result));
     expect(result.ticks).toBe(2000);
-    // 20 enemies + 10 allied bots + the player.
-    expect(result.units).toBe(31);
+    // 20 enemies + 19 allied bots + the player (20 vs 20).
+    expect(result.units).toBe(40);
     expect(result.averageMs).toBeLessThan(BUDGET_MS_PER_STEP);
   });
 });

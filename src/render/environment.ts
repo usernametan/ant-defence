@@ -75,28 +75,46 @@ export class EnvironmentRenderer {
         tctx.lineWidth = 1;
         tctx.strokeRect(x + 0.5, y + 0.5, 31, 31);
 
-        if (theme === 'fortress' && (r + c) % 2 === 1) {
-          tctx.fillStyle = 'rgba(159, 176, 207, 0.09)';
-          tctx.fillRect(x + 4, y + 4, 2, 2);
-          tctx.fillRect(x + 26, y + 26, 2, 2);
+        if (theme === 'fortress') {
+          if ((r + c) % 2 === 1) {
+            tctx.fillStyle = 'rgba(148, 163, 184, 0.14)';
+            tctx.fillRect(x + 4, y + 4, 2, 2);
+            tctx.fillRect(x + 26, y + 4, 2, 2);
+            tctx.fillRect(x + 4, y + 26, 2, 2);
+            tctx.fillRect(x + 26, y + 26, 2, 2);
+          }
         } else if (theme === 'temple') {
-          if ((r * 3 + c) % 4 === 0) {
-            tctx.strokeStyle = 'rgba(72, 56, 36, 0.34)';
+          // Subtle carved 2D glyph patterns on warm sandy-tan stone tiles
+          if ((r + c) % 2 === 0) {
+            tctx.strokeStyle = 'rgba(88, 72, 52, 0.36)';
+            tctx.lineWidth = 1.2;
+            tctx.strokeRect(x + 6, y + 6, 20, 20);
+            tctx.strokeRect(x + 11, y + 11, 10, 10);
+          } else if ((r * 3 + c) % 3 === 0) {
+            tctx.strokeStyle = 'rgba(223, 199, 157, 0.22)';
+            tctx.lineWidth = 1.2;
             tctx.beginPath();
-            tctx.moveTo(x + 6, y + 14);
-            tctx.lineTo(x + 15, y + 17);
-            tctx.lineTo(x + 21, y + 24);
+            tctx.moveTo(x + 8, y + 16);
+            tctx.lineTo(x + 24, y + 16);
+            tctx.moveTo(x + 16, y + 8);
+            tctx.lineTo(x + 16, y + 24);
             tctx.stroke();
           }
-          if ((r + c) % 3 === 0) {
-            tctx.strokeStyle = 'rgba(223, 199, 157, 0.09)';
-            tctx.strokeRect(x + 5, y + 5, 22, 22);
-          }
         } else if (theme === 'jungle') {
-          if ((r + c * 2) % 3 === 0) {
-            tctx.fillStyle = 'rgba(54, 130, 71, 0.14)';
-            tctx.fillRect(x + 3, y + 2, 9, 4);
-            tctx.fillRect(x + 20, y + 24, 7, 5);
+          // Subtle 2D grass tufts on dark olive-green square tiles
+          if ((r + c * 2) % 2 === 0) {
+            tctx.strokeStyle = '#368247';
+            tctx.lineWidth = 1.4;
+            tctx.beginPath();
+            tctx.moveTo(x + 9, y + 22);
+            tctx.lineTo(x + 7, y + 16);
+            tctx.moveTo(x + 9, y + 22);
+            tctx.lineTo(x + 12, y + 16);
+            tctx.moveTo(x + 22, y + 12);
+            tctx.lineTo(x + 20, y + 7);
+            tctx.moveTo(x + 22, y + 12);
+            tctx.lineTo(x + 25, y + 7);
+            tctx.stroke();
           }
         }
       }
@@ -116,7 +134,7 @@ export class EnvironmentRenderer {
   private ensureStaticGroundCache(map: MapData): HTMLCanvasElement | null {
     if (typeof document === 'undefined') return null;
     const theme: MapTheme = map.theme ?? 'fortress';
-    const key = `${map.seed}:${theme}:${map.width}x${map.height}:${map.tileSize}`;
+    const key = `${map.seed}:${theme}:${map.width}x${map.height}:${map.tileSize}:w${map.wallRevision ?? 0}`;
     if (this.groundCacheCanvas && this.groundCacheKey === key) {
       return this.groundCacheCanvas;
     }
@@ -375,7 +393,7 @@ export class EnvironmentRenderer {
     tp: ThemePalette,
     c: number,
     r: number,
-    time: number,
+    _time: number,
   ): void {
     const ts = map.tileSize;
     const x = c * ts;
@@ -387,104 +405,73 @@ export class EnvironmentRenderer {
     const isBorder = r === 0 || c === 0 || r === map.height - 1 || c === map.width - 1;
     const h = tileHash(c, r, map.seed);
 
-    // In Ancient Temple, isolated 1x1 interior walls render as tall fluted 3/4 temple pillars
-    if (theme === 'temple' && !isBorder && !nUp && !nDown && !nLeft && !nRight) {
-      this.drawTemplePillar(ctx, tp, x + ts * 0.5, y + ts - 2, h < 0.35);
-      return;
-    }
-
-    const topY = y - WALL_HEIGHT;
-    const frontY = y + ts - WALL_HEIGHT;
-
-    if (!nDown) {
-      ctx.fillStyle = tp.wallSide;
-      ctx.fillRect(x, frontY, ts, WALL_HEIGHT);
-
-      const midY = frontY + WALL_HEIGHT * 0.5;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-      ctx.fillRect(x + 1, frontY + 1, ts - 2, 2);
-      ctx.fillRect(x + 1, midY + 1, ts - 2, 1.5);
-
-      ctx.fillStyle = tp.floorSeam;
-      ctx.fillRect(x, midY, ts, 1.5);
-      ctx.fillRect(x + ts * 0.5, frontY, 1.5, WALL_HEIGHT * 0.5);
-      ctx.fillRect(x + ts * 0.15, midY, 1.5, WALL_HEIGHT * 0.5);
-      ctx.fillRect(x + ts * 0.85, midY, 1.5, WALL_HEIGHT * 0.5);
-
-      ctx.fillStyle = 'rgba(7, 11, 20, 0.42)';
-      ctx.fillRect(x, y + ts - 3.5, ts, 3.5);
-
-      if (theme === 'temple') {
-        ctx.fillStyle = 'rgba(223, 199, 157, 0.16)';
-        ctx.fillRect(x + 3, frontY + 3, ts - 6, 2);
-        if (h > 0.72) {
-          ctx.strokeStyle = tp.bgVoid;
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.moveTo(x + 11, frontY + 2);
-          ctx.lineTo(x + 15, frontY + 10);
-          ctx.lineTo(x + 12, frontY + 17);
-          ctx.stroke();
-        }
-      } else if (theme === 'fortress') {
-        ctx.fillStyle = 'rgba(34, 211, 238, 0.18)';
-        if ((c + r) % 4 === 0) ctx.fillRect(x + 10, frontY + 7, 12, 2.5);
-      }
-    }
-
-    const isBrokenTempleEnd =
-      theme === 'temple' && !isBorder && ((!nLeft && !nUp) || (!nRight && !nUp)) && h < 0.55;
-
+    // Strict Flat 2D Top-Down Orthographic Block Wall (grid-aligned 1x1 block, 2-3px dark outline)
     ctx.fillStyle = (c + r) % 3 === 0 ? tp.wallTopAlt : tp.wallTop;
-    if (isBrokenTempleEnd) {
-      ctx.fillRect(x, topY + 6, ts, ts - 6);
-      ctx.fillRect(x + (nLeft ? 0 : 8), topY, ts - 8, 8);
-      ctx.fillStyle = tp.wallSide;
-      ctx.fillRect(x + (nLeft ? ts - 8 : 2), topY + 2, 6, 6);
-    } else {
-      ctx.fillRect(x, topY, ts, ts);
-    }
+    ctx.fillRect(x, y, ts, ts);
 
-    ctx.strokeStyle =
-      theme === 'temple' ? 'rgba(88, 72, 52, 0.48)' : 'rgba(15, 20, 32, 0.48)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, topY + 0.5, ts - 1, ts - 1);
-
-    if (theme === 'temple' && !isBrokenTempleEnd && h < 0.45) {
-      ctx.beginPath();
-      ctx.moveTo(x + 6, topY + 12);
-      ctx.lineTo(x + 16, topY + 18);
-      ctx.lineTo(x + 24, topY + 14);
-      ctx.stroke();
-    }
-
+    // Subtle 2D cel-shaded inner bevel
     ctx.fillStyle = tp.wallEdge;
-    if (!nUp && !isBrokenTempleEnd) ctx.fillRect(x, topY, ts, 2.5);
-    if (!nLeft && !isBrokenTempleEnd) ctx.fillRect(x, topY, 2.5, ts);
+    if (!nUp) ctx.fillRect(x + 2, y + 2, ts - 4, 3);
+    if (!nLeft) ctx.fillRect(x + 2, y + 2, 3, ts - 4);
+    ctx.fillStyle = tp.wallSide;
+    if (!nDown) ctx.fillRect(x + 2, y + ts - 5, ts - 4, 3);
+    if (!nRight) ctx.fillRect(x + ts - 5, y + 2, 3, ts - 4);
 
-    ctx.fillStyle = tp.bgVoid;
-    if (!nUp) ctx.fillRect(x, topY - 1, ts, 1.5);
-    if (!nLeft) ctx.fillRect(x - 1, topY, 1.5, nDown ? ts : ts + WALL_HEIGHT);
-    if (!nRight) ctx.fillRect(x + ts - 1.5, topY, 1.5, nDown ? ts : ts + WALL_HEIGHT);
-    if (!nDown) {
-      ctx.fillRect(x, frontY - 1.5, ts, 1.8);
-      ctx.fillRect(x, y + ts - 1, ts, 1.4);
-    }
+    if (theme === 'fortress') {
+      // Sci-Fi Arena: metallic inner plate & yellow hazard stripes on exposed interior walls
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.45)';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(x + 5, y + 5, ts - 10, ts - 10);
 
-    if (theme === 'jungle') {
-      this.drawJungleWallDetails(ctx, map, tp, c, r, x, y, topY, frontY, nDown, nLeft, nRight, isBorder, time);
+      if (!isBorder && (!nDown || !nUp) && (c + r) % 2 === 0) {
+        const stripeY = !nDown ? y + ts - 8 : y + 4;
+        ctx.fillStyle = '#FACC15';
+        ctx.fillRect(x + 5, stripeY, ts - 10, 4);
+        ctx.fillStyle = '#0F172A';
+        for (let sx = x + 7; sx < x + ts - 8; sx += 6) {
+          ctx.fillRect(sx, stripeY, 3, 4);
+        }
+      }
+    } else if (theme === 'jungle') {
+      // Jungle Outpost: mossy stone patches & small 2D vine leaves
+      if ((c + r) % 2 === 0) {
+        ctx.fillStyle = 'rgba(54, 130, 71, 0.42)';
+        ctx.fillRect(x + 5, y + 5, 10, 8);
+      }
+      if (!isBorder && (!nDown || !nRight || !nLeft) && h < 0.65) {
+        ctx.fillStyle = '#368247';
+        ctx.strokeStyle = PALETTE.bg0;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(x + 9, y + 9, 4, 0, Math.PI * 2);
+        ctx.arc(x + 22, y + 22, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#4ADE80';
+        ctx.fillRect(x + 8, y + 8, 2, 2);
+      }
     } else if (theme === 'temple') {
-      this.drawTempleWallDetails(ctx, map, tp, c, r, x, y, topY, nUp, nDown, nLeft, nRight, isBorder);
-    } else if (!isBorder) {
-      const nearWater =
-        map.tiles[r + 1]?.[c] === 'water' ||
-        map.tiles[r - 1]?.[c] === 'water' ||
-        map.tiles[r]?.[c + 1] === 'water' ||
-        map.tiles[r]?.[c - 1] === 'water';
-      if ((!nDown && !nLeft && (c + r) % 2 === 0) || (nearWater && (c * 7 + r * 3) % 3 === 0)) {
-        this.drawFoliageCluster(ctx, tp, x + 5, y + ts - 2, 0.9);
+      // Ancient Temple: flat warm sandstone block with subtle 2D cracks
+      ctx.strokeStyle = 'rgba(88, 72, 52, 0.55)';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(x + 5, y + 5, ts - 10, ts - 10);
+      if (h < 0.55) {
+        ctx.strokeStyle = '#3F3122';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x + 8, y + 10);
+        ctx.lineTo(x + 15, y + 15);
+        ctx.lineTo(x + 22, y + 12);
+        ctx.stroke();
       }
     }
+
+    // Thick dark 2px-3px outer outline along exposed block edges
+    ctx.fillStyle = PALETTE.bg0;
+    if (!nUp) ctx.fillRect(x, y, ts, 2.4);
+    if (!nDown) ctx.fillRect(x, y + ts - 2.4, ts, 2.4);
+    if (!nLeft) ctx.fillRect(x, y, 2.4, ts);
+    if (!nRight) ctx.fillRect(x + ts - 2.4, y, 2.4, ts);
   }
 
   private drawLowCover3Quarter(
@@ -500,111 +487,57 @@ export class EnvironmentRenderer {
     const y = r * ts;
     const hp = map.coverHp[`${c},${r}`] ?? 100;
     if (hp <= 0) {
-      // Subtle shattered debris marks when cover is destroyed
-      ctx.fillStyle = 'rgba(24, 18, 12, 0.35)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
       ctx.fillRect(x + 7, y + 12, 6, 4);
       ctx.fillRect(x + 19, y + 18, 5, 4);
       return;
     }
 
-    if (theme === 'temple') {
-      const variant = (c + r * 2) % 3;
-      if (variant === 0) {
-        // Destructible 3/4 Brass-Bound Treasure Chest on sandstone base
-        ctx.fillStyle = tp.wallSide;
-        ctx.fillRect(x + 3, y + ts - 8, ts - 6, 6);
-        this.drawTempleChest(ctx, x + ts * 0.5, y + ts - 6);
-      } else if (variant === 1) {
-        // Destructible 3/4 Terracotta Urn/Pot cluster on stone plinth
-        ctx.fillStyle = tp.wallTopAlt;
-        ctx.strokeStyle = tp.bgVoid;
-        ctx.lineWidth = 1.2;
-        ctx.fillRect(x + 4, y + ts - 12, ts - 8, 9);
-        ctx.strokeRect(x + 4, y + ts - 12, ts - 8, 9);
-        this.drawTemplePots(ctx, x + 13, y + ts - 8, true);
-      } else {
-        this.drawBarricadeCover(ctx, map, tp, x, y, c, r, ts);
-      }
-    } else {
-      const isCrate = (c + r) % 2 === 0;
-      if (isCrate) {
-        ctx.fillStyle = '#5F3F16';
-        ctx.fillRect(x + 3, y + ts - 11, ts - 6, 9);
-        ctx.strokeStyle = tp.bgVoid;
-        ctx.lineWidth = 1.4;
-        ctx.strokeRect(x + 3, y + ts - 11, ts - 6, 9);
+    // Strict Flat 2D Top-Down 1x1 Grid Square Crate (2-3px dark outline)
+    ctx.fillStyle = tp.crateBody;
+    ctx.fillRect(x + 2, y + 2, ts - 4, ts - 4);
 
-        ctx.fillStyle = tp.crateBody;
-        ctx.fillRect(x + 3, y - 3, ts - 6, ts - 8);
-        ctx.fillStyle = '#BA8539';
-        ctx.fillRect(x + 4, y - 2, ts - 8, 4);
-        ctx.strokeStyle = tp.crateTrim;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x + 4, y - 2, ts - 8, ts - 10);
+    // Inner cel-shaded bevel & cross-brace
+    ctx.strokeStyle = tp.crateTrim;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 5, y + 5, ts - 10, ts - 10);
 
-        ctx.beginPath();
-        ctx.moveTo(x + 6, y);
-        ctx.lineTo(x + ts - 6, y + ts - 14);
-        ctx.moveTo(x + ts - 6, y);
-        ctx.lineTo(x + 6, y + ts - 14);
-        ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 6, y + 6);
+    ctx.lineTo(x + ts - 6, y + ts - 6);
+    ctx.moveTo(x + ts - 6, y + 6);
+    ctx.lineTo(x + 6, y + ts - 6);
+    ctx.stroke();
 
-        ctx.strokeStyle = tp.bgVoid;
-        ctx.lineWidth = 1.4;
-        ctx.strokeRect(x + 3, y - 3, ts - 6, ts - 8);
-
-        ctx.fillStyle = '#F3D282';
-        ctx.fillRect(x + 5, y - 1, 2, 2);
-        ctx.fillRect(x + ts - 7, y - 1, 2, 2);
-      } else {
-        this.drawBarricadeCover(ctx, map, tp, x, y, c, r, ts);
-      }
+    if (theme === 'fortress') {
+      // Sci-Fi Arena: yellow 1x1 crate with dark hazard center band
+      ctx.fillStyle = '#0F172A';
+      ctx.fillRect(x + 10, y + 13, ts - 20, 6);
+      ctx.fillStyle = '#FEF08A';
+      ctx.fillRect(x + 12, y + 15, ts - 24, 2);
+    } else if (theme === 'temple') {
+      // Ancient Temple: dark-brown reinforced 1x1 wooden crate with corner brackets
+      ctx.fillStyle = '#D4A14B';
+      ctx.fillRect(x + 3, y + 3, 4, 4);
+      ctx.fillRect(x + ts - 7, y + 3, 4, 4);
+      ctx.fillRect(x + 3, y + ts - 7, 4, 4);
+      ctx.fillRect(x + ts - 7, y + ts - 7, 4, 4);
     }
+
+    // Thick 2.4px dark outer outline
+    ctx.strokeStyle = PALETTE.bg0;
+    ctx.lineWidth = 2.4;
+    ctx.strokeRect(x + 2, y + 2, ts - 4, ts - 4);
 
     if (hp < 75) {
-      ctx.strokeStyle = hp < 35 ? PALETTE.enemyGlow : tp.bgVoid;
-      ctx.lineWidth = hp < 35 ? 2 : 1.4;
+      ctx.strokeStyle = hp < 35 ? PALETTE.enemyGlow : PALETTE.bg0;
+      ctx.lineWidth = hp < 35 ? 2 : 1.5;
       ctx.beginPath();
-      ctx.moveTo(x + 7, y + 5);
-      ctx.lineTo(x + 16, y + 13);
-      ctx.lineTo(x + 12, y + 21);
-      if (hp < 40) {
-        ctx.moveTo(x + 16, y + 13);
-        ctx.lineTo(x + 24, y + 17);
-      }
+      ctx.moveTo(x + 7, y + 7);
+      ctx.lineTo(x + 16, y + 15);
+      ctx.lineTo(x + 12, y + 23);
       ctx.stroke();
     }
-  }
-
-  private drawBarricadeCover(
-    ctx: CanvasRenderingContext2D,
-    map: MapData,
-    tp: ThemePalette,
-    x: number,
-    y: number,
-    c: number,
-    r: number,
-    ts: number,
-  ): void {
-    const leftCover = map.tiles[r]?.[c - 1] === 'lowCover';
-    const rightCover = map.tiles[r]?.[c + 1] === 'lowCover';
-    const padL = leftCover ? 0 : 2;
-    const padR = rightCover ? 0 : 2;
-    const w = ts - padL - padR;
-
-    ctx.fillStyle = tp.wallSide;
-    ctx.fillRect(x + padL, y + ts - 12, w, 9);
-    ctx.fillStyle = tp.bgVoid;
-    ctx.fillRect(x + padL, y + ts - 4, w, 1.5);
-
-    ctx.fillStyle = tp.barricadeBody;
-    ctx.fillRect(x + padL, y, w, ts - 12);
-    ctx.fillStyle = tp.barricadeHighlight;
-    ctx.fillRect(x + padL + 1, y + 1, w - 2, 3);
-
-    ctx.strokeStyle = tp.bgVoid;
-    ctx.lineWidth = 1.3;
-    ctx.strokeRect(x + padL + 0.5, y + 0.5, w - 1, ts - 4);
   }
 
   private drawFloorDetails(
@@ -617,7 +550,41 @@ export class EnvironmentRenderer {
     maxRow: number,
   ): void {
     const ts = map.tileSize;
-    if (theme === 'fortress') return;
+    if (theme === 'fortress') {
+      for (let r = minRow; r <= maxRow; r += 1) {
+        for (let c = minCol; c <= maxCol; c += 1) {
+          if (map.tiles[r][c] !== 'floor') continue;
+          const x = c * ts;
+          const y = r * ts;
+          const h = tileHash(c, r, map.seed);
+
+          if (r % 8 === 4 && c > 2 && c < map.width - 3) {
+            ctx.fillStyle = 'rgba(11, 18, 34, 0.7)';
+            ctx.fillRect(x, y + 13, ts, 6);
+            ctx.fillStyle = 'rgba(34, 211, 238, 0.24)';
+            ctx.fillRect(x, y + 15, ts, 2);
+          } else if (c % 10 === 5 && r > 2 && r < map.height - 3) {
+            ctx.fillStyle = 'rgba(11, 18, 34, 0.7)';
+            ctx.fillRect(x + 13, y, 6, ts);
+            ctx.fillStyle = 'rgba(79, 140, 255, 0.22)';
+            ctx.fillRect(x + 15, y, 2, ts);
+          }
+
+          if (h < 0.08) {
+            ctx.fillStyle = '#0B101D';
+            ctx.fillRect(x + 6, y + 6, 20, 20);
+            ctx.fillStyle = '#1E2C47';
+            for (let vy = 8; vy <= 22; vy += 4) {
+              ctx.fillRect(x + 8, y + vy, 16, 2);
+            }
+          } else if (h > 0.94) {
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.16)';
+            ctx.fillRect(x + 8, y + 14, 16, 4);
+          }
+        }
+      }
+      return;
+    }
 
     if (theme === 'temple') {
       const rugSpots: Array<{ c: number; r: number; w: number; h: number }> = [
@@ -813,380 +780,34 @@ export class EnvironmentRenderer {
     ctx.restore();
   }
 
-  private drawJungleWallDetails(
-    ctx: CanvasRenderingContext2D,
-    map: MapData,
-    tp: ThemePalette,
-    c: number,
-    r: number,
-    x: number,
-    y: number,
-    topY: number,
-    frontY: number,
-    nDown: boolean,
-    nLeft: boolean,
-    nRight: boolean,
-    isBorder: boolean,
-    time: number,
-  ): void {
-    const ts = map.tileSize;
-    const h = tileHash(c, r, map.seed);
-
-    if (h < 0.62 || isBorder) {
-      ctx.strokeStyle = '#266C38';
-      ctx.lineWidth = 2.6;
-      ctx.beginPath();
-      ctx.moveTo(x + 3, topY + 6);
-      ctx.quadraticCurveTo(x + 16, topY + 18, x + ts - 3, topY + 10);
-      ctx.stroke();
-
-      ctx.fillStyle = '#3E9A54';
-      ctx.beginPath();
-      ctx.arc(x + 10, topY + 11, 2.5, 0, Math.PI * 2);
-      ctx.arc(x + 22, topY + 13, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (!nDown) {
-        ctx.strokeStyle = '#2E8344';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x + 8, frontY - 2);
-        ctx.quadraticCurveTo(x + 11, frontY + 8, x + 7, y + ts - 3);
-        ctx.moveTo(x + 23, frontY - 2);
-        ctx.quadraticCurveTo(x + 20, frontY + 9, x + 24, y + ts - 5);
-        ctx.stroke();
-
-        ctx.fillStyle = '#48AC5D';
-        ctx.beginPath();
-        ctx.arc(x + 7, y + ts - 4, 2.2, 0, Math.PI * 2);
-        ctx.arc(x + 24, y + ts - 6, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    if (isBorder) {
-      if ((c + r) % 2 === 0 || h < 0.55) {
-        this.drawJungleTree(ctx, tp, x + ts * 0.5, y + ts * 0.35, 1.15, h < 0.48, time + c * 0.4);
-      }
-    } else {
-      if (!nDown && !nLeft && h < 0.34) {
-        this.drawJungleTree(ctx, tp, x + ts * 0.45, topY + 12, 0.92, h < 0.17, time + r * 0.5);
-      } else {
-        if (!nDown && !nLeft && h < 0.72) {
-          this.drawFoliageCluster(ctx, tp, x + 5, y + ts - 2, 1.05);
-        }
-        if (!nDown && !nRight && h > 0.32) {
-          this.drawFoliageCluster(ctx, tp, x + ts - 6, y + ts - 2, 1.0);
-        }
-      }
-    }
-  }
-
-  private drawJungleTree(
-    ctx: CanvasRenderingContext2D,
-    tp: ThemePalette,
-    x: number,
-    baseY: number,
-    scale: number,
-    isPalm: boolean,
-    swayPhase: number,
-  ): void {
-    const sway = Math.sin(swayPhase * 1.4) * 1.6;
-    ctx.save();
-    ctx.translate(x, baseY);
-
-    ctx.fillStyle = '#472E1B';
-    ctx.strokeStyle = '#0D130E';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(-4.5 * scale, 4);
-    ctx.lineTo(-3 * scale + sway * 0.3, -18 * scale);
-    ctx.lineTo(3 * scale + sway * 0.3, -18 * scale);
-    ctx.lineTo(4.5 * scale, 4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    const crownY = -19 * scale;
-    ctx.translate(sway, crownY);
-
-    if (isPalm) {
-      const fronds = 7;
-      for (let i = 0; i < fronds; i += 1) {
-        const a = (i / fronds) * Math.PI * 2 + 0.3;
-        ctx.save();
-        ctx.rotate(a);
-        ctx.fillStyle = i % 2 === 0 ? tp.foliageDark : tp.foliageBright;
-        ctx.strokeStyle = '#0B130D';
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(11 * scale, -7 * scale, 21 * scale, 1 * scale);
-        ctx.quadraticCurveTo(11 * scale, 6 * scale, 0, 0);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.strokeStyle = '#5BB96D';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(2, 0);
-        ctx.lineTo(17 * scale, 0.5);
-        ctx.stroke();
-        ctx.restore();
-      }
-      ctx.fillStyle = '#6B4828';
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.5 * scale, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = '#0B140E';
-      ctx.beginPath();
-      ctx.arc(0, 1, 16 * scale, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = tp.foliageDark;
-      ctx.beginPath();
-      ctx.arc(-5 * scale, 2 * scale, 11 * scale, 0, Math.PI * 2);
-      ctx.arc(6 * scale, 1 * scale, 10.5 * scale, 0, Math.PI * 2);
-      ctx.arc(0, -5 * scale, 11 * scale, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = tp.foliageBright;
-      ctx.beginPath();
-      ctx.arc(-4 * scale, -3 * scale, 7.5 * scale, 0, Math.PI * 2);
-      ctx.arc(5 * scale, -4 * scale, 6.5 * scale, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#58B665';
-      ctx.beginPath();
-      ctx.arc(-1 * scale, -7 * scale, 4 * scale, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.restore();
-  }
-
-  private drawTempleWallDetails(
-    ctx: CanvasRenderingContext2D,
-    map: MapData,
-    tp: ThemePalette,
-    c: number,
-    r: number,
-    x: number,
-    y: number,
-    topY: number,
-    nUp: boolean,
-    nDown: boolean,
-    nLeft: boolean,
-    nRight: boolean,
-    isBorder: boolean,
-  ): void {
-    const ts = map.tileSize;
-    const h = tileHash(c, r, map.seed);
-
-    const isWallEnd = !nUp && !nDown && (!nLeft || !nRight);
-    if (isWallEnd || (!isBorder && !nDown && (!nLeft || !nRight) && h < 0.45)) {
-      ctx.strokeStyle = tp.wallEdge;
-      ctx.lineWidth = 1.4;
-      ctx.strokeRect(x + 5, topY + 5, ts - 10, ts - 10);
-      ctx.fillStyle = 'rgba(223, 199, 157, 0.25)';
-      ctx.fillRect(x + 10, topY + 10, ts - 20, ts - 20);
-    }
-
-    if (isBorder && (c === 15 || c === 44) && (r === 0 || r === map.height - 1)) {
-      this.drawTempleStatue(ctx, tp, x + ts * 0.5, y + ts - 2);
-      return;
-    }
-
-    if (!isBorder && !nDown && map.tiles[r + 1]?.[c] === 'floor') {
-      if (h > 0.87) {
-        this.drawTemplePots(ctx, x + 12, y + ts + 3, h > 0.93);
-      } else if (h < 0.09) {
-        this.drawTempleChest(ctx, x + 16, y + ts + 3);
-      }
-    }
-  }
-
-  private drawTemplePillar(
-    ctx: CanvasRenderingContext2D,
-    tp: ThemePalette,
-    cx: number,
-    baseY: number,
-    broken: boolean,
-  ): void {
-    ctx.save();
-    ctx.translate(cx, baseY);
-
-    ctx.fillStyle = 'rgba(7, 11, 20, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(4, 2, 12, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = tp.wallSide;
-    ctx.strokeStyle = tp.bgVoid;
-    ctx.lineWidth = 1.5;
-    ctx.fillRect(-11, -7, 22, 9);
-    ctx.strokeRect(-11, -7, 22, 9);
-    ctx.fillStyle = tp.wallTopAlt;
-    ctx.fillRect(-11, -11, 22, 5);
-    ctx.strokeRect(-11, -11, 22, 5);
-
-    const shaftH = broken ? 14 : 26;
-    ctx.fillStyle = tp.wallTop;
-    ctx.fillRect(-7.5, -10 - shaftH, 15, shaftH);
-    ctx.strokeRect(-7.5, -10 - shaftH, 15, shaftH);
-
-    ctx.fillStyle = tp.wallSide;
-    ctx.fillRect(-4, -9 - shaftH, 1.5, shaftH - 2);
-    ctx.fillRect(0, -9 - shaftH, 1.5, shaftH - 2);
-    ctx.fillRect(3.5, -9 - shaftH, 1.5, shaftH - 2);
-
-    if (broken) {
-      ctx.fillStyle = tp.wallEdge;
-      ctx.beginPath();
-      ctx.moveTo(-7.5, -10 - shaftH);
-      ctx.lineTo(-2, -14 - shaftH);
-      ctx.lineTo(3, -11 - shaftH);
-      ctx.lineTo(7.5, -13 - shaftH);
-      ctx.lineTo(7.5, -10 - shaftH);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      const capY = -10 - shaftH;
-      ctx.fillStyle = tp.wallSide;
-      ctx.fillRect(-11, capY - 6, 22, 6);
-      ctx.strokeRect(-11, capY - 6, 22, 6);
-      ctx.fillStyle = tp.wallEdge;
-      ctx.fillRect(-11, capY - 12, 22, 6);
-      ctx.strokeRect(-11, capY - 12, 22, 6);
-    }
-
-    ctx.restore();
-  }
-
-  private drawTemplePots(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    baseY: number,
-    pair: boolean,
-  ): void {
-    const drawSinglePot = (ox: number, oy: number, r: number) => {
-      ctx.fillStyle = 'rgba(7, 11, 20, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(ox + 2, oy + 2, r + 1, r * 0.55, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#9C4B24';
-      ctx.strokeStyle = '#1C130C';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.ellipse(ox, oy - r * 0.5, r, r * 1.1, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = '#C96F3D';
-      ctx.beginPath();
-      ctx.ellipse(ox - r * 0.25, oy - r * 0.7, r * 0.4, r * 0.55, -0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#DFC79D';
-      ctx.fillRect(ox - r * 0.45, oy - r * 1.55, r * 0.9, 2.5);
-      ctx.strokeRect(ox - r * 0.45, oy - r * 1.55, r * 0.9, 2.5);
-    };
-
-    drawSinglePot(cx - 2, baseY, 5.2);
-    if (pair) {
-      drawSinglePot(cx + 7, baseY + 2, 4);
-    }
-  }
-
-  private drawTempleChest(ctx: CanvasRenderingContext2D, cx: number, baseY: number): void {
-    ctx.save();
-    ctx.translate(cx, baseY);
-
-    ctx.fillStyle = 'rgba(7, 11, 20, 0.42)';
-    ctx.fillRect(-9, -2, 21, 7);
-
-    ctx.fillStyle = '#5D3B18';
-    ctx.strokeStyle = '#181009';
-    ctx.lineWidth = 1.4;
-    ctx.fillRect(-9, -8, 18, 10);
-    ctx.strokeRect(-9, -8, 18, 10);
-
-    ctx.fillStyle = '#855625';
-    ctx.fillRect(-9, -13, 18, 6);
-    ctx.strokeRect(-9, -13, 18, 6);
-
-    ctx.fillStyle = '#E2B45A';
-    ctx.fillRect(-6, -13, 2.5, 15);
-    ctx.fillRect(3.5, -13, 2.5, 15);
-    ctx.fillStyle = PALETTE.gold;
-    ctx.fillRect(-1.5, -9, 3, 4);
-
-    ctx.restore();
-  }
-
-  private drawTempleStatue(
-    ctx: CanvasRenderingContext2D,
-    tp: ThemePalette,
-    cx: number,
-    baseY: number,
-  ): void {
-    ctx.save();
-    ctx.translate(cx, baseY);
-    ctx.fillStyle = tp.wallSide;
-    ctx.strokeStyle = tp.bgVoid;
-    ctx.lineWidth = 1.5;
-    ctx.fillRect(-11, -12, 22, 12);
-    ctx.strokeRect(-11, -12, 22, 12);
-
-    ctx.fillStyle = tp.wallTop;
-    ctx.fillRect(-7, -26, 14, 15);
-    ctx.strokeRect(-7, -26, 14, 15);
-    ctx.fillStyle = tp.wallEdge;
-    ctx.beginPath();
-    ctx.arc(0, -29, 5.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private drawFoliageCluster(
-    ctx: CanvasRenderingContext2D,
-    tp: ThemePalette,
-    x: number,
-    y: number,
-    scale = 1,
-  ): void {
-    ctx.fillStyle = tp.bgVoid;
-    ctx.beginPath();
-    ctx.arc(x, y + 1, 7.5 * scale, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = tp.foliageDark;
-    ctx.beginPath();
-    ctx.arc(x - 2 * scale, y, 6 * scale, 0, Math.PI * 2);
-    ctx.arc(x + 3 * scale, y - 1 * scale, 5 * scale, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = tp.foliageBright;
-    ctx.beginPath();
-    ctx.arc(x - 1 * scale, y - 2 * scale, 3.5 * scale, 0, Math.PI * 2);
-    ctx.arc(x + 2.5 * scale, y - 2.5 * scale, 2.5 * scale, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   drawZonesAndBases(
     ctx: CanvasRenderingContext2D,
     state: Readonly<GameState>,
     baseFlash: { player: number; enemy: number },
   ): void {
+    if (state.matchConfig.mode === 'rampage') return;
     const time = state.time;
     const theme: MapTheme = state.map.theme ?? 'fortress';
     const tp = getThemePalette(theme);
+    const hellcellBreach =
+      state.matchConfig.mode === 'hellcell' &&
+      state.hellcell &&
+      state.hellcell.phase !== 'NORMAL';
 
     for (const def of state.map.zones) {
+      if (hellcellBreach && def.id === 'zone-2') {
+        // Zone B is deactivated during Hellcell breach: draw a pulsing red/dark breach perimeter
+        ctx.save();
+        ctx.translate(def.center.x, def.center.y);
+        ctx.strokeStyle = 'rgba(244, 63, 94, 0.55)';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([10, 6]);
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.min(def.radius, 76), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
       const zState = state.zones.find((z) => z.id === def.id);
       const owner = zState?.owner ?? 'neutral';
       const contested = zState?.contested ?? false;
@@ -1412,15 +1033,19 @@ export class EnvironmentRenderer {
     ctx.beginPath();
     ctx.roundRect(-12, -8, 24, 16, 3);
     ctx.fill();
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = p.kind === 'shield' ? PALETTE.player : color;
     ctx.lineWidth = 1.8;
     ctx.stroke();
 
     ctx.font = '800 9px Bahnschrift, "Segoe UI", system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = color;
-    ctx.fillText(p.weaponId.slice(0, 3).toUpperCase(), 0, 0.5);
+    ctx.fillStyle = p.kind === 'shield' ? PALETTE.playerGlow : color;
+    ctx.fillText(
+      p.kind === 'shield' ? '+50S' : p.weaponId.slice(0, 3).toUpperCase(),
+      0,
+      0.5,
+    );
 
     ctx.restore();
   }

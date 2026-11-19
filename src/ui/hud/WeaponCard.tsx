@@ -1,12 +1,14 @@
 import React from 'react';
-import { WEAPON_DEFS } from '../../shared/api';
+import { GRENADE_DEF, WEAPON_DEFS } from '../../shared/api';
 import type { WeaponId } from '../../shared/types';
-import { AnimatedNumber } from '../design';
+import { AnimatedNumber, Icon } from '../design';
 
 export interface WeaponCardProps {
   weaponId: WeaponId;
   ammoInMag: number;
   reserveAmmo: number;
+  grenades?: number;
+  maxGrenades?: number;
   reloading: boolean;
   reloadProgress: number;
   flipKey: number;
@@ -93,6 +95,8 @@ export const WeaponCard: React.FC<WeaponCardProps> = ({
   weaponId,
   ammoInMag,
   reserveAmmo,
+  grenades = GRENADE_DEF.defaultCount,
+  maxGrenades = GRENADE_DEF.defaultCount,
   reloading,
   reloadProgress,
   flipKey,
@@ -198,6 +202,35 @@ export const WeaponCard: React.FC<WeaponCardProps> = ({
             />
           </div>
         )}
+      </div>
+
+      <div className="ht-weapon-grenade-block" title={`Frag Grenades (Press G): ${grenades}/${maxGrenades}`}>
+        <div className="ht-weapon-grenade-top">
+          <Icon
+            name="grenade"
+            size={18}
+            color={grenades > 0 ? 'var(--gold)' : 'var(--text-low)'}
+          />
+          <span
+            className="ht-display"
+            style={{
+              fontSize: 22,
+              lineHeight: 1,
+              color: grenades > 0 ? 'var(--text-hi)' : 'var(--text-low)',
+            }}
+          >
+            {grenades}
+          </span>
+        </div>
+        <div className="ht-weapon-grenade-pips" aria-label="Remaining grenades">
+          {Array.from({ length: maxGrenades }, (_, idx) => (
+            <span
+              key={idx}
+              className={`ht-weapon-grenade-pip ${idx < grenades ? 'is-ready' : ''}`}
+            />
+          ))}
+        </div>
+        <span className="ht-weapon-grenade-key">[G] FRAG</span>
       </div>
     </div>
   );

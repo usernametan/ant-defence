@@ -1,9 +1,10 @@
-import { WEAPON_DEFS, type SimApi } from '../shared/api';
+import { GRENADE_DEF, WEAPON_DEFS, type SimApi } from '../shared/api';
 import { bus } from '../shared/events';
 import type { GameState, InputState, MatchConfig, Unit } from '../shared/types';
 import { spawnBots, updateAi } from './ai';
-import { updatePickups, updateProjectiles, updateWeapons } from './combat';
+import { updateGrenades, updatePickups, updateProjectiles, updateWeapons } from './combat';
 import { FIXED_DT, MAX_SUBSTEPS, PLAYER_MAX_HP } from './constants';
+import { updateHellcell } from './hellcell';
 import { createInput } from './internal';
 import { generateMap } from './map';
 import { rebuildSpatial, updateUnits } from './units';
@@ -28,6 +29,7 @@ export function createSim(): SimApi {
   function buildMatch(config: MatchConfig): void {
     const normalized: MatchConfig = {
       seed: config.seed >>> 0,
+      ...(config.mode !== undefined ? { mode: config.mode } : {}),
       difficulty: config.difficulty,
       scoreToWin: Math.max(1, Math.floor(config.scoreToWin)),
       enemyCount: Math.max(0, Math.floor(config.enemyCount)),
@@ -54,6 +56,8 @@ export function createSim(): SimApi {
     rebuildSpatial(world);
     updateWeapons(world, dt);
     updateProjectiles(world, dt);
+    updateGrenades(world, dt);
+    updateHellcell(world, dt);
     updatePickups(world, dt);
     updateZones(world, dt);
     updateBaseCores(world, dt);
@@ -79,6 +83,7 @@ export function createSim(): SimApi {
       intent.interact = input.interact;
       intent.swapWeapon = input.swapWeapon;
       intent.dash = input.dash;
+      intent.throwGrenade = Boolean(input.throwGrenade);
     },
 
     step(dtSeconds: number): void {
@@ -114,12 +119,18 @@ export function createSim(): SimApi {
 }
 
 function addPlayer(world: SimWorld, config: MatchConfig): Unit {
-  const base = world.state.map.bases.find((candidate) => candidate.team === 'player');
-  const spawn = base ? world.findFreeSpot(base.center, 4) : { x: 160, y: 336 };
+  const spawn =
+    config.mode === 'rampage'
+      ? world.findRampageSpawnSpot()
+      : (() => {
+          const base = world.state.map.bases.find((candidate) => candidate.team === 'player');
+          return base ? world.findFreeSpot(base.center, 4) : { x: 160, y: 336 };
+        })();
   const weapon = WEAPON_DEFS[config.startingWeapon];
   const player: Unit = {
     id: world.state.playerId,
     team: 'player',
+    name: 'YOU',
     pos: { x: spawn.x, y: spawn.y },
     vel: { x: 0, y: 0 },
     angle: 0,
@@ -128,6 +139,7 @@ function addPlayer(world: SimWorld, config: MatchConfig): Unit {
     weaponId: weapon.id,
     ammoInMag: weapon.magSize,
     reserveAmmo: weapon.magSize * 5,
+    grenades: GRENADE_DEF.defaultCount,
     reloading: false,
     reloadProgress: 0,
     isPlayer: true,

@@ -61,11 +61,11 @@ function tick(world: SimWorld): void {
 }
 
 describe('AI', () => {
-  it('spawns enemy bots and half as many allied bots', () => {
+  it('spawns enemy bots and allied bots so both teams have equal size', () => {
     const world = makeWorld(makeMap(30, 20));
     spawnBots(world, { seed: 1, difficulty: 'normal', scoreToWin: 100, enemyCount: 5, startingWeapon: 'pistol' });
     expect(world.livingUnits('enemy')).toHaveLength(5);
-    expect(world.livingUnits('player')).toHaveLength(2);
+    expect(world.livingUnits('player')).toHaveLength(4);
   });
 
   it('navigates to and captures a neutral zone', () => {
@@ -129,6 +129,20 @@ describe('AI', () => {
 
     expect(reactionOf(easy, easyBot)).toBeGreaterThan(reactionOf(hard, hardBot));
     expect(Math.abs(aimErrorOf(easy, easyBot))).toBeGreaterThan(Math.abs(aimErrorOf(hard, hardBot)));
+  });
+
+  it('allows bots to throw grenades at visible enemies in range', () => {
+    const world = makeWorld(makeMap(30, 20), 'hard');
+    const bot = addBot(world, 'enemy-1', 'enemy', 240, 336);
+    bot.grenades = 2;
+    addBot(world, 'player-1', 'player', 480, 336);
+    const thrown = vi.fn();
+    unsubscribers.push(bus.on('grenade:thrown', thrown));
+
+    for (let i = 0; i < 240; i += 1) tick(world);
+
+    expect(thrown.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(bot.grenades).toBeLessThan(2);
   });
 });
 

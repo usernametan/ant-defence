@@ -10,6 +10,11 @@ export interface HintItem {
 
 const HINTS: HintItem[] = [
   {
+    id: 'grenade',
+    title: 'FRAG GRENADES',
+    text: 'Press G to throw a grenade straight toward your cursor (2 per life).',
+  },
+  {
     id: 'cover',
     title: 'TACTICAL COVER',
     text: 'Take cover behind crates and sandbags to block incoming fire.',

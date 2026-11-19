@@ -28,6 +28,8 @@ export interface UnitRuntime {
   intent: InputState;
   fireCooldown: number;
   wasFiring: boolean;
+  grenadeCooldown: number;
+  wasThrowingGrenade: boolean;
   reloadRemaining: number;
   dashCooldown: number;
   dashRemaining: number;
@@ -52,6 +54,7 @@ export function createInput(): InputState {
     interact: false,
     swapWeapon: false,
     dash: false,
+    throwGrenade: false,
   };
 }
 
@@ -60,6 +63,8 @@ export function createUnitRuntime(): UnitRuntime {
     intent: createInput(),
     fireCooldown: 0,
     wasFiring: false,
+    grenadeCooldown: 0,
+    wasThrowingGrenade: false,
     reloadRemaining: 0,
     dashCooldown: 0,
     dashRemaining: 0,

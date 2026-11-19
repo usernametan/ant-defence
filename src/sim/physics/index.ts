@@ -160,6 +160,7 @@ export function sweepProjectile(
   candidates: readonly Unit[],
   victimTeam: Team,
   ownerId: string,
+  freeForAll = false,
 ): SweepHit | null {
   const total = distance(from, to);
   const steps = Math.max(1, Math.ceil(total / 6));
@@ -179,7 +180,8 @@ export function sweepProjectile(
       };
     }
     for (const unit of candidates) {
-      if (unit.dead || unit.team !== victimTeam || unit.id === ownerId) continue;
+      if (unit.dead || unit.id === ownerId) continue;
+      if (!freeForAll && unit.team !== victimTeam) continue;
       if (distance(point, unit.pos) <= radius + UNIT_RADIUS) {
         return {
           kind: 'unit',

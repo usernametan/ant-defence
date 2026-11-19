@@ -60,50 +60,97 @@ export const Minimap: React.FC<MinimapProps> = ({
       }
     }
 
-    // Bases
-    for (const base of map.bases) {
-      ctx.fillStyle = teamColor(base.team);
-      ctx.beginPath();
-      ctx.arc(base.center.x * sx, base.center.y * sy, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    const isRampage = state.matchConfig.mode === 'rampage';
 
-    // Zones
-    for (const def of map.zones) {
-      const zState = state.zones.find((z) => z.id === def.id);
-      const owner = zState?.owner ?? 'neutral';
-      const contested = zState?.contested ?? false;
-      const zx = def.center.x * sx;
-      const zy = def.center.y * sy;
-      const zr = Math.max(8, def.radius * sx);
-      const ringColor =
-        owner === 'neutral' || contested ? PALETTE.gold : teamColor(owner);
-
-      ctx.fillStyle = `${ringColor}2e`;
-      ctx.strokeStyle = ringColor;
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.arc(zx, zy, zr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      const hasPing = pings.some((p) => p.zoneId === def.id);
-      if (hasPing || contested) {
-        const phase = (state.time * 2.2) % 1;
-        ctx.strokeStyle = PALETTE.gold;
-        ctx.globalAlpha = 1 - phase;
+    if (!isRampage) {
+      // Bases
+      for (const base of map.bases) {
+        ctx.fillStyle = teamColor(base.team);
         ctx.beginPath();
-        ctx.arc(zx, zy, zr + phase * 10, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        ctx.arc(base.center.x * sx, base.center.y * sy, 4.5, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      const label = formatZoneCode(def.id);
-      ctx.fillStyle = PALETTE.textHi;
-      ctx.font = '800 9px Bahnschrift, "Segoe UI", system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, zx, zy + 0.5);
+      // Zones
+      for (const def of map.zones) {
+        const zx = def.center.x * sx;
+        const zy = def.center.y * sy;
+        const zr = Math.max(8, def.radius * sx);
+
+        // Replace central B circle icon with a pulsing red ring while first boss breaches Zone B
+        if (def.id === 'zone-2' && state.hellcell?.isCeasefireActive && (state.hellcell.bossCount ?? 0) === 0) {
+          const pulse = (state.time * 2.6) % 1;
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
+          ctx.strokeStyle = PALETTE.danger;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(zx, zy, zr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.strokeStyle = PALETTE.enemyGlow;
+          ctx.globalAlpha = 1 - pulse;
+          ctx.beginPath();
+          ctx.arc(zx, zy, zr + pulse * 10, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          continue;
+        }
+
+        const zState = state.zones.find((z) => z.id === def.id);
+        const owner = zState?.owner ?? 'neutral';
+        const contested = zState?.contested ?? false;
+        const ringColor =
+          owner === 'neutral' || contested ? PALETTE.gold : teamColor(owner);
+
+        ctx.fillStyle = `${ringColor}2e`;
+        ctx.strokeStyle = ringColor;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(zx, zy, zr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        const hasPing = pings.some((p) => p.zoneId === def.id);
+        if (hasPing || contested) {
+          const phase = (state.time * 2.2) % 1;
+          ctx.strokeStyle = PALETTE.gold;
+          ctx.globalAlpha = 1 - phase;
+          ctx.beginPath();
+          ctx.arc(zx, zy, zr + phase * 10, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        const label = formatZoneCode(def.id);
+        ctx.fillStyle = PALETTE.textHi;
+        ctx.font = '800 9px Bahnschrift, "Segoe UI", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, zx, zy + 0.5);
+      }
+
+      // Active Boss / Breach Marker anywhere on the map
+      if (state.hellcell && (state.hellcell.boss || state.hellcell.phase === 'WARNING')) {
+        const bPos = state.hellcell.boss?.pos ?? state.hellcell.spawnPos;
+        if (bPos) {
+          const bx = bPos.x * sx;
+          const by = bPos.y * sy;
+          const pulse = (state.time * 2.8) % 1;
+          ctx.strokeStyle = PALETTE.danger;
+          ctx.lineWidth = 1.6;
+          ctx.globalAlpha = 1 - pulse;
+          ctx.beginPath();
+          ctx.arc(bx, by, 7 + pulse * 8, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+
+          ctx.fillStyle = PALETTE.danger;
+          ctx.beginPath();
+          ctx.arc(bx, by, 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
 
     // Pickups
@@ -118,7 +165,9 @@ export const Minimap: React.FC<MinimapProps> = ({
       const px = playerUnit.pos.x * sx;
       const py = playerUnit.pos.y * sy;
       ctx.save();
-      ctx.fillStyle = 'rgba(103, 232, 249, 0.16)';
+      ctx.fillStyle = isRampage
+        ? 'rgba(255, 255, 255, 0.22)'
+        : 'rgba(103, 232, 249, 0.16)';
       ctx.beginPath();
       ctx.moveTo(px, py);
       ctx.arc(px, py, 24, playerUnit.angle - 0.42, playerUnit.angle + 0.42);
@@ -132,9 +181,18 @@ export const Minimap: React.FC<MinimapProps> = ({
       if (u.dead) continue;
       const ux = u.pos.x * sx;
       const uy = u.pos.y * sy;
-      ctx.fillStyle = u.isPlayer ? PALETTE.textHi : teamColor(u.team);
+      const isFriendly = u.isPlayer || (!isRampage && u.team === 'player');
+      ctx.fillStyle = isRampage
+        ? u.isPlayer
+          ? '#FFFFFF'
+          : '#05070B'
+        : u.isPlayer
+          ? PALETTE.textHi
+          : isFriendly
+            ? teamColor('player')
+            : teamColor('enemy');
       ctx.beginPath();
-      if (u.team === 'player') {
+      if (isFriendly) {
         ctx.moveTo(ux, uy - pipR);
         ctx.lineTo(ux + pipR, uy + pipR * 0.8);
         ctx.lineTo(ux - pipR, uy + pipR * 0.8);
@@ -146,6 +204,11 @@ export const Minimap: React.FC<MinimapProps> = ({
       }
       ctx.closePath();
       ctx.fill();
+      if (isRampage) {
+        ctx.strokeStyle = u.isPlayer ? '#070B14' : '#9CA3AF';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
     }
   }, [state, pings, colorblindAssist]);
 

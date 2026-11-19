@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WEAPON_DEFS } from '../../shared/api';
+import { GRENADE_DEF, WEAPON_DEFS } from '../../shared/api';
 import { bus } from '../../shared/events';
 import type { MapData, Team, TileKind, Unit, WeaponId } from '../../shared/types';
 import { COVER_HP, TILE_SIZE } from '../constants';
 import { tileKey } from '../map';
 import { SimWorld } from '../world';
-import { explode, updatePickups, updateProjectiles, updateWeapons } from './index';
+import { explode, updateGrenades, updatePickups, updateProjectiles, updateWeapons } from './index';
 
 const unsubscribers: Array<() => void> = [];
 afterEach(() => {
@@ -168,5 +168,89 @@ describe('weapons and combat', () => {
     expect(killer.kills).toBe(1);
     expect(world.state.pickups.some((pickup) => pickup.pos.x === victim.pos.x)).toBe(true);
     expect(kill).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws grenades straight along aim angle, decrements count, and explodes on impact', () => {
+    const world = makeWorld();
+    const thrower = addUnit(world, 'p', 'player', 'pistol', 160, 300, true);
+    thrower.grenades = GRENADE_DEF.defaultCount;
+    thrower.angle = 0;
+    const enemy = addUnit(world, 'e', 'enemy', 'pistol', 320, 300);
+
+    const thrown = vi.fn();
+    const exploded = vi.fn();
+    const killed = vi.fn();
+    unsubscribers.push(
+      bus.on('grenade:thrown', thrown),
+      bus.on('explosion', exploded),
+      bus.on('kill', killed),
+    );
+
+    world.runtime(thrower).intent.throwGrenade = true;
+    updateWeapons(world, 1 / 60);
+    expect(thrower.grenades).toBe(1);
+    expect(world.state.grenades).toHaveLength(1);
+    expect(world.state.grenades![0].vel.x).toBeCloseTo(GRENADE_DEF.speed, 4);
+    expect(world.state.grenades![0].vel.y).toBeCloseTo(0, 4);
+    expect(thrown).toHaveBeenCalledTimes(1);
+
+    // Holding the key down does not dump the second grenade in the next tick.
+    updateWeapons(world, 1 / 60);
+    expect(thrower.grenades).toBe(1);
+
+    for (let i = 0; i < 60; i += 1) {
+      updateGrenades(world, 1 / 60);
+      if ((world.state.grenades?.length ?? 0) === 0) break;
+    }
+
+    expect(world.state.grenades).toHaveLength(0);
+    expect(exploded).toHaveBeenCalledTimes(1);
+    expect(enemy.dead).toBe(true);
+    expect(killed).toHaveBeenCalledWith({
+      killerId: 'p',
+      victimId: 'e',
+      weaponId: 'grenade',
+    });
+  });
+
+  it('allows grenades to hurt other bots in Rampage free-for-all mode', () => {
+    const world = new SimWorld(
+      { seed: 7, mode: 'rampage', difficulty: 'normal', scoreToWin: 15, enemyCount: 3, startingWeapon: 'pistol' },
+      blankMap(),
+    );
+    const botA = addUnit(world, 'bot-1', 'enemy', 'pistol', 200, 300);
+    const botB = addUnit(world, 'bot-2', 'enemy', 'pistol', 310, 300);
+    botA.grenades = 2;
+    botA.angle = 0;
+
+    world.runtime(botA).intent.throwGrenade = true;
+    updateWeapons(world, 1 / 60);
+    for (let i = 0; i < 60; i += 1) {
+      updateGrenades(world, 1 / 60);
+      if ((world.state.grenades?.length ?? 0) === 0) break;
+    }
+
+    expect(botB.dead).toBe(true);
+    expect(botA.kills).toBe(1);
+  });
+
+  it('recovers ammo on kill but only replenishes grenades on respawn', () => {
+    const world = makeWorld();
+    const killer = addUnit(world, 'p', 'player', 'pistol', 200, 300, true);
+    killer.reserveAmmo = 10;
+    killer.grenades = 0;
+
+    const v1 = addUnit(world, 'e1', 'enemy', 'pistol', 260, 300);
+    world.damageUnit(v1, 200, killer.id, 'pistol', v1.pos);
+    expect(killer.reserveAmmo).toBe(10 + WEAPON_DEFS.pistol.magSize);
+    expect(killer.grenades).toBe(0);
+
+    const v2 = addUnit(world, 'e2', 'enemy', 'pistol', 270, 300);
+    world.damageUnit(v2, 200, killer.id, 'pistol', v2.pos);
+    expect(killer.reserveAmmo).toBe(10 + WEAPON_DEFS.pistol.magSize * 2);
+    expect(killer.grenades).toBe(0);
+
+    world.respawnUnit(killer);
+    expect(killer.grenades).toBe(GRENADE_DEF.defaultCount);
   });
 });

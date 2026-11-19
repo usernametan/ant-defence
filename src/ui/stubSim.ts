@@ -37,6 +37,7 @@ export class StubSim implements SimApi {
     interact: false,
     swapWeapon: false,
     dash: false,
+    throwGrenade: false,
   };
   private projSeq = 1;
   private lastAutoEventAt = 0;
@@ -420,6 +421,7 @@ export class StubSim implements SimApi {
       weaponId: config.startingWeapon,
       ammoInMag: weapon.magSize,
       reserveAmmo: weapon.magSize * 4,
+      grenades: 2,
       reloading: false,
       reloadProgress: 0,
       isPlayer: true,
@@ -429,17 +431,19 @@ export class StubSim implements SimApi {
       deaths: 2,
     };
 
-    const ally: Unit = {
-      id: 'ally-1',
+    const allyCount = config.mode === 'rampage' ? 0 : Math.max(0, config.enemyCount - 1);
+    const allies: Unit[] = Array.from({ length: allyCount }, (_, i) => ({
+      id: `ally-${i + 1}`,
       team: 'player',
-      pos: { x: 23 * 32, y: 18 * 32 },
+      pos: { x: (23 - (i % 2) * 2) * 32, y: (18 + (i % 3) * 3) * 32 },
       vel: { x: 0, y: 0 },
       angle: 0.2,
       hp: 94,
       maxHp: 100,
-      weaponId: 'smg',
+      weaponId: i % 2 === 0 ? 'smg' : 'rifle',
       ammoInMag: 24,
       reserveAmmo: 90,
+      grenades: 2,
       reloading: false,
       reloadProgress: 0,
       isPlayer: false,
@@ -448,7 +452,7 @@ export class StubSim implements SimApi {
       aiState: 'engage',
       kills: 4,
       deaths: 1,
-    };
+    }));
 
     const enemies: Unit[] = Array.from({ length: config.enemyCount }, (_, i) => ({
       id: `enemy-${i + 1}`,
@@ -461,6 +465,7 @@ export class StubSim implements SimApi {
       weaponId: i === 0 ? 'rocket' : i % 2 === 0 ? 'rifle' : 'shotgun',
       ammoInMag: 12,
       reserveAmmo: 60,
+      grenades: 2,
       reloading: false,
       reloadProgress: 0,
       isPlayer: false,
@@ -474,9 +479,11 @@ export class StubSim implements SimApi {
     return {
       tick: 0,
       time: 0,
+      timeLimit: 300,
       map,
-      units: [playerUnit, ally, ...enemies],
+      units: [playerUnit, ...allies, ...enemies],
       projectiles: [],
+      grenades: [],
       pickups: [
         {
           id: 'p-epic-1',

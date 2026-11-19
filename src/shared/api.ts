@@ -115,3 +115,13 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
     automatic: false,
   },
 };
+
+/** Default grenade balance stats. Single source of truth for sim and presentation. */
+export const GRENADE_DEF = {
+  defaultCount: 2,
+  speed: 440,
+  fuseTime: 1.15,
+  damage: 110,
+  splashRadius: 145,
+  cooldown: 0.65,
+} as const;

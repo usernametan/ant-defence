@@ -4,7 +4,7 @@ import { formatZoneCode } from '../../render/environment';
 import { getThemePalette } from '../../render/palette';
 import { WEAPON_DEFS } from '../../shared/api';
 import { bus } from '../../shared/events';
-import type { GameState, Pickup, Team, WeaponId } from '../../shared/types';
+import type { GameState, KillSource, Pickup, Team, WeaponId } from '../../shared/types';
 import { AnimatedNumber, Badge, Icon, KeyCap, Panel } from '../design';
 import type { CrosshairStyle } from '../settingsStore';
 import { ActionBar } from './ActionBar';
@@ -33,8 +33,17 @@ export interface HUDProps {
 
 function unitLabel(state: Readonly<GameState>, id: string): { name: string; team: Team } {
   if (id === state.playerId) return { name: 'YOU', team: 'player' };
+  if (id === 'hellcell-boss') {
+    return { name: state.hellcell?.boss?.name ?? 'HELLCELL BOSS', team: 'enemy' };
+  }
   const u = state.units.find((unit) => unit.id === id);
   if (!u) return { name: 'RogueBot', team: 'enemy' };
+  if (state.matchConfig.mode === 'rampage') {
+    return {
+      name: u.name ?? u.id,
+      team: 'enemy',
+    };
+  }
   const idx = state.units.filter((x) => x.team === u.team).indexOf(u) + 1;
   return {
     name: u.team === 'player' ? `Alpha-${idx}` : `Rogue-${idx}`,
@@ -89,7 +98,7 @@ export const HUD: React.FC<HUDProps> = ({
   const [killFeed, setKillFeed] = useState<KillFeedEntry[]>(initialKillFeed);
   const [streakText, setStreakText] = useState<string | null>(null);
   const [zonePings, setZonePings] = useState<ZonePing[]>([]);
-  const [lastKiller, setLastKiller] = useState<{ name: string; weaponId: WeaponId } | null>(
+  const [lastKiller, setLastKiller] = useState<{ name: string; weaponId: KillSource } | null>(
     null,
   );
 
@@ -251,13 +260,16 @@ export const HUD: React.FC<HUDProps> = ({
   const speed = player ? Math.hypot(player.vel.x, player.vel.y) : 0;
   const crosshairGap = 5 + weaponDef.spread * 36 + speed * 0.02 + shotKick;
 
-  const contestedZones = state.map.zones.filter((def) => {
-    const zs = state.zones.find((z) => z.id === def.id);
-    return zs?.contested && player;
-  });
+  const isRampage = state.matchConfig.mode === 'rampage';
+  const contestedZones = isRampage
+    ? []
+    : state.map.zones.filter((def) => {
+        const zs = state.zones.find((z) => z.id === def.id);
+        return zs?.contested && player;
+      });
 
   const activeZone =
-    player && !player.dead
+    !isRampage && player && !player.dead
       ? state.map.zones.find(
           (def) => Math.hypot(player.pos.x - def.center.x, player.pos.y - def.center.y) <= def.radius,
         )
@@ -265,10 +277,16 @@ export const HUD: React.FC<HUDProps> = ({
   const activeZoneState = activeZone
     ? state.zones.find((z) => z.id === activeZone.id)
     : undefined;
-  const clockUrgent = state.time >= 270;
+  const timeRemaining =
+    state.timeLimit !== undefined ? Math.max(0, state.timeLimit - state.time) : state.time;
+  const clockUrgent = isRampage ? timeRemaining <= 30 : state.time >= 270;
 
   const safeZone = state.zones.find((z) => z.owner === 'player')?.id ?? 'HQ';
-  const safeZoneLabel = safeZone === 'HQ' ? 'HQ' : `Zone ${formatZoneLabel(safeZone)}`;
+  const safeZoneLabel = isRampage
+    ? 'Arena'
+    : safeZone === 'HQ'
+      ? 'HQ'
+      : `Zone ${formatZoneLabel(safeZone)}`;
 
   // Base core integrity meter scaled to the player's base max coreHp
   const playerBaseCoreMax = Math.max(
@@ -278,10 +296,28 @@ export const HUD: React.FC<HUDProps> = ({
   const shieldMax = 50;
   const shieldVal = player?.dead
     ? 0
-    : Math.min(shieldMax, Math.round((state.baseHp.player / playerBaseCoreMax) * shieldMax));
+    : player?.shield !== undefined
+      ? Math.min(shieldMax, Math.round(player.shield))
+      : isRampage
+        ? shieldMax
+        : Math.min(shieldMax, Math.round((state.baseHp.player / playerBaseCoreMax) * shieldMax));
   const goalScore = Math.max(1, state.matchConfig.scoreToWin);
-  const playerScorePct = Math.min(100, (state.score.player / goalScore) * 100);
-  const enemyScorePct = Math.min(100, (state.score.enemy / goalScore) * 100);
+  const rampageStandings = isRampage
+    ? [...state.units].sort((a, b) => {
+        if (b.kills !== a.kills) return b.kills - a.kills;
+        if (a.deaths !== b.deaths) return a.deaths - b.deaths;
+        return a.isPlayer ? -1 : 1;
+      })
+    : [];
+  const playerKills = player?.kills ?? 0;
+  const topBotKills = rampageStandings.reduce(
+    (max, u) => (u.isPlayer ? max : Math.max(max, u.kills)),
+    0,
+  );
+  const leftVal = isRampage ? playerKills : state.score.player;
+  const rightVal = isRampage ? topBotKills : state.score.enemy;
+  const playerScorePct = Math.min(100, (leftVal / goalScore) * 100);
+  const enemyScorePct = Math.min(100, (rightVal / goalScore) * 100);
   const themeAccent = getThemePalette(state.map.theme).accent;
 
   return (
@@ -335,6 +371,41 @@ export const HUD: React.FC<HUDProps> = ({
           );
         })}
 
+      {/* Hellcell Pre-Spawn & Resume Alert Banners */}
+      {state.hellcell &&
+        (state.hellcell.phase === 'WARNING' || state.hellcell.phase === 'RESUME_COUNTDOWN') && (
+          <div className="ht-capture-banner">
+            <Panel
+              bracketed
+              tone={state.hellcell.phase === 'WARNING' ? 'enemy' : 'gold'}
+              style={{
+                padding: '10px 28px',
+                boxShadow:
+                  state.hellcell.phase === 'WARNING'
+                    ? 'var(--glow-enemy)'
+                    : 'var(--glow-gold)',
+              }}
+            >
+              <span
+                className="ht-display"
+                style={{
+                  fontSize: 16,
+                  color:
+                    state.hellcell.phase === 'WARNING'
+                      ? 'var(--enemy-glow)'
+                      : 'var(--gold)',
+                }}
+              >
+                {state.hellcell.phase === 'WARNING'
+                  ? (state.hellcell.bossCount ?? 0) === 0
+                    ? `ZONES A & C SECURED · ZONE B BOSS EMERGING IN ${Math.max(1, Math.ceil(state.hellcell.countdown))}...`
+                    : `HELLCELL BREACH IN ${Math.max(1, Math.ceil(state.hellcell.countdown))}...`
+                  : `PVP RESUMING IN ${Math.max(1, Math.ceil(state.hellcell.countdown))}...`}
+              </span>
+            </Panel>
+          </div>
+        )}
+
       {/* Zone Capture Banner */}
       {captureBanner && (
         <div key={captureBanner.id} className="ht-capture-banner">
@@ -382,7 +453,7 @@ export const HUD: React.FC<HUDProps> = ({
                 </svg>
                 <div className="ht-score-metric">
                   <span className="ht-display ht-score-val" style={{ color: 'var(--player-glow)' }}>
-                    <AnimatedNumber value={state.score.player} />
+                    <AnimatedNumber value={leftVal} />
                   </span>
                   <div className="ht-score-bar">
                     <div
@@ -398,17 +469,17 @@ export const HUD: React.FC<HUDProps> = ({
                   className="ht-display ht-score-clock"
                   style={{ color: clockUrgent ? 'var(--gold)' : 'var(--text-hi)' }}
                 >
-                  {formatClock(state.time)}
+                  {formatClock(isRampage ? timeRemaining : state.time)}
                 </div>
                 <div className="ht-score-goal">
-                  Score to Win: {state.matchConfig.scoreToWin}
+                  {isRampage ? `Kills to Win: ${state.matchConfig.scoreToWin}` : `Score to Win: ${state.matchConfig.scoreToWin}`}
                 </div>
               </div>
 
               <div className="ht-score-wing ht-score-wing--enemy">
                 <div className="ht-score-metric" style={{ alignItems: 'flex-end' }}>
                   <span className="ht-display ht-score-val" style={{ color: 'var(--enemy-glow)' }}>
-                    <AnimatedNumber value={state.score.enemy} />
+                    <AnimatedNumber value={rightVal} />
                   </span>
                   <div className="ht-score-bar">
                     <div
@@ -421,7 +492,136 @@ export const HUD: React.FC<HUDProps> = ({
               </div>
             </div>
 
-            {state.zones.length > 0 && (
+            {/* Top-Center Ceasefire & Boss Health Bar (proportional to player count / team size) */}
+            {state.hellcell?.isCeasefireActive && state.hellcell.boss && (() => {
+              const teamSize = Math.max(2, Math.floor(state.matchConfig.enemyCount || 2));
+              const totalPlayers = Math.max(teamSize * 2, state.units.length);
+              const barWidth = Math.min(680, 280 + totalPlayers * 20);
+              const barHeight = Math.min(18, 10 + Math.floor(teamSize * 0.6));
+              const bossHpRatio = Math.max(
+                0,
+                Math.min(1, state.hellcell.boss.hp / Math.max(1, state.hellcell.boss.maxHp)),
+              );
+              return (
+                <div
+                  className="ht-chamfer-panel"
+                  style={{
+                    width: barWidth,
+                    maxWidth: '92vw',
+                    padding: '9px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    border: '1.5px solid var(--enemy)',
+                    boxShadow: 'var(--glow-enemy)',
+                    transition: 'width 200ms ease',
+                  }}
+                  aria-label="Hellcell Ceasefire Boss Health"
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: 10,
+                      gap: 8,
+                    }}
+                  >
+                    <span className="ht-display" style={{ color: 'var(--gold)', letterSpacing: '0.12em' }}>
+                      CEASEFIRE · {teamSize}v{teamSize} ({totalPlayers}P)
+                    </span>
+                    <span className="ht-display" style={{ color: 'var(--text-hi)', fontSize: 11, fontWeight: 800 }}>
+                      {state.hellcell.boss.name}
+                    </span>
+                    <span className="ht-num" style={{ color: 'var(--enemy-glow)', fontWeight: 800 }}>
+                      {Math.ceil(state.hellcell.boss.hp)} / {state.hellcell.boss.maxHp}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      height: barHeight,
+                      background: 'var(--bg-0)',
+                      border: '1px solid var(--line)',
+                      borderRadius: 4,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${bossHpRatio * 100}%`,
+                        height: '100%',
+                        background:
+                          bossHpRatio < 0.5
+                            ? 'linear-gradient(90deg, #DC2626 0%, #F43F5E 50%, #FB923C 100%)'
+                            : 'linear-gradient(90deg, #F43F5E 0%, #FF5A3C 60%, #FACC15 100%)',
+                        boxShadow: '0 0 12px rgba(244, 63, 94, 0.65)',
+                        transition: 'width 100ms linear',
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'grid',
+                        gridTemplateColumns: `repeat(${totalPlayers}, 1fr)`,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      {Array.from({ length: totalPlayers }, (_, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            borderRight:
+                              idx < totalPlayers - 1 ? '1px solid rgba(7, 11, 20, 0.65)' : 'none',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 9,
+                      color: 'var(--text-mid)',
+                    }}
+                  >
+                    <span style={{ color: 'var(--player-glow)', fontWeight: 700 }}>
+                      BLUE DMG: {Math.round(state.hellcell.blueBossDamage)}
+                    </span>
+                    <span>ZONE B TITAN · &gt;50% DMG = +150 PTS &amp; ZONE B</span>
+                    <span style={{ color: 'var(--enemy-glow)', fontWeight: 700 }}>
+                      RED DMG: {Math.round(state.hellcell.redBossDamage)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {isRampage ? (
+              <div className="ht-zone-strip" aria-label="Rampage Kill Standings">
+                {rampageStandings.slice(0, 4).map((u, idx) => (
+                  <div
+                    key={u.id}
+                    className="ht-zone-pip"
+                    style={{
+                      width: 'auto',
+                      minWidth: 56,
+                      padding: '0 8px',
+                      borderColor: u.isPlayer ? 'var(--player)' : idx === 0 ? 'var(--gold)' : 'var(--line)',
+                      color: u.isPlayer ? 'var(--player-glow)' : 'var(--text-hi)',
+                      background: u.isPlayer ? 'rgba(34, 211, 238, 0.14)' : 'rgba(8, 12, 22, 0.9)',
+                      fontSize: 10,
+                    }}
+                  >
+                    <span>#{idx + 1} {u.isPlayer ? 'YOU' : (u.name ?? u.id)} · {u.kills}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              state.zones.length > 0 && (
               <div className="ht-zone-strip" aria-label="Zone Control Status">
                 {state.zones.map((zone) => {
                   const color =
@@ -461,7 +661,7 @@ export const HUD: React.FC<HUDProps> = ({
                   );
                 })}
               </div>
-            )}
+            ))}
           </div>
         </div>
 
@@ -554,6 +754,7 @@ export const HUD: React.FC<HUDProps> = ({
             hasNearbyPickup={Boolean(nearbyPickup)}
             reloading={Boolean(player?.reloading)}
             lowAmmo={isLowAmmo}
+            grenades={player?.grenades ?? 2}
           />
         </div>
 
@@ -564,6 +765,7 @@ export const HUD: React.FC<HUDProps> = ({
               weaponId={player.weaponId}
               ammoInMag={player.ammoInMag}
               reserveAmmo={player.reserveAmmo}
+              grenades={player.grenades ?? 2}
               reloading={player.reloading}
               reloadProgress={player.reloadProgress}
               flipKey={weaponFlipKey}
@@ -636,7 +838,11 @@ export const HUD: React.FC<HUDProps> = ({
               <div style={{ fontSize: 12, color: 'var(--text-mid)' }}>
                 Eliminated by{' '}
                 <strong style={{ color: 'var(--enemy-glow)' }}>{lastKiller.name}</strong>{' '}
-                ({WEAPON_DEFS[lastKiller.weaponId].name})
+                ({lastKiller.weaponId === 'grenade'
+                  ? 'Frag Grenade'
+                  : lastKiller.weaponId === 'boss'
+                    ? 'Hellcell Boss'
+                    : WEAPON_DEFS[lastKiller.weaponId].name})
               </div>
             )}
           </Panel>

@@ -5,6 +5,7 @@ export interface ActionBarProps {
   reloading: boolean;
   lowAmmo: boolean;
   dashReady?: boolean;
+  grenades?: number;
 }
 
 export const ActionBar: React.FC<ActionBarProps> = ({
@@ -12,13 +13,14 @@ export const ActionBar: React.FC<ActionBarProps> = ({
   reloading,
   lowAmmo,
   dashReady = true,
+  grenades = 2,
 }) => {
   const [pressedKey, setPressedKey] = useState<string | null>(null);
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       const k = e.key.toUpperCase();
-      if (k === 'Q' || k === 'SHIFT' || k === 'E' || k === 'R' || k === 'C') {
+      if (k === 'Q' || k === 'SHIFT' || k === 'E' || k === 'R' || k === 'G') {
         setPressedKey(k === 'SHIFT' ? 'Q' : k);
       }
     };
@@ -74,16 +76,16 @@ export const ActionBar: React.FC<ActionBarProps> = ({
       ),
     },
     {
-      key: 'C',
-      title: 'Target Ping / Focus (C)',
-      active: pressedKey === 'C',
-      highlight: pressedKey === 'C',
-      badge: null as number | null,
+      key: 'G',
+      title: `Throw Grenade Straight (G) — ${grenades} left`,
+      active: grenades > 0 || pressedKey === 'G',
+      highlight: pressedKey === 'G',
+      badge: grenades,
       icon: (
         <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={2}>
-          <circle cx="12" cy="12" r="7" />
-          <circle cx="12" cy="12" r="2.5" fill="currentColor" />
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+          <rect x="7" y="8" width="10" height="12" rx="4" fill="currentColor" opacity="0.18" />
+          <rect x="7" y="8" width="10" height="12" rx="4" />
+          <path d="M10 8V5h4v3M14 5l3 1.5M8 13h8" strokeLinecap="round" />
         </svg>
       ),
     },

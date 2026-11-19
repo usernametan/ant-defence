@@ -1,4 +1,4 @@
-import type { MapData, Projectile, Vec2, WeaponId } from '../shared/types';
+import type { Grenade, MapData, Projectile, Vec2, WeaponId } from '../shared/types';
 import { PALETTE, getThemePalette, teamColor, teamGlowColor } from './palette';
 
 export interface Particle {
@@ -53,12 +53,21 @@ export interface MuzzleFlash {
   radius: number;
 }
 
+export interface ExplosionFlash {
+  x: number;
+  y: number;
+  radius: number;
+  life: number;
+  maxLife: number;
+}
+
 export class EffectsSystem {
   particles: Particle[] = [];
   shockwaves: Shockwave[] = [];
   scorchDecals: ScorchDecal[] = [];
   floatingTexts: FloatingText[] = [];
   muzzleFlashes: MuzzleFlash[] = [];
+  explosionFlashes: ExplosionFlash[] = [];
   projectileTrails = new Map<string, Vec2[]>();
   private lastProjPos = new Map<string, { pos: Vec2; vel: Vec2; life: number }>();
   unitHitFlash = new Map<string, number>();
@@ -71,6 +80,7 @@ export class EffectsSystem {
     this.scorchDecals.length = 0;
     this.floatingTexts.length = 0;
     this.muzzleFlashes.length = 0;
+    this.explosionFlashes.length = 0;
     this.projectileTrails.clear();
     this.lastProjPos.clear();
     this.unitHitFlash.clear();
@@ -126,6 +136,13 @@ export class EffectsSystem {
   }
 
   spawnExplosion(pos: Vec2, radius: number): void {
+    this.explosionFlashes.push({
+      x: pos.x,
+      y: pos.y,
+      radius: radius * 0.72,
+      life: 0.22,
+      maxLife: 0.22,
+    });
     this.shockwaves.push({
       x: pos.x,
       y: pos.y,
@@ -318,6 +335,11 @@ export class EffectsSystem {
       m.life -= dt;
       return m.life > 0;
     });
+
+    this.explosionFlashes = this.explosionFlashes.filter((e) => {
+      e.life -= dt;
+      return e.life > 0;
+    });
   }
 
   drawScorchDecals(ctx: CanvasRenderingContext2D): void {
@@ -364,6 +386,13 @@ export class EffectsSystem {
       ctx.translate(p.pos.x, p.pos.y);
       ctx.rotate(angle);
       if (p.weaponId === 'rocket') {
+        ctx.fillStyle = '#FACC15';
+        ctx.beginPath();
+        ctx.moveTo(-7, -2.5);
+        ctx.lineTo(-14, 0);
+        ctx.lineTo(-7, 2.5);
+        ctx.closePath();
+        ctx.fill();
         ctx.fillStyle = PALETTE.textHi;
         ctx.fillRect(-7, -2.5, 11, 5);
         ctx.fillStyle = color;
@@ -374,7 +403,14 @@ export class EffectsSystem {
         ctx.closePath();
         ctx.fill();
       } else {
-        // Team-tinted luminous tracer streak
+        // Soft outer glow + crisp team-tinted tracer core
+        ctx.fillStyle = glow;
+        ctx.globalAlpha = 0.28;
+        ctx.beginPath();
+        ctx.ellipse(-4, 0, 14, 4.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
         const grad = ctx.createLinearGradient(-18, 0, 7, 0);
         grad.addColorStop(0, 'transparent');
         grad.addColorStop(0.45, p.team === 'player' ? PALETTE.playerGlow : PALETTE.gold);
@@ -386,7 +422,88 @@ export class EffectsSystem {
     }
   }
 
+  drawGrenades(
+    ctx: CanvasRenderingContext2D,
+    grenades: readonly Grenade[],
+    time: number,
+  ): void {
+    for (const g of grenades) {
+      const angle = Math.atan2(g.vel.y, g.vel.x);
+      const speed = Math.hypot(g.vel.x, g.vel.y);
+      const nx = speed > 1 ? g.vel.x / speed : Math.cos(angle);
+      const ny = speed > 1 ? g.vel.y / speed : Math.sin(angle);
+      const fuseRatio = Math.max(0, Math.min(1, g.fuse / Math.max(0.01, g.maxFuse)));
+      const blink = Math.sin(time * (16 + (1 - fuseRatio) * 24)) > 0;
+
+      // Straight tactical flight streak behind the grenade
+      ctx.save();
+      const trailLen = 36;
+      const grad = ctx.createLinearGradient(
+        g.pos.x - nx * trailLen,
+        g.pos.y - ny * trailLen,
+        g.pos.x,
+        g.pos.y,
+      );
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(1, blink ? 'rgba(250, 204, 21, 0.55)' : 'rgba(244, 63, 94, 0.55)');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(g.pos.x - nx * trailLen, g.pos.y - ny * trailLen);
+      ctx.lineTo(g.pos.x, g.pos.y);
+      ctx.stroke();
+      ctx.restore();
+
+      // Ground shadow
+      ctx.save();
+      ctx.fillStyle = 'rgba(7, 11, 20, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(g.pos.x, g.pos.y + 8, 6, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Spinning tactical frag canister
+      ctx.save();
+      ctx.translate(g.pos.x, g.pos.y);
+      ctx.rotate(angle + time * 12);
+      ctx.fillStyle = '#334155';
+      ctx.strokeStyle = PALETTE.bg0;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -4.5, 11, 9, 3);
+      ctx.fill();
+      ctx.stroke();
+
+      // Olive band + armed fuse LED
+      ctx.fillStyle = '#4D7C0F';
+      ctx.fillRect(-3.5, -3, 7, 6);
+      ctx.fillStyle = blink ? PALETTE.danger : PALETTE.gold;
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   drawForegroundEffects(ctx: CanvasRenderingContext2D): void {
+    for (const e of this.explosionFlashes) {
+      const ratio = e.life / e.maxLife;
+      const r = e.radius * (0.45 + (1 - ratio) * 0.75);
+      ctx.save();
+      ctx.globalAlpha = ratio * 0.9;
+      const grad = ctx.createRadialGradient(e.x, e.y, 2, e.x, e.y, r);
+      grad.addColorStop(0, '#FFFBEB');
+      grad.addColorStop(0.32, '#FACC15');
+      grad.addColorStop(0.68, '#FF5A3C');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     for (const m of this.muzzleFlashes) {
       const t = m.life / m.maxLife;
       ctx.save();
@@ -423,11 +540,19 @@ export class EffectsSystem {
 
     for (const p of this.particles) {
       const ratio = p.life / p.maxLife;
+      const r = p.size * (0.5 + ratio * 0.5);
       ctx.save();
+      if (p.glow) {
+        ctx.globalAlpha = Math.max(0, Math.min(0.32, ratio * p.alpha * 0.35));
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * 2.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = Math.max(0, Math.min(1, ratio * p.alpha));
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * (0.5 + ratio * 0.5), 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }

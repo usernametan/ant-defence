@@ -1,31 +1,27 @@
-# Agent Collaboration Rules — Zone Control
+# Agent Rules — Zone Control
 
-Two AI agents work in parallel on this repository (`OpenCode` = main agent,
-`Antigravity` = side jobs). Follow these rules strictly.
+A single AI agent (`Antigravity`) owns the entire repository — both backend/simulation and frontend/presentation — with full access to all folders in this project.
 
 The alchemy RPG has been discarded. This repository is now **Zone Control**, a
-top-down arena shooter with a procedural map, destructible cover, three capture
+top-down arena shooter with a procedural map, destructible cover, capture
 zones, weapon pickups, and respawning AI.
 
-## Ownership Boundaries
+## Ownership
 
-- **OpenCode owns:**
+- **Antigravity owns all application tracks:**
+  - `src/shared/` — domain contract (`types.ts`, `events.ts`, `api.ts`)
   - `src/sim/` — pure simulation
   - `src/app/` — game-loop glue, input capture, React ↔ sim bridge
-- **Antigravity owns:**
   - `src/render/` — Canvas 2D drawing, camera, effects, lighting
   - `src/ui/` — React overlays and menus
   - `src/audio/` — synthesized Web Audio sound effects
-- **`src/shared/` is READ-ONLY.** It holds the contract (`types.ts`, `events.ts`,
-  `api.ts`). If a change is needed there, **stop and ask the user**. Do not edit
-  it directly.
 
-## Shared & Protected Files
+## Protected Config Files
 
-- **Never edit `package.json` or config files** (`package-lock.json`,
-  `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`, `.github/workflows/ci.yml`).
-  Ask the user first.
-- Tracks communicate only through `src/shared/types.ts`, `src/shared/events.ts`,
+- **Avoid editing `package.json` or config files** (`package-lock.json`,
+  `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`, `.github/workflows/ci.yml`)
+  unless explicitly asked.
+- Tracks communicate through `src/shared/types.ts`, `src/shared/events.ts`,
   and `src/shared/api.ts`.
 
 ## Simulation Rules
@@ -41,7 +37,5 @@ zones, weapon pickups, and respawning AI.
 ## Workflow & Code Standards
 
 - Run `npm run typecheck` before every commit.
-- Commit small and often on your own branch (`track-opencode` or
-  `track-antigravity`). **Never commit directly to `main`.**
 - **No `any`** in TypeScript.
 - Keep the project's CI and tooling intact.

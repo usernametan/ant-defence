@@ -41,7 +41,7 @@ export class Camera {
   }
 
   addZoomKick(kick: number): void {
-    this.zoom = Math.min(this.targetZoom + 0.09, this.zoom + kick);
+    this.zoom = Math.min(this.targetZoom + 0.032, this.zoom + kick);
   }
 
   update(
@@ -66,8 +66,8 @@ export class Camera {
     const zoomRate = 1 - Math.exp(-12 * dt);
     this.zoom += (this.targetZoom - this.zoom) * zoomRate;
 
-    this.trauma = Math.max(0, this.trauma - 1.9 * dt);
-    this.shakeTime += dt * 42;
+    this.trauma = Math.max(0, this.trauma - 2.9 * dt);
+    this.shakeTime += dt * 36;
   }
 
   getTransform(
@@ -80,13 +80,13 @@ export class Camera {
     const shakeStrength = reducedMotion ? 0 : this.trauma * this.trauma * shakeScale;
     const shakeX =
       shakeStrength *
-      14 *
-      (Math.sin(this.shakeTime * 1.7) + 0.5 * Math.cos(this.shakeTime * 2.9));
+      4.5 *
+      (Math.sin(this.shakeTime * 1.7) + 0.4 * Math.cos(this.shakeTime * 2.9));
     const shakeY =
       shakeStrength *
-      14 *
-      (Math.cos(this.shakeTime * 2.1) + 0.5 * Math.sin(this.shakeTime * 3.1));
-    const shakeAngle = shakeStrength * 0.014 * Math.sin(this.shakeTime * 2.5);
+      4.5 *
+      (Math.cos(this.shakeTime * 2.1) + 0.4 * Math.sin(this.shakeTime * 3.1));
+    const shakeAngle = shakeStrength * 0.0022 * Math.sin(this.shakeTime * 2.5);
 
     const cx = this.x + shakeX;
     const cy = this.y + shakeY;

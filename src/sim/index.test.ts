@@ -78,7 +78,8 @@ describe('simulation integration', () => {
     expect(sim.getState().status).toBe('playing');
     expect(sim.getState().units.some((unit) => unit.isPlayer)).toBe(true);
     expect(sim.getState().units.filter((unit) => unit.team === 'enemy')).toHaveLength(4);
-    expect(sim.getState().units.filter((unit) => unit.team === 'player' && !unit.isPlayer)).toHaveLength(2);
+    expect(sim.getState().units.filter((unit) => unit.team === 'player' && !unit.isPlayer)).toHaveLength(3);
+    expect(sim.getState().units.filter((unit) => unit.team === 'player')).toHaveLength(4);
   });
 
   it('produces identical state for identical seeds and inputs over 1000 ticks', () => {
@@ -168,5 +169,64 @@ describe('simulation integration', () => {
 
     expect(shot.mock.calls.length).toBeGreaterThan(0);
     expect(kill.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('spawns 2 default grenades and supports Rampage FFA mode where bots fight each other', () => {
+    const kills: Array<{ killerId: string; victimId: string }> = [];
+    unsubscribers.push(bus.on('kill', ({ killerId, victimId }) => kills.push({ killerId, victimId })));
+
+    const sim = createSim();
+    sim.start({
+      seed: 9876,
+      mode: 'rampage',
+      difficulty: 'hard',
+      scoreToWin: 15,
+      enemyCount: 6,
+      startingWeapon: 'rifle',
+    });
+
+    const initial = sim.getState();
+    expect(initial.units).toHaveLength(7); // player + 6 bots, no allies
+    expect(initial.units.every((u) => u.grenades === 2)).toBe(true);
+    expect(initial.units.filter((u) => !u.isPlayer).every((u) => u.team === 'enemy')).toBe(true);
+
+    // Throw a grenade with G intent
+    const player = initial.units.find((u) => u.isPlayer)!;
+    sim.setInput({
+      moveX: 0,
+      moveY: 0,
+      aimX: player.pos.x + 200,
+      aimY: player.pos.y,
+      firing: false,
+      reload: false,
+      interact: false,
+      swapWeapon: false,
+      dash: false,
+      throwGrenade: true,
+    });
+    sim.step(1 / 60);
+    expect(sim.getState().units.find((u) => u.isPlayer)!.grenades).toBe(1);
+    expect(sim.getState().grenades?.length).toBe(1);
+
+    // Let Rampage bots fight each other
+    sim.setInput({
+      moveX: 0,
+      moveY: 0,
+      aimX: player.pos.x + 200,
+      aimY: player.pos.y,
+      firing: false,
+      reload: false,
+      interact: false,
+      swapWeapon: false,
+      dash: false,
+      throwGrenade: false,
+    });
+    for (let i = 0; i < 1200; i += 1) sim.step(1 / 60);
+
+    // Bots must kill other bots in FFA
+    const botOnBotKill = kills.some(
+      (k) => k.killerId !== initial.playerId && k.victimId !== initial.playerId,
+    );
+    expect(botOnBotKill).toBe(true);
   });
 });
