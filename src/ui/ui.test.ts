@@ -6,8 +6,8 @@ import { CrosshairGlyph, CrosshairOverlay } from './hud/Crosshair';
 import { MinimapTerrainCache } from './hud/Minimap';
 import { WeaponCard } from './hud/WeaponCard';
 import { CountdownOverlay } from './screens/CountdownOverlay';
-import { MainMenu } from './screens/MainMenu';
-import { MatchSetup } from './screens/MatchSetup';
+import { LANDING_BGM_SRC, MainMenu } from './screens/MainMenu';
+import { MatchSetup, SETUP_BGM_SRC } from './screens/MatchSetup';
 import { PauseMenu } from './screens/PauseMenu';
 import { generatePreviewMap } from './previewMap';
 import { DEFAULT_SETTINGS, loadSettings } from './settingsStore';
@@ -145,6 +145,8 @@ describe('UI StubSim and settings', () => {
     expect(html).toContain('THREE CAPTURE ZONES');
     expect(html).toContain('SQUAD-BASED COMBAT');
     expect(html).toContain('TARGET SCORE: 600');
+    expect(html).toContain(`src="${LANDING_BGM_SRC}"`);
+    expect(html).toContain('loop=""');
   });
 
   it('MinimapTerrainCache reuses offscreen layer until wallRevision or theme changes', () => {
@@ -212,6 +214,8 @@ describe('UI StubSim and settings', () => {
     expect(setupHtml).toContain('zc-landing');
     expect(setupHtml).toContain('START MATCH');
     expect(setupHtml).toContain('Hellcell');
+    expect(setupHtml).toContain(`src="${SETUP_BGM_SRC}"`);
+    expect(setupHtml).toContain('loop=""');
 
     const countdownHtml = renderToString(
       createElement(CountdownOverlay, {

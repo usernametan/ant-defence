@@ -41,6 +41,7 @@ export {
   playUiConfirm,
   playUiHover,
   registerUiSoundSink,
+  setLandingMusicActive,
 } from './uiSound';
 export type { UiSoundSink } from './uiSound';
 export { useMenuNavigation } from './useMenuNavigation';

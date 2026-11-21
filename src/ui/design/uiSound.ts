@@ -4,7 +4,10 @@ export interface UiSoundSink {
   click: () => void;
   confirm: () => void;
   back: () => void;
+  setLandingMusicActive?: (active: boolean) => void;
 }
+
+let landingMusicActive = false;
 
 let sink: UiSoundSink = {
   hover: () => undefined,
@@ -15,6 +18,7 @@ let sink: UiSoundSink = {
 
 export function registerUiSoundSink(next: UiSoundSink): void {
   sink = next;
+  sink.setLandingMusicActive?.(landingMusicActive);
 }
 
 export function playUiHover(): void {
@@ -31,4 +35,9 @@ export function playUiConfirm(): void {
 
 export function playUiBack(): void {
   sink.back();
+}
+
+export function setLandingMusicActive(active: boolean): void {
+  landingMusicActive = active;
+  sink.setLandingMusicActive?.(active);
 }

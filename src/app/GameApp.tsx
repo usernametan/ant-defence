@@ -116,6 +116,7 @@ function GameRoot() {
       click: () => audio.playUiClick(),
       confirm: () => audio.playUiConfirm(),
       back: () => audio.playUiBack(),
+      setLandingMusicActive: (active) => audio.setLandingMusicActive(active),
     });
 
     const detachInput = controller.attach(canvas);

@@ -33,6 +33,14 @@ export const DEFAULT_SETTINGS: GameSettings = {
 
 const SETTINGS_KEY = 'zone-control:settings:v1';
 const HINTS_KEY = 'zone-control:hints-seen:v1';
+const settingsListeners = new Set<(settings: GameSettings) => void>();
+
+export function subscribeSettings(listener: (settings: GameSettings) => void): () => void {
+  settingsListeners.add(listener);
+  return () => {
+    settingsListeners.delete(listener);
+  };
+}
 
 export function loadSettings(): GameSettings {
   if (typeof window === 'undefined') return { ...DEFAULT_SETTINGS };
@@ -50,11 +58,15 @@ export function loadSettings(): GameSettings {
 }
 
 export function saveSettings(settings: GameSettings): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch {
-    // Ignore storage quota errors
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }
+  for (const listener of settingsListeners) {
+    listener(settings);
   }
 }
 

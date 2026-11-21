@@ -109,6 +109,7 @@ export const Showcase: React.FC = () => {
       click: () => audio.playUiClick(),
       confirm: () => audio.playUiConfirm(),
       back: () => audio.playUiBack(),
+      setLandingMusicActive: (active) => audio.setLandingMusicActive(active),
     });
 
     const onResize = () => renderer.resize();

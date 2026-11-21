@@ -1,11 +1,27 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { WEAPON_DEFS } from '../../shared/api';
 import type { GameMode, MapTheme, WeaponId } from '../../shared/types';
 import { Icon, useMenuNavigation } from '../design';
-import { playUiClick, playUiConfirm, playUiHover } from '../design/uiSound';
+import {
+  playUiClick,
+  playUiConfirm,
+  playUiHover,
+  setLandingMusicActive,
+} from '../design/uiSound';
+import { loadSettings, subscribeSettings } from '../settingsStore';
 import { BattlefieldPreview } from './BattlefieldPreview';
 import { TacticalSketchBackdrop } from './TacticalSketchBackdrop';
 import './landing.css';
+
+export const LANDING_BGM_SRC = '/assets/audio/tactical-operator.wav';
+
+function computeLandingBgmVolume(settings: {
+  masterVolume: number;
+  musicVolume: number;
+}): number {
+  const raw = (settings.masterVolume / 100) * (settings.musicVolume / 100);
+  return Math.max(0, Math.min(1, raw));
+}
 
 export interface MainMenuProps {
   onPlay: () => void;
@@ -51,6 +67,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   version = 'v0.1.0',
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const bgmStoppedRef = useRef(false);
   const [view, setView] = useState<LandingView>('home');
   const [previewTheme, setPreviewTheme] = useState<MapTheme>('slumside');
   const [previewMode, setPreviewMode] = useState<GameMode>('zoneControl');
@@ -61,7 +79,93 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     onEscape: view !== 'home' ? () => setView('home') : undefined,
   });
 
+  const stopLandingMusic = () => {
+    bgmStoppedRef.current = true;
+    setLandingMusicActive(false);
+    const audio = bgmRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  };
+
+  useEffect(() => {
+    bgmStoppedRef.current = false;
+    setLandingMusicActive(true);
+
+    const audio = bgmRef.current;
+    if (!audio) {
+      return () => {
+        bgmStoppedRef.current = true;
+        setLandingMusicActive(false);
+      };
+    }
+
+    audio.loop = true;
+    audio.volume = computeLandingBgmVolume(loadSettings());
+
+    const unsubscribeSettings = subscribeSettings((next) => {
+      if (bgmRef.current) {
+        bgmRef.current.volume = computeLandingBgmVolume(next);
+      }
+    });
+
+    const removeUnlockListeners = () => {
+      if (typeof window === 'undefined') return;
+      window.removeEventListener('pointerdown', handleInteractionUnlock);
+      window.removeEventListener('keydown', handleInteractionUnlock);
+      window.removeEventListener('click', handleInteractionUnlock);
+      window.removeEventListener('touchstart', handleInteractionUnlock);
+    };
+
+    const tryPlay = () => {
+      if (bgmStoppedRef.current || !bgmRef.current) return;
+      const playPromise = bgmRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            if (bgmStoppedRef.current && bgmRef.current) {
+              bgmRef.current.pause();
+              bgmRef.current.currentTime = 0;
+            } else {
+              removeUnlockListeners();
+            }
+          })
+          .catch(() => {
+            // Autoplay blocked until first user gesture; interaction listeners retry automatically.
+          });
+      }
+    };
+
+    function handleInteractionUnlock() {
+      if (bgmStoppedRef.current) {
+        removeUnlockListeners();
+        return;
+      }
+      tryPlay();
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pointerdown', handleInteractionUnlock, { passive: true });
+      window.addEventListener('keydown', handleInteractionUnlock, { passive: true });
+      window.addEventListener('click', handleInteractionUnlock, { passive: true });
+      window.addEventListener('touchstart', handleInteractionUnlock, { passive: true });
+    }
+
+    tryPlay();
+
+    return () => {
+      bgmStoppedRef.current = true;
+      removeUnlockListeners();
+      unsubscribeSettings();
+      setLandingMusicActive(false);
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, []);
+
   const handlePlay = () => {
+    stopLandingMusic();
     playUiConfirm();
     onPlay();
   };
@@ -79,6 +183,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   return (
     <div ref={containerRef} className="zc-landing">
+      <audio
+        ref={bgmRef}
+        src={LANDING_BGM_SRC}
+        loop
+        preload="auto"
+        aria-hidden="true"
+      />
       <TacticalSketchBackdrop />
       <div className="zc-shell">
         <header className="zc-nav">
@@ -164,6 +275,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     type="button"
                     className="zc-play-btn"
                     onMouseEnter={() => playUiHover()}
+                    onPointerDown={stopLandingMusic}
                     onClick={handlePlay}
                   >
                     <Icon name="play" size={15} />
@@ -266,6 +378,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     type="button"
                     className="zc-play-btn"
                     onMouseEnter={() => playUiHover()}
+                    onPointerDown={stopLandingMusic}
                     onClick={handlePlay}
                   >
                     <Icon name="play" size={14} />
@@ -347,6 +460,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     type="button"
                     className="zc-play-btn"
                     onMouseEnter={() => playUiHover()}
+                    onPointerDown={stopLandingMusic}
                     onClick={handlePlay}
                   >
                     <Icon name="play" size={14} />

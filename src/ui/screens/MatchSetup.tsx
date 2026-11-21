@@ -8,10 +8,26 @@ import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from '../../render/palet
 import { WEAPON_DEFS } from '../../shared/api';
 import type { GameMode, MapTheme, MatchConfig, MatchDifficulty, WeaponId } from '../../shared/types';
 import { Icon, useMenuNavigation } from '../design';
-import { playUiClick, playUiConfirm, playUiHover } from '../design/uiSound';
+import {
+  playUiClick,
+  playUiConfirm,
+  playUiHover,
+  setLandingMusicActive,
+} from '../design/uiSound';
 import { generatePreviewMap } from '../previewMap';
+import { loadSettings, subscribeSettings } from '../settingsStore';
 import { TacticalSketchBackdrop } from './TacticalSketchBackdrop';
 import './landing.css';
+
+export const SETUP_BGM_SRC = '/assets/audio/tactical-transmission.mp3';
+
+function computeSetupBgmVolume(settings: {
+  masterVolume: number;
+  musicVolume: number;
+}): number {
+  const raw = (settings.masterVolume / 100) * (settings.musicVolume / 100);
+  return Math.max(0, Math.min(1, raw));
+}
 
 export interface MatchSetupProps {
   initialConfig: MatchConfig;
@@ -66,9 +82,107 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const bgmStoppedRef = useRef(false);
   const [config, setConfig] = useState<MatchConfig>(initialConfig);
 
-  useMenuNavigation({ containerRef, onEscape: onBack });
+  const stopSetupMusic = () => {
+    bgmStoppedRef.current = true;
+    setLandingMusicActive(false);
+    const audio = bgmRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  };
+
+  const handleBack = () => {
+    stopSetupMusic();
+    onBack();
+  };
+
+  const handleDeploy = () => {
+    stopSetupMusic();
+    playUiConfirm();
+    onDeploy(config);
+  };
+
+  useMenuNavigation({ containerRef, onEscape: handleBack });
+
+  useEffect(() => {
+    bgmStoppedRef.current = false;
+    setLandingMusicActive(true);
+
+    const audio = bgmRef.current;
+    if (!audio) {
+      return () => {
+        bgmStoppedRef.current = true;
+        setLandingMusicActive(false);
+      };
+    }
+
+    audio.loop = true;
+    audio.volume = computeSetupBgmVolume(loadSettings());
+
+    const unsubscribeSettings = subscribeSettings((next) => {
+      if (bgmRef.current) {
+        bgmRef.current.volume = computeSetupBgmVolume(next);
+      }
+    });
+
+    const removeUnlockListeners = () => {
+      if (typeof window === 'undefined') return;
+      window.removeEventListener('pointerdown', handleInteractionUnlock);
+      window.removeEventListener('keydown', handleInteractionUnlock);
+      window.removeEventListener('click', handleInteractionUnlock);
+      window.removeEventListener('touchstart', handleInteractionUnlock);
+    };
+
+    const tryPlay = () => {
+      if (bgmStoppedRef.current || !bgmRef.current) return;
+      const playPromise = bgmRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            if (bgmStoppedRef.current && bgmRef.current) {
+              bgmRef.current.pause();
+              bgmRef.current.currentTime = 0;
+            } else {
+              removeUnlockListeners();
+            }
+          })
+          .catch(() => {
+            // Autoplay blocked until first user gesture; interaction listeners retry automatically.
+          });
+      }
+    };
+
+    function handleInteractionUnlock() {
+      if (bgmStoppedRef.current) {
+        removeUnlockListeners();
+        return;
+      }
+      tryPlay();
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pointerdown', handleInteractionUnlock, { passive: true });
+      window.addEventListener('keydown', handleInteractionUnlock, { passive: true });
+      window.addEventListener('click', handleInteractionUnlock, { passive: true });
+      window.addEventListener('touchstart', handleInteractionUnlock, { passive: true });
+    }
+
+    tryPlay();
+
+    return () => {
+      bgmStoppedRef.current = true;
+      removeUnlockListeners();
+      unsubscribeSettings();
+      setLandingMusicActive(false);
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, []);
 
   const activeTheme: MapTheme = config.mapTheme ?? 'fortress';
   const previewMap = useMemo(
@@ -204,6 +318,13 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
 
   return (
     <div ref={containerRef} className="zc-landing">
+      <audio
+        ref={bgmRef}
+        src={SETUP_BGM_SRC}
+        loop
+        preload="auto"
+        aria-hidden="true"
+      />
       <TacticalSketchBackdrop />
       <div className="zc-shell">
         <header className="zc-nav">
@@ -211,9 +332,10 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
             type="button"
             className="zc-brand"
             onMouseEnter={() => playUiHover()}
+            onPointerDown={stopSetupMusic}
             onClick={() => {
               playUiClick();
-              onBack();
+              handleBack();
             }}
           >
             <ZoneLogoMark />
@@ -225,9 +347,10 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
               type="button"
               className="zc-nav-link"
               onMouseEnter={() => playUiHover()}
+              onPointerDown={stopSetupMusic}
               onClick={() => {
                 playUiClick();
-                onBack();
+                handleBack();
               }}
             >
               Back to Home
@@ -410,10 +533,8 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
                   type="button"
                   className="zc-play-btn"
                   onMouseEnter={() => playUiHover()}
-                  onClick={() => {
-                    playUiConfirm();
-                    onDeploy(config);
-                  }}
+                  onPointerDown={stopSetupMusic}
+                  onClick={handleDeploy}
                 >
                   <Icon name="play" size={15} />
                   <span>START MATCH</span>
@@ -423,9 +544,10 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
                   type="button"
                   className="zc-secondary-btn"
                   onMouseEnter={() => playUiHover()}
+                  onPointerDown={stopSetupMusic}
                   onClick={() => {
                     playUiClick();
-                    onBack();
+                    handleBack();
                   }}
                 >
                   Back

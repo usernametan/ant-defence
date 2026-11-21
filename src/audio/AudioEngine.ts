@@ -36,6 +36,7 @@ export class AudioEngine {
   private ambientOscB: OscillatorNode | null = null;
   private ambientFilter: BiquadFilterNode | null = null;
   private ambientStarted = false;
+  private landingMusicActive = false;
 
   // Continuous proximity-faded Hellcell monster audio nodes
   private bossLoopKind: BossKind | null = null;
@@ -98,7 +99,20 @@ export class AudioEngine {
       const now = this.ctx.currentTime;
       this.masterGain.gain.setTargetAtTime(this.volumes.master, now, 0.03);
       this.sfxGain.gain.setTargetAtTime(this.volumes.sfx, now, 0.03);
-      this.musicGain.gain.setTargetAtTime(this.volumes.music * 0.28, now, 0.05);
+      this.musicGain.gain.setTargetAtTime(
+        this.landingMusicActive ? 0 : this.volumes.music * 0.28,
+        now,
+        0.05,
+      );
+    }
+  }
+
+  setLandingMusicActive(active: boolean): void {
+    this.landingMusicActive = active;
+    if (this.ctx && this.musicGain) {
+      const now = this.ctx.currentTime;
+      const target = active ? 0 : this.volumes.music * (0.2 + this.combatHeat * 0.16);
+      this.musicGain.gain.setTargetAtTime(target, now, 0.05);
     }
   }
 
@@ -162,7 +176,7 @@ export class AudioEngine {
       const cutoff = baseCut + this.combatHeat * 740;
       this.ambientFilter.frequency.setTargetAtTime(cutoff, now, 0.18);
       this.musicGain.gain.setTargetAtTime(
-        this.volumes.music * (0.2 + this.combatHeat * 0.16),
+        this.landingMusicActive ? 0 : this.volumes.music * (0.2 + this.combatHeat * 0.16),
         now,
         0.2,
       );
