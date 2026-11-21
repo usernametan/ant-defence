@@ -1,4 +1,9 @@
 import type { GameState, MapData } from '../../shared/types';
+import {
+  drawStructureShadowsAndAoRegion,
+  type ChunkRect,
+  type ShadowStrokeOptions,
+} from '../groundCache';
 import { hash2, type SlumBuilding } from './architecture';
 import { drawSlumParkedTwoWheeler, drawSlumWallClutter } from './props';
 import type { SlumsideTextureAtlas } from './textures';
@@ -93,75 +98,38 @@ function drawRailwayCorridor(
   }
 }
 
-function drawGroundShadowsAndAo(
+const SLUMSIDE_SHADOW_OPTS: ShadowStrokeOptions = {
+  shadowColor: '#0D0B12',
+  shadowAlpha: 0.42,
+  shadowOffsetXFactor: 0.65,
+  shadowOffsetYFactor: 0.55,
+  blurPx: 5,
+  aoOuterColor: 'rgba(12, 10, 14, 0.14)',
+  aoOuterWidth: 14,
+  aoInnerColor: 'rgba(10, 8, 12, 0.34)',
+  aoInnerWidth: 5,
+};
+
+export function drawSlumsideShadowsForRect(
   ctx: CanvasRenderingContext2D,
   map: MapData,
   buildings: readonly SlumBuilding[],
+  rect?: ChunkRect,
+  scratchCanvas?: HTMLCanvasElement | null,
 ): void {
+  drawStructureShadowsAndAoRegion(ctx, map, buildings, SLUMSIDE_SHADOW_OPTS, rect, scratchCanvas);
+
   const ts = map.tileSize;
-  const worldW = map.width * ts;
-  const worldH = map.height * ts;
-
-  // 1. Soft directional cast shadows (upper-left late-afternoon sun -> down-right)
-  if (typeof document !== 'undefined') {
-    const sc = document.createElement('canvas');
-    sc.width = Math.max(1, Math.floor(worldW * 0.5));
-    sc.height = Math.max(1, Math.floor(worldH * 0.5));
-    const sctx = sc.getContext('2d');
-    if (sctx) {
-      sctx.save();
-      sctx.scale(0.5, 0.5);
-      if ('filter' in sctx) sctx.filter = 'blur(5px)';
-      sctx.fillStyle = '#0D0B12';
-
-      for (const b of buildings) {
-        const bx = b.col * ts;
-        const by = b.row * ts;
-        const bw = b.w * ts;
-        const bh = b.h * ts;
-        const dx = b.elevation * 0.65;
-        const dy = b.elevation * 0.55;
-
-        sctx.beginPath();
-        sctx.moveTo(bx + bw, by);
-        sctx.lineTo(bx + bw + dx, by + dy);
-        sctx.lineTo(bx + bw + dx, by + bh + dy);
-        sctx.lineTo(bx + dx, by + bh + dy);
-        sctx.lineTo(bx, by + bh);
-        sctx.closePath();
-        sctx.fill();
-      }
-      sctx.restore();
-
-      ctx.save();
-      ctx.globalAlpha = 0.42;
-      ctx.drawImage(sc, 0, 0, worldW, worldH);
-      ctx.restore();
-    }
-  }
-
-  // 2. Soft Ambient Occlusion bleed & tight contact crease around every building footprint
-  ctx.save();
-  for (const b of buildings) {
-    if (b.isBorder) continue;
-    const bx = b.col * ts;
-    const by = b.row * ts;
-    const bw = b.w * ts;
-    const bh = b.h * ts;
-
-    ctx.strokeStyle = 'rgba(12, 10, 14, 0.14)';
-    ctx.lineWidth = 14;
-    ctx.strokeRect(bx, by, bw, bh);
-
-    ctx.strokeStyle = 'rgba(10, 8, 12, 0.34)';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(bx, by, bw, bh);
-  }
+  const minC = rect ? Math.max(1, Math.floor(rect.x / ts)) : 1;
+  const maxC = rect ? Math.min(map.width - 2, Math.ceil((rect.x + rect.w) / ts)) : map.width - 2;
+  const minR = rect ? Math.max(1, Math.floor(rect.y / ts)) : 1;
+  const maxR = rect ? Math.min(map.height - 2, Math.ceil((rect.y + rect.h) / ts)) : map.height - 2;
 
   // Subtle extra AO darkening inside narrow 1-2 tile alleyways
+  ctx.save();
   ctx.fillStyle = 'rgba(12, 10, 14, 0.12)';
-  for (let r = 1; r < map.height - 1; r += 1) {
-    for (let c = 1; c < map.width - 1; c += 1) {
+  for (let r = minR; r <= maxR; r += 1) {
+    for (let c = minC; c <= maxC; c += 1) {
       if (map.tiles[r][c] !== 'floor') continue;
       const wallLR = map.tiles[r][c - 1] === 'wall' && map.tiles[r][c + 1] === 'wall';
       const wallUD = map.tiles[r - 1][c] === 'wall' && map.tiles[r + 1][c] === 'wall';
@@ -173,14 +141,8 @@ function drawGroundShadowsAndAo(
   ctx.restore();
 }
 
-/**
- * Bakes the multi-layered Slumside ground cache: high-res painted textures per
- * neighborhood, pedestrian footpaths, double railway track, storm drains, wall-apron
- * clutter, soft directional building shadows, and ambient occlusion.
- */
-export function bakeSlumsideGroundLayer(
+export function bakeSlumsideBaseFloorLayer(
   map: MapData,
-  buildings: readonly SlumBuilding[],
   textures: SlumsideTextureAtlas,
   existingCanvas?: HTMLCanvasElement | null,
 ): HTMLCanvasElement | null {
@@ -292,7 +254,6 @@ export function bakeSlumsideGroundLayer(
       const h = hash2(c, r, map.seed + 211);
 
       if (kind === 'water') {
-        // Concrete storm drain curb & dark murky water basin
         ctx.fillStyle = '#4B443B';
         ctx.fillRect(x, y, ts, ts);
         const padT = map.tiles[r - 1]?.[c] === 'water' ? 0 : 4;
@@ -313,7 +274,6 @@ export function bakeSlumsideGroundLayer(
         ctx.lineWidth = 1.2;
         ctx.strokeRect(x + 0.5, y + 0.5, ts - 1, ts - 1);
       } else if (kind === 'floor' && (c < 50 || c > 53)) {
-        // Organic street dirt patches, puddles & oil stains
         if (h < 0.12) {
           ctx.fillStyle = 'rgba(40, 34, 28, 0.2)';
           ctx.beginPath();
@@ -326,7 +286,6 @@ export function bakeSlumsideGroundLayer(
           ctx.fill();
         }
 
-        // Manhole covers & cast-iron grates
         const wallUp = map.tiles[r - 1]?.[c] === 'wall';
         if (!wallUp && h > 0.61 && h < 0.635) {
           ctx.fillStyle = '#252A30';
@@ -337,7 +296,6 @@ export function bakeSlumsideGroundLayer(
           ctx.lineWidth = 1;
           ctx.stroke();
         } else if (wallUp && r > 1) {
-          // Concrete doorstep apron flush under south building facade
           ctx.fillStyle = 'rgba(148, 138, 124, 0.36)';
           ctx.fillRect(x + 2, y, ts - 4, 6);
           if (h < 0.18) {
@@ -357,8 +315,38 @@ export function bakeSlumsideGroundLayer(
     }
   }
 
-  // 6. Soft directional building cast shadows + Ambient Occlusion grounding
-  drawGroundShadowsAndAo(ctx, map, buildings);
+  return canvas;
+}
+
+/**
+ * Bakes the multi-layered Slumside ground cache: high-res painted textures per
+ * neighborhood, pedestrian footpaths, double railway track, storm drains, wall-apron
+ * clutter, soft directional building shadows, and ambient occlusion.
+ */
+export function bakeSlumsideGroundLayer(
+  map: MapData,
+  buildings: readonly SlumBuilding[],
+  textures: SlumsideTextureAtlas,
+  existingCanvas?: HTMLCanvasElement | null,
+  baseFloorCanvas?: HTMLCanvasElement | null,
+): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+
+  const base = baseFloorCanvas ?? bakeSlumsideBaseFloorLayer(map, textures);
+  if (!base) return null;
+
+  const ts = map.tileSize;
+  const worldW = map.width * ts;
+  const worldH = map.height * ts;
+  const canvas = existingCanvas ?? document.createElement('canvas');
+  canvas.width = worldW;
+  canvas.height = worldH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, worldW, worldH);
+  ctx.drawImage(base, 0, 0);
+  drawSlumsideShadowsForRect(ctx, map, buildings);
 
   return canvas;
 }

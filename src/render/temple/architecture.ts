@@ -278,7 +278,7 @@ function bakeEgyptianColumnCanvas(
   ry: number,
   ts: number,
 ): void {
-  const baseY = ry + s.elevation;
+  const baseY = ry;
   const stonePat = textures.getPattern(ctx, 'wallEgyptianSandstone', 0.25);
 
   // 1. Stepped sandstone column plinth filling the 32x32 tile footprint cleanly
@@ -298,8 +298,8 @@ function bakeEgyptianColumnCanvas(
   // 2. Massive cylindrical decorated column shaft rising into roof plane
   const colW = ts - 8;
   const colX = rx + 4;
-  const shaftBotY = baseY + ts * 0.55;
-  const shaftTopY = ry + 6;
+  const shaftBotY = baseY + ts * 0.72;
+  const shaftTopY = ry + 4;
 
   const cylGrad = ctx.createLinearGradient(colX, 0, colX + colW, 0);
   cylGrad.addColorStop(0, '#DFBE82');
@@ -516,21 +516,23 @@ export function bakeTempleStructureCanvas(
 ): void {
   if (typeof document === 'undefined') return;
   const padX = 12;
-  const padTop = s.elevation + 18;
+  const padTop = 18;
   const padBottom = 6;
   const bw = s.w * tileSize;
-  const bh = s.h * tileSize;
+  const fullBh = s.h * tileSize;
+  const facadeH = Math.min(s.elevation, Math.max(10, Math.floor(fullBh * 0.32)));
+  const bh = fullBh - facadeH;
 
   const canvas = s.canvas ?? document.createElement('canvas');
   canvas.width = bw + padX * 2;
-  canvas.height = bh + padTop + padBottom;
+  canvas.height = fullBh + padTop + padBottom;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const rx = padX;
-  const ry = padTop - s.elevation;
+  const ry = padTop;
 
   if (s.kind === 'colonnadePillar') {
     bakeEgyptianColumnCanvas(ctx, s, textures, rx, ry, tileSize);
@@ -541,7 +543,7 @@ export function bakeTempleStructureCanvas(
   }
 
   // 1. South-facing 2.5D sandstone pylon / sanctuary facade
-  drawTempleFacade(ctx, s, textures, rx, ry + bh, bw, s.elevation);
+  drawTempleFacade(ctx, s, textures, rx, ry + bh, bw, facadeH);
 
   // 2. Carved sunlit temple parapet roof top
   ctx.save();

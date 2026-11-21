@@ -318,24 +318,26 @@ export function bakeFortressStructureCanvas(
 ): void {
   if (typeof document === 'undefined') return;
   const padX = 12;
-  const padTop = s.elevation + 14;
+  const padTop = 14;
   const padBottom = 5;
   const bw = s.w * tileSize;
-  const bh = s.h * tileSize;
+  const fullBh = s.h * tileSize;
+  const facadeH = Math.min(s.elevation, Math.max(10, Math.floor(fullBh * 0.32)));
+  const bh = fullBh - facadeH;
 
   const canvas = s.canvas ?? document.createElement('canvas');
   canvas.width = bw + padX * 2;
-  canvas.height = bh + padTop + padBottom;
+  canvas.height = fullBh + padTop + padBottom;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const rx = padX;
-  const ry = padTop - s.elevation;
+  const ry = padTop;
 
   // 1. South-facing 2.5D metallic facade
-  drawFortressFacade(ctx, s, textures, rx, ry + bh, bw, s.elevation);
+  drawFortressFacade(ctx, s, textures, rx, ry + bh, bw, facadeH);
 
   // 2. Rooftop architectural module
   ctx.save();

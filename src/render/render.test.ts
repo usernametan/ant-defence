@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { HellcellBoss, HellcellState, MapData } from '../shared/types';
 import { generateMap } from '../sim/map';
 import { Camera, DEFAULT_BASE_ZOOM, DEFAULT_SCOPE_ZOOM } from './camera';
-import { formatZoneCode } from './environment';
+import { EffectsSystem } from './effects';
+import { EnvironmentRenderer, formatZoneCode } from './environment';
 import { drawHellcellEntities, drawHellcellGroundLayer } from './hellcell';
 import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from './palette';
 import { decomposeFortressStructures } from './fortress';
 import { decomposeJungleRuins } from './jungle';
 import { decomposeSlumBuildings } from './slumside';
 import { decomposeTempleStructures } from './temple';
-import { computeVisibilityPolygon, hasLineOfSight } from './visibility';
+import { VisibilityPolygonCache, computeVisibilityPolygon, hasLineOfSight } from './visibility';
 
 function makeMiniMap(): MapData {
   const width = 10;
@@ -91,6 +92,15 @@ describe('Renderer math & palette', () => {
 
     const poly = computeVisibilityPolygon(map, { x: 96, y: 144 }, 300, 36);
     expect(poly.length).toBeGreaterThanOrEqual(36);
+
+    // VisibilityPolygonCache skips recomputation for small <=6px jitter, recomputes on >6px or wallRevision bump
+    const visCache = new VisibilityPolygonCache();
+    expect(visCache.update(map, { x: 96, y: 144 }, 300, 48)).toBe(true);
+    expect(visCache.update(map, { x: 99, y: 146 }, 300, 48)).toBe(false);
+    expect(visCache.update(map, { x: 112, y: 144 }, 300, 48)).toBe(true);
+    map.wallRevision = (map.wallRevision ?? 0) + 1;
+    expect(visCache.update(map, { x: 112, y: 144 }, 300, 48)).toBe(true);
+    expect(visCache.recomputeCount).toBe(3);
   });
 
   it('provides distinct theme palettes for fortress, jungle, temple, and slumside', () => {
@@ -585,5 +595,201 @@ describe('Renderer math & palette', () => {
         shutdownBoss: { boss: { ...boss, hp: 0 }, progress: 0.5 },
       });
     }).not.toThrow();
+  });
+
+  it('uses dirty chunks and structure diffing instead of full ground-cache rebuilds when Hellcell crushes walls', () => {
+    for (const theme of ['fortress', 'jungle', 'slumside', 'temple'] as const) {
+      const env = new EnvironmentRenderer();
+      const map = generateMap(4242, theme);
+      const noop = () => {};
+      const ctx = {
+        save: noop,
+        restore: noop,
+        beginPath: noop,
+        rect: noop,
+        clip: noop,
+        clearRect: noop,
+        fillRect: noop,
+        drawImage: noop,
+        fill: noop,
+        stroke: noop,
+        strokeRect: noop,
+        moveTo: noop,
+        lineTo: noop,
+        arc: noop,
+        ellipse: noop,
+        roundRect: noop,
+        quadraticCurveTo: noop,
+        translate: noop,
+        rotate: noop,
+        scale: noop,
+        setLineDash: noop,
+        closePath: noop,
+        setTransform: noop,
+        createLinearGradient: () => ({ addColorStop: noop }),
+        createRadialGradient: () => ({ addColorStop: noop }),
+      } as unknown as CanvasRenderingContext2D;
+
+      env.drawGroundAndShadows(ctx, map, 1, 0, 0, 1280, 720);
+      expect(env.getThemeCacheStats(theme).fullRebuilds).toBe(1);
+
+      // Simulate crushing 10 interior walls one by one
+      let crushed = 0;
+      for (let r = 2; r < map.height - 2 && crushed < 10; r += 1) {
+        for (let c = 2; c < map.width - 2 && crushed < 10; c += 1) {
+          if (map.tiles[r][c] === 'wall') {
+            map.tiles[r][c] = 'floor';
+            env.markDirtyTile(`${c},${r}`, map);
+            map.wallRevision = (map.wallRevision ?? 0) + 1;
+            env.drawGroundAndShadows(ctx, map, 1 + crushed * 0.1, 0, 0, 1280, 720);
+            crushed += 1;
+          }
+        }
+      }
+
+      const stats = env.getThemeCacheStats(theme);
+      expect(stats.fullRebuilds).toBe(1); // Zero extra full rebuilds!
+      expect(stats.chunkRebuilds).toBeGreaterThan(0);
+      expect(stats.structuresReused).toBeGreaterThan(0);
+
+      // Simulate restoreCrushedObstacles bumping wallRevision without dirty tiles
+      map.wallRevision = (map.wallRevision ?? 0) + 1;
+      env.drawGroundAndShadows(ctx, map, 3.0, 0, 0, 1280, 720);
+      const afterRestore = env.getThemeCacheStats(theme);
+      expect(afterRestore.fullRebuilds).toBe(1);
+      expect(afterRestore.pendingChunks).toBeGreaterThan(0);
+    }
+  });
+
+  it('compacts EffectsSystem arrays in-place and culls offscreen Hellcell entities/decals', () => {
+    const fx = new EffectsSystem();
+    const initialParticlesRef = fx.particles;
+    const initialDecalsRef = fx.scorchDecals;
+    for (let i = 0; i < 40; i += 1) {
+      fx.spawnImpactSparks({ x: 100 + i * 50, y: 100 }, '#38BDF8', 10);
+    }
+    expect(fx.particles).toBe(initialParticlesRef);
+    expect(fx.particles.length).toBe(340);
+
+    fx.spawnExplosion({ x: 200, y: 200 }, 80);
+    fx.spawnExplosion({ x: 2500, y: 2500 }, 80);
+    expect(fx.scorchDecals).toBe(initialDecalsRef);
+
+    fx.update(0.3, []);
+    expect(fx.particles).toBe(initialParticlesRef);
+    expect(fx.particles.length).toBeLessThan(340);
+
+    let arcCount = 0;
+    const noop = () => {};
+    const ctx = {
+      save: noop,
+      restore: noop,
+      translate: noop,
+      rotate: noop,
+      scale: noop,
+      beginPath: noop,
+      closePath: noop,
+      moveTo: noop,
+      lineTo: noop,
+      arc: () => {
+        arcCount += 1;
+      },
+      ellipse: noop,
+      rect: noop,
+      roundRect: noop,
+      fill: noop,
+      stroke: noop,
+      clip: noop,
+      fillRect: noop,
+      strokeRect: noop,
+      fillText: noop,
+      setLineDash: noop,
+      drawImage: noop,
+      createRadialGradient: () => ({ addColorStop: noop }),
+      createLinearGradient: () => ({ addColorStop: noop }),
+    } as unknown as CanvasRenderingContext2D;
+
+    fx.drawScorchDecals(ctx, { minX: 0, minY: 0, maxX: 500, maxY: 500 });
+    expect(arcCount).toBe(1);
+
+    arcCount = 0;
+    const hellcell: HellcellState = {
+      phase: 'CEASEFIRE_BOSS',
+      hasTriggered: true,
+      isCeasefireActive: true,
+      bossDefeated: false,
+      triggerTime: 0,
+      countdown: 0,
+      blueBossDamage: 0,
+      redBossDamage: 0,
+      boss: null,
+      reticles: [
+        {
+          id: 'r-in',
+          startPos: { x: 100, y: 100 },
+          targetPos: { x: 200, y: 200 },
+          splashRadius: 60,
+          timer: 0.4,
+          maxTimer: 1,
+          damage: 40,
+        },
+        {
+          id: 'r-out',
+          startPos: { x: 2900, y: 2900 },
+          targetPos: { x: 3000, y: 3000 },
+          splashRadius: 60,
+          timer: 0.4,
+          maxTimer: 1,
+          damage: 40,
+        },
+      ],
+      acidPools: [],
+      bossProjectiles: [
+        {
+          id: 'p-in',
+          kind: 'venomBlob',
+          pos: { x: 200, y: 200 },
+          vel: { x: 0, y: 0 },
+          rotation: 0,
+          spinSpeed: 1,
+          bouncesLeft: 0,
+          life: 1,
+          damage: 20,
+          splashRadius: 30,
+        },
+        {
+          id: 'p-out',
+          kind: 'venomBlob',
+          pos: { x: 3000, y: 3000 },
+          vel: { x: 0, y: 0 },
+          rotation: 0,
+          spinSpeed: 1,
+          bouncesLeft: 0,
+          life: 1,
+          damage: 20,
+          splashRadius: 30,
+        },
+      ],
+      venomCone: null,
+    };
+
+    drawHellcellGroundLayer(ctx, hellcell, 40, 1.0, undefined, {
+      minX: 0,
+      minY: 0,
+      maxX: 500,
+      maxY: 500,
+    });
+    const groundArcsWithCull = arcCount;
+    arcCount = 0;
+    drawHellcellGroundLayer(ctx, hellcell, 40, 1.0);
+    expect(groundArcsWithCull).toBeLessThan(arcCount);
+
+    let projArcsWithCull = 0;
+    arcCount = 0;
+    drawHellcellEntities(ctx, hellcell, 1.0, { view: { minX: 0, minY: 0, maxX: 500, maxY: 500 } });
+    projArcsWithCull = arcCount;
+    arcCount = 0;
+    drawHellcellEntities(ctx, hellcell, 1.0);
+    expect(projArcsWithCull).toBeLessThan(arcCount);
   });
 });

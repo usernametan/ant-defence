@@ -70,9 +70,13 @@ export class EffectsSystem {
   explosionFlashes: ExplosionFlash[] = [];
   projectileTrails = new Map<string, Vec2[]>();
   private lastProjPos = new Map<string, { pos: Vec2; vel: Vec2; life: number }>();
+  private readonly activeProjIds = new Set<string>();
   unitHitFlash = new Map<string, number>();
 
   private maxParticles = 340;
+  private particleEvictIdx = 0;
+  private scorchEvictIdx = 0;
+  private scorchSprite: HTMLCanvasElement | null = null;
 
   clear(): void {
     this.particles.length = 0;
@@ -83,7 +87,10 @@ export class EffectsSystem {
     this.explosionFlashes.length = 0;
     this.projectileTrails.clear();
     this.lastProjPos.clear();
+    this.activeProjIds.clear();
     this.unitHitFlash.clear();
+    this.particleEvictIdx = 0;
+    this.scorchEvictIdx = 0;
   }
 
   spawnShellCasing(pos: Vec2, angle: number, weaponId: WeaponId): void {
@@ -161,15 +168,24 @@ export class EffectsSystem {
       maxLife: 0.26,
       lineWidth: 2.5,
     });
-    this.scorchDecals.push({
-      x: pos.x,
-      y: pos.y,
-      radius: radius * 0.55,
-      life: 16,
-      maxLife: 16,
-    });
-    if (this.scorchDecals.length > 24) {
-      this.scorchDecals.shift();
+    if (this.scorchDecals.length >= 24) {
+      const slot = this.scorchEvictIdx % this.scorchDecals.length;
+      this.scorchDecals[slot] = {
+        x: pos.x,
+        y: pos.y,
+        radius: radius * 0.55,
+        life: 16,
+        maxLife: 16,
+      };
+      this.scorchEvictIdx = (slot + 1) % this.scorchDecals.length;
+    } else {
+      this.scorchDecals.push({
+        x: pos.x,
+        y: pos.y,
+        radius: radius * 0.55,
+        life: 16,
+        maxLife: 16,
+      });
     }
 
     const debrisCount = 26;
@@ -252,14 +268,23 @@ export class EffectsSystem {
       else this.unitHitFlash.set(id, next);
     }
 
-    const activeProjIds = new Set<string>();
+    this.activeProjIds.clear();
     for (const p of projectiles) {
-      activeProjIds.add(p.id);
-      this.lastProjPos.set(p.id, {
-        pos: { x: p.pos.x, y: p.pos.y },
-        vel: { x: p.vel.x, y: p.vel.y },
-        life: p.life,
-      });
+      this.activeProjIds.add(p.id);
+      const cached = this.lastProjPos.get(p.id);
+      if (cached) {
+        cached.pos.x = p.pos.x;
+        cached.pos.y = p.pos.y;
+        cached.vel.x = p.vel.x;
+        cached.vel.y = p.vel.y;
+        cached.life = p.life;
+      } else {
+        this.lastProjPos.set(p.id, {
+          pos: { x: p.pos.x, y: p.pos.y },
+          vel: { x: p.vel.x, y: p.vel.y },
+          life: p.life,
+        });
+      }
       let trail = this.projectileTrails.get(p.id);
       if (!trail) {
         trail = [];
@@ -286,7 +311,7 @@ export class EffectsSystem {
       }
     }
     for (const id of this.projectileTrails.keys()) {
-      if (!activeProjIds.has(id)) {
+      if (!this.activeProjIds.has(id)) {
         const last = this.lastProjPos.get(id);
         if (last && map && last.life > 0.04) {
           const probeX = last.pos.x + last.vel.x * dt * 1.1;
@@ -303,60 +328,130 @@ export class EffectsSystem {
       }
     }
 
-    this.particles = this.particles.filter((p) => {
+    const particleDrag = Math.exp(-4.5 * dt);
+    let pw = 0;
+    for (let i = 0; i < this.particles.length; i += 1) {
+      const p = this.particles[i];
       p.life -= dt;
-      if (p.life <= 0) return false;
+      if (p.life <= 0) continue;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= Math.exp(-4.5 * dt);
-      p.vy *= Math.exp(-4.5 * dt);
-      return true;
-    });
+      p.vx *= particleDrag;
+      p.vy *= particleDrag;
+      this.particles[pw] = p;
+      pw += 1;
+    }
+    this.particles.length = pw;
 
-    this.shockwaves = this.shockwaves.filter((s) => {
+    let sw = 0;
+    for (let i = 0; i < this.shockwaves.length; i += 1) {
+      const s = this.shockwaves[i];
       s.life -= dt;
-      return s.life > 0;
-    });
+      if (s.life <= 0) continue;
+      this.shockwaves[sw] = s;
+      sw += 1;
+    }
+    this.shockwaves.length = sw;
 
-    this.scorchDecals = this.scorchDecals.filter((d) => {
+    let dw = 0;
+    for (let i = 0; i < this.scorchDecals.length; i += 1) {
+      const d = this.scorchDecals[i];
       d.life -= dt;
-      return d.life > 0;
-    });
+      if (d.life <= 0) continue;
+      this.scorchDecals[dw] = d;
+      dw += 1;
+    }
+    this.scorchDecals.length = dw;
 
-    this.floatingTexts = this.floatingTexts.filter((f) => {
+    const textDrag = Math.exp(-3 * dt);
+    let fw = 0;
+    for (let i = 0; i < this.floatingTexts.length; i += 1) {
+      const f = this.floatingTexts[i];
       f.life -= dt;
-      if (f.life <= 0) return false;
+      if (f.life <= 0) continue;
       f.y += f.vy * dt;
-      f.vy *= Math.exp(-3 * dt);
-      return true;
-    });
+      f.vy *= textDrag;
+      this.floatingTexts[fw] = f;
+      fw += 1;
+    }
+    this.floatingTexts.length = fw;
 
-    this.muzzleFlashes = this.muzzleFlashes.filter((m) => {
+    let mw = 0;
+    for (let i = 0; i < this.muzzleFlashes.length; i += 1) {
+      const m = this.muzzleFlashes[i];
       m.life -= dt;
-      return m.life > 0;
-    });
+      if (m.life <= 0) continue;
+      this.muzzleFlashes[mw] = m;
+      mw += 1;
+    }
+    this.muzzleFlashes.length = mw;
 
-    this.explosionFlashes = this.explosionFlashes.filter((e) => {
+    let ew = 0;
+    for (let i = 0; i < this.explosionFlashes.length; i += 1) {
+      const e = this.explosionFlashes[i];
       e.life -= dt;
-      return e.life > 0;
-    });
+      if (e.life <= 0) continue;
+      this.explosionFlashes[ew] = e;
+      ew += 1;
+    }
+    this.explosionFlashes.length = ew;
   }
 
-  drawScorchDecals(ctx: CanvasRenderingContext2D): void {
-    for (const d of this.scorchDecals) {
+  private getScorchSprite(): HTMLCanvasElement | null {
+    if (this.scorchSprite) return this.scorchSprite;
+    if (typeof document === 'undefined') return null;
+    const size = 128;
+    const half = size * 0.5;
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const gctx = c.getContext('2d');
+    if (!gctx) return null;
+    const grad = gctx.createRadialGradient(half, half, 4, half, half, half);
+    grad.addColorStop(0, '#04060B');
+    grad.addColorStop(0.65, '#0D1220');
+    grad.addColorStop(1, 'transparent');
+    gctx.fillStyle = grad;
+    gctx.fillRect(0, 0, size, size);
+    this.scorchSprite = c;
+    return c;
+  }
+
+  drawScorchDecals(
+    ctx: CanvasRenderingContext2D,
+    view?: { minX: number; minY: number; maxX: number; maxY: number },
+  ): void {
+    if (this.scorchDecals.length === 0) return;
+    const sprite = this.getScorchSprite();
+    ctx.save();
+    for (let i = 0; i < this.scorchDecals.length; i += 1) {
+      const d = this.scorchDecals[i];
+      if (
+        view &&
+        (d.x + d.radius < view.minX ||
+          d.x - d.radius > view.maxX ||
+          d.y + d.radius < view.minY ||
+          d.y - d.radius > view.maxY)
+      ) {
+        continue;
+      }
       const alpha = Math.min(0.42, (d.life / d.maxLife) * 0.5);
-      ctx.save();
       ctx.globalAlpha = alpha;
-      const grad = ctx.createRadialGradient(d.x, d.y, 2, d.x, d.y, d.radius);
-      grad.addColorStop(0, '#04060B');
-      grad.addColorStop(0.65, '#0D1220');
-      grad.addColorStop(1, 'transparent');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, d.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      if (sprite) {
+        const size = d.radius * 2;
+        ctx.drawImage(sprite, d.x - d.radius, d.y - d.radius, size, size);
+      } else {
+        const grad = ctx.createRadialGradient(d.x, d.y, 2, d.x, d.y, d.radius);
+        grad.addColorStop(0, '#04060B');
+        grad.addColorStop(0.65, '#0D1220');
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
+    ctx.restore();
   }
 
   drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]): void {
@@ -486,8 +581,21 @@ export class EffectsSystem {
     }
   }
 
-  drawForegroundEffects(ctx: CanvasRenderingContext2D): void {
-    for (const e of this.explosionFlashes) {
+  drawForegroundEffects(
+    ctx: CanvasRenderingContext2D,
+    view?: { minX: number; minY: number; maxX: number; maxY: number },
+  ): void {
+    for (let i = 0; i < this.explosionFlashes.length; i += 1) {
+      const e = this.explosionFlashes[i];
+      if (
+        view &&
+        (e.x + e.radius < view.minX ||
+          e.x - e.radius > view.maxX ||
+          e.y + e.radius < view.minY ||
+          e.y - e.radius > view.maxY)
+      ) {
+        continue;
+      }
       const ratio = e.life / e.maxLife;
       const r = e.radius * (0.45 + (1 - ratio) * 0.75);
       ctx.save();
@@ -504,7 +612,17 @@ export class EffectsSystem {
       ctx.restore();
     }
 
-    for (const m of this.muzzleFlashes) {
+    for (let i = 0; i < this.muzzleFlashes.length; i += 1) {
+      const m = this.muzzleFlashes[i];
+      if (
+        view &&
+        (m.x + m.radius * 2 < view.minX ||
+          m.x - m.radius * 2 > view.maxX ||
+          m.y + m.radius * 2 < view.minY ||
+          m.y - m.radius * 2 > view.maxY)
+      ) {
+        continue;
+      }
       const t = m.life / m.maxLife;
       ctx.save();
       ctx.translate(m.x, m.y);
@@ -525,55 +643,94 @@ export class EffectsSystem {
       ctx.restore();
     }
 
-    for (const s of this.shockwaves) {
-      const progress = 1 - s.life / s.maxLife;
-      const r = 8 + s.maxRadius * (1 - Math.pow(1 - progress, 2));
+    if (this.shockwaves.length > 0) {
       ctx.save();
-      ctx.globalAlpha = (s.life / s.maxLife) * 0.85;
-      ctx.strokeStyle = s.color;
-      ctx.lineWidth = s.lineWidth;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-      ctx.stroke();
+      for (let i = 0; i < this.shockwaves.length; i += 1) {
+        const s = this.shockwaves[i];
+        if (
+          view &&
+          (s.x + s.maxRadius < view.minX ||
+            s.x - s.maxRadius > view.maxX ||
+            s.y + s.maxRadius < view.minY ||
+            s.y - s.maxRadius > view.maxY)
+        ) {
+          continue;
+        }
+        const progress = 1 - s.life / s.maxLife;
+        const r = 8 + s.maxRadius * (1 - Math.pow(1 - progress, 2));
+        ctx.globalAlpha = (s.life / s.maxLife) * 0.85;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = s.lineWidth;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
-    for (const p of this.particles) {
-      const ratio = p.life / p.maxLife;
-      const r = p.size * (0.5 + ratio * 0.5);
+    if (this.particles.length > 0) {
       ctx.save();
-      if (p.glow) {
-        ctx.globalAlpha = Math.max(0, Math.min(0.32, ratio * p.alpha * 0.35));
+      for (let i = 0; i < this.particles.length; i += 1) {
+        const p = this.particles[i];
+        const margin = p.size * 2.5;
+        if (
+          view &&
+          (p.x + margin < view.minX ||
+            p.x - margin > view.maxX ||
+            p.y + margin < view.minY ||
+            p.y - margin > view.maxY)
+        ) {
+          continue;
+        }
+        const ratio = p.life / p.maxLife;
+        const r = p.size * (0.5 + ratio * 0.5);
         ctx.fillStyle = p.color;
+        if (p.glow) {
+          ctx.globalAlpha = Math.max(0, Math.min(0.32, ratio * p.alpha * 0.35));
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r * 2.1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = Math.max(0, Math.min(1, ratio * p.alpha));
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r * 2.1, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = Math.max(0, Math.min(1, ratio * p.alpha));
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fill();
       ctx.restore();
     }
 
-    for (const f of this.floatingTexts) {
-      const alpha = Math.min(1, (f.life / f.maxLife) * 1.4);
+    if (this.floatingTexts.length > 0) {
       ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.font = `800 ${Math.round(13 * f.scale)}px Bahnschrift, "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillStyle = PALETTE.bg0;
-      ctx.fillText(f.text, f.x + 1, f.y + 1);
-      ctx.fillStyle = f.color;
-      ctx.fillText(f.text, f.x, f.y);
+      for (let i = 0; i < this.floatingTexts.length; i += 1) {
+        const f = this.floatingTexts[i];
+        if (
+          view &&
+          (f.x + 48 < view.minX ||
+            f.x - 48 > view.maxX ||
+            f.y + 32 < view.minY ||
+            f.y - 32 > view.maxY)
+        ) {
+          continue;
+        }
+        const alpha = Math.min(1, (f.life / f.maxLife) * 1.4);
+        ctx.globalAlpha = alpha;
+        ctx.font = `800 ${Math.round(13 * f.scale)}px Bahnschrift, "Segoe UI", system-ui, sans-serif`;
+        ctx.fillStyle = PALETTE.bg0;
+        ctx.fillText(f.text, f.x + 1, f.y + 1);
+        ctx.fillStyle = f.color;
+        ctx.fillText(f.text, f.x, f.y);
+      }
       ctx.restore();
     }
   }
 
   private pushParticle(p: Particle): void {
     if (this.particles.length >= this.maxParticles) {
-      this.particles.shift();
+      const slot = this.particleEvictIdx % this.particles.length;
+      this.particles[slot] = p;
+      this.particleEvictIdx = (slot + 1) % this.particles.length;
+      return;
     }
     this.particles.push(p);
   }

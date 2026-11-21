@@ -2,10 +2,13 @@ import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ActionBar } from './hud/ActionBar';
-import { CrosshairGlyph } from './hud/Crosshair';
+import { CrosshairGlyph, CrosshairOverlay } from './hud/Crosshair';
+import { MinimapTerrainCache } from './hud/Minimap';
 import { WeaponCard } from './hud/WeaponCard';
+import { CountdownOverlay } from './screens/CountdownOverlay';
 import { MainMenu } from './screens/MainMenu';
 import { MatchSetup } from './screens/MatchSetup';
+import { PauseMenu } from './screens/PauseMenu';
 import { generatePreviewMap } from './previewMap';
 import { DEFAULT_SETTINGS, loadSettings } from './settingsStore';
 import { StubSim } from './stubSim';
@@ -142,5 +145,106 @@ describe('UI StubSim and settings', () => {
     expect(html).toContain('THREE CAPTURE ZONES');
     expect(html).toContain('SQUAD-BASED COMBAT');
     expect(html).toContain('TARGET SCORE: 600');
+  });
+
+  it('MinimapTerrainCache reuses offscreen layer until wallRevision or theme changes', () => {
+    const map = generatePreviewMap(4242, 'slumside');
+    let fillRects = 0;
+    const makeCanvas = (w: number, h: number) =>
+      ({
+        width: w,
+        height: h,
+        getContext: () => ({
+          fillStyle: '',
+          fillRect: () => {
+            fillRects += 1;
+          },
+        }),
+      }) as unknown as HTMLCanvasElement;
+
+    const cache = new MinimapTerrainCache();
+    const first = cache.ensureTerrain(196, 130, map, makeCanvas);
+    expect(first).not.toBeNull();
+    expect(cache.fullRebuilds).toBe(1);
+    const firstRects = fillRects;
+    expect(firstRects).toBeGreaterThan(50);
+
+    const second = cache.ensureTerrain(196, 130, map, makeCanvas);
+    expect(second).toBe(first);
+    expect(cache.fullRebuilds).toBe(1);
+    expect(fillRects).toBe(firstRects);
+
+    const updated = { ...map, wallRevision: (map.wallRevision ?? 0) + 1 };
+    cache.ensureTerrain(196, 130, updated, makeCanvas);
+    expect(cache.fullRebuilds).toBe(2);
+    expect(fillRects).toBe(firstRects * 2);
+  });
+
+  it('CrosshairOverlay renders cleanly with subscribeScreenPos omitted or provided', () => {
+    const html = renderToString(
+      createElement(CrosshairOverlay, {
+        subscribeScreenPos: () => () => {},
+        style: 'tactical',
+        gap: 8,
+        hitFlash: null,
+        damageIndicators: [],
+      }),
+    );
+    expect(html).toContain('translate3d');
+  });
+
+  it('renders MatchSetup, CountdownOverlay, and PauseMenu with the studio landing palette classes', () => {
+    const setupHtml = renderToString(
+      createElement(MatchSetup, {
+        initialConfig: {
+          seed: 4242,
+          mode: 'hellcell',
+          difficulty: 'easy',
+          scoreToWin: 1000,
+          enemyCount: 4,
+          startingWeapon: 'rifle',
+          mapTheme: 'fortress',
+        },
+        onDeploy: () => {},
+        onBack: () => {},
+      }),
+    );
+    expect(setupHtml).toContain('zc-landing');
+    expect(setupHtml).toContain('START MATCH');
+    expect(setupHtml).toContain('Hellcell');
+
+    const countdownHtml = renderToString(
+      createElement(CountdownOverlay, {
+        seconds: 3,
+        mode: 'hellcell',
+        mapTheme: 'fortress',
+        difficulty: 'easy',
+        scoreToWin: 1000,
+        onComplete: () => {},
+      }),
+    );
+    expect(countdownHtml).toContain('zc-overlay-backdrop');
+    expect(countdownHtml).toContain('zc-countdown-card');
+    expect(countdownHtml).toContain('Hellcell');
+    expect(countdownHtml).toContain('1000 score to win');
+
+    const pauseHtml = renderToString(
+      createElement(PauseMenu, {
+        mode: 'zoneControl',
+        score: { player: 120, enemy: 95 },
+        elapsedSeconds: 47,
+        mapTheme: 'fortress',
+        onResume: () => {},
+        onSettings: () => {},
+        onRestart: () => {},
+        onQuit: () => {},
+      }),
+    );
+    expect(pauseHtml).toContain('zc-overlay-backdrop');
+    expect(pauseHtml).toContain('zc-pause-card');
+    expect(pauseHtml).toContain('Paused');
+    expect(pauseHtml).toContain('Resume');
+    expect(pauseHtml).toContain('Restart Match');
+    expect(pauseHtml).toContain('Exit to Menu');
   });
 });

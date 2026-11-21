@@ -1,6 +1,7 @@
 /* Zone Control — Minimal, Tactical, Studio-Grade Landing Interface */
 
-.zc-landing {
+.zc-landing,
+.zc-overlay-backdrop {
   --zc-bg: #101419;
   --zc-surface: #161c23;
   --zc-surface-hi: #1d242e;
@@ -12,6 +13,7 @@
   --zc-accent-active: #bc7f22;
   --zc-steel: #5897ba;
   --zc-crimson: #c85d4c;
+  --zc-sage: #6ba37a;
   --zc-border: #2a333d;
   --zc-border-hi: #3b4654;
   --zc-font-display: "Space Grotesk", "IBM Plex Sans", "Inter", system-ui, -apple-system, sans-serif;
@@ -19,13 +21,6 @@
 
   position: fixed;
   inset: 0;
-  z-index: var(--z-menu, 30);
-  background-color: var(--zc-bg);
-  background-image:
-    radial-gradient(ellipse 68% 58% at 76% 32%, rgba(88, 151, 186, 0.12) 0%, transparent 68%),
-    radial-gradient(ellipse 52% 48% at 18% 42%, rgba(217, 154, 56, 0.09) 0%, transparent 66%),
-    radial-gradient(ellipse 48% 42% at 84% 86%, rgba(200, 93, 76, 0.06) 0%, transparent 64%),
-    radial-gradient(circle at 50% 45%, transparent 45%, rgba(7, 10, 14, 0.62) 100%);
   color: var(--zc-text);
   overflow-y: auto;
   overflow-x: hidden;
@@ -33,6 +28,16 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.zc-landing {
+  z-index: var(--z-menu, 30);
+  background-color: var(--zc-bg);
+  background-image:
+    radial-gradient(ellipse 68% 58% at 76% 32%, rgba(88, 151, 186, 0.12) 0%, transparent 68%),
+    radial-gradient(ellipse 52% 48% at 18% 42%, rgba(217, 154, 56, 0.09) 0%, transparent 66%),
+    radial-gradient(ellipse 48% 42% at 84% 86%, rgba(200, 93, 76, 0.06) 0%, transparent 64%),
+    radial-gradient(circle at 50% 45%, transparent 45%, rgba(7, 10, 14, 0.62) 100%);
 }
 
 .zc-sketch-backdrop {
@@ -46,7 +51,10 @@
 
 .zc-landing *,
 .zc-landing *::before,
-.zc-landing *::after {
+.zc-landing *::after,
+.zc-overlay-backdrop *,
+.zc-overlay-backdrop *::before,
+.zc-overlay-backdrop *::after {
   box-sizing: border-box;
   font-family: var(--zc-font-body);
 }
@@ -730,20 +738,311 @@
   }
 }
 
+/* Overlay Backdrop & Minimal Modal Surface */
+.zc-overlay-backdrop {
+  z-index: var(--z-overlay, 20);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(11, 15, 20, 0.8);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.zc-card-surface {
+  background-color: var(--zc-surface);
+  border: 1px solid var(--zc-border-hi);
+  border-radius: 3px;
+  box-shadow: 0 20px 44px rgba(5, 7, 11, 0.55);
+}
+
+/* Match Setup — Clean Open Editorial Layout (matches Hero Split) */
+.zc-setup-block {
+  width: 100%;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--zc-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.zc-setup-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.zc-setup-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--zc-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.zc-setup-label-row strong {
+  color: var(--zc-text);
+  font-weight: 600;
+}
+
+.zc-setup-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--zc-muted);
+}
+
+.zc-slider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.zc-slider-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.zc-slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--zc-border);
+  cursor: pointer;
+}
+
+.zc-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--zc-accent);
+  border: 1px solid #f6d598;
+  cursor: pointer;
+}
+
+.zc-slider-input::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--zc-accent);
+  border: 1px solid #f6d598;
+  cursor: pointer;
+}
+
+.zc-slider-input:focus-visible {
+  outline: 2px solid var(--zc-accent);
+  outline-offset: 3px;
+}
+
+.zc-seed-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zc-seed-label-inline {
+  font-size: 12px;
+  color: var(--zc-muted);
+}
+
+.zc-seed-input-inline {
+  width: 76px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 2px;
+  border: 1px solid var(--zc-border);
+  background-color: var(--zc-bg);
+  color: var(--zc-text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.zc-seed-input-inline:focus-visible {
+  outline: 2px solid var(--zc-accent);
+  outline-offset: 1px;
+}
+
+/* Countdown Overlay — Minimal & Badge-Free */
+.zc-countdown-card {
+  width: min(360px, 100%);
+  padding: 28px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.zc-countdown-context {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--zc-muted);
+  letter-spacing: 0.02em;
+}
+
+.zc-countdown-num {
+  margin: 6px 0;
+  font-family: var(--zc-font-display);
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--zc-text);
+  font-variant-numeric: tabular-nums;
+  animation: zc-fade-up 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.zc-countdown-meta {
+  font-size: 12.5px;
+  color: var(--zc-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pause Menu — Clean & Direct */
+.zc-pause-card {
+  width: min(340px, 100%);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.zc-pause-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--zc-border);
+}
+
+.zc-pause-title {
+  margin: 0;
+  font-family: var(--zc-font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--zc-text);
+}
+
+.zc-pause-meta {
+  font-size: 12px;
+  color: var(--zc-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.zc-pause-scoreboard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 2px;
+  border: 1px solid var(--zc-border);
+  background-color: var(--zc-bg);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.zc-pause-team {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--zc-muted);
+}
+
+.zc-pause-team strong {
+  font-family: var(--zc-font-display);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.zc-pause-team--player strong {
+  color: var(--zc-steel);
+}
+
+.zc-pause-team--enemy strong {
+  color: var(--zc-crimson);
+}
+
+.zc-pause-vs {
+  font-size: 11px;
+  color: var(--zc-dim);
+}
+
+.zc-pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zc-pause-btn {
+  width: 100%;
+  min-height: 40px;
+}
+
+.zc-danger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 2px;
+  border: 1px solid rgba(200, 93, 76, 0.45);
+  background-color: transparent;
+  color: #e08b7e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.zc-danger-btn:hover {
+  background-color: rgba(200, 93, 76, 0.14);
+  border-color: var(--zc-crimson);
+  color: var(--zc-text);
+}
+
+.zc-danger-btn:focus-visible {
+  outline: 2px solid var(--zc-crimson);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .zc-slider-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-  .zc-enter {
+  .zc-enter,
+  .zc-countdown-num {
     animation: none;
   }
-  .zc-landing * {
+  .zc-landing *,
+  .zc-overlay-backdrop * {
     transition-duration: 1ms !important;
   }
 }
 
-[data-reduced-motion='true'] .zc-enter {
+[data-reduced-motion='true'] .zc-enter,
+[data-reduced-motion='true'] .zc-countdown-num {
   animation: none;
 }
 
-[data-reduced-motion='true'] .zc-landing * {
+[data-reduced-motion='true'] .zc-landing *,
+[data-reduced-motion='true'] .zc-overlay-backdrop * {
   transition-duration: 1ms !important;
 }

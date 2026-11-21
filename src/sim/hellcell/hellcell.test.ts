@@ -180,9 +180,9 @@ describe('Hellcell PvPvE mode', () => {
     expect(map.coverHp[tileKey(17, 10)]).toBe(0);
 
     const spawnPos = { ...boss.pos };
-    // Step 0.5s: fast boss travels > 90px
+    // Step 0.5s: boss travels > 65px
     for (let i = 0; i < 30; i += 1) updateHellcell(world5v5, 1 / 60);
-    expect(Math.hypot(boss.pos.x - spawnPos.x, boss.pos.y - spawnPos.y)).toBeGreaterThan(90);
+    expect(Math.hypot(boss.pos.x - spawnPos.x, boss.pos.y - spawnPos.y)).toBeGreaterThan(65);
   });
 
   it('refuels unit health & ammo, restores crushed walls & blocks, and spawns another boss up to HELLCELL_MAX_BOSSES after defeat', () => {
@@ -333,10 +333,10 @@ describe('Hellcell PvPvE mode', () => {
     hc.boss!.attackTimer = 0.01;
     updateHellcell(world, 0.02);
 
-    expect(hc.reticles.length).toBeGreaterThanOrEqual(9);
-    expect(hc.reticles.length).toBeLessThanOrEqual(12);
-    expect(hc.reticles[0].timer).toBeCloseTo(0.92, 2);
-    expect(hc.reticles[0].damage).toBe(115);
+    expect(hc.reticles.length).toBeGreaterThanOrEqual(5);
+    expect(hc.reticles.length).toBeLessThanOrEqual(7);
+    expect(hc.reticles[0].timer).toBeCloseTo(1.2, 2);
+    expect(hc.reticles[0].damage).toBe(52);
 
     // Place a 1x1 crate at the first reticle target tile
     const target = hc.reticles[0].targetPos;

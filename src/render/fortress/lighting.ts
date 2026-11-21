@@ -1,4 +1,10 @@
 import type { MapData } from '../../shared/types';
+import {
+  drawStructureShadowsAndAoRegion,
+  filterStructuresInRegion,
+  type ChunkRect,
+  type ShadowStrokeOptions,
+} from '../groundCache';
 import { hash2, type FortressStructure } from './architecture';
 import {
   drawEnergyConduitChannel,
@@ -216,73 +222,33 @@ function drawFacilityFloorEngineering(
   }
 }
 
-function drawFortressShadowsAndLighting(
+const FORTRESS_SHADOW_OPTS: ShadowStrokeOptions = {
+  shadowColor: '#03060E',
+  shadowAlpha: 0.56,
+  shadowOffsetXFactor: 0.76,
+  shadowOffsetYFactor: 0.58,
+  blurPx: 5,
+  aoOuterColor: 'rgba(4, 7, 16, 0.34)',
+  aoOuterWidth: 14,
+  aoInnerColor: 'rgba(3, 5, 12, 0.62)',
+  aoInnerWidth: 5,
+};
+
+export function drawFortressShadowsForRect(
   ctx: CanvasRenderingContext2D,
   map: MapData,
   structures: readonly FortressStructure[],
+  rect?: ChunkRect,
+  scratchCanvas?: HTMLCanvasElement | null,
 ): void {
+  drawStructureShadowsAndAoRegion(ctx, map, structures, FORTRESS_SHADOW_OPTS, rect, scratchCanvas);
+
   const ts = map.tileSize;
-  const worldW = map.width * ts;
-  const worldH = map.height * ts;
-
-  // 1. Crisp-yet-soft directional architectural drop shadows
-  if (typeof document !== 'undefined') {
-    const sc = document.createElement('canvas');
-    sc.width = Math.max(1, Math.floor(worldW * 0.5));
-    sc.height = Math.max(1, Math.floor(worldH * 0.5));
-    const sctx = sc.getContext('2d');
-    if (sctx) {
-      sctx.save();
-      sctx.scale(0.5, 0.5);
-      if ('filter' in sctx) sctx.filter = 'blur(5px)';
-      sctx.fillStyle = '#03060E';
-
-      for (const s of structures) {
-        const bx = s.col * ts;
-        const by = s.row * ts;
-        const bw = s.w * ts;
-        const bh = s.h * ts;
-        const dx = s.elevation * 0.76;
-        const dy = s.elevation * 0.58;
-
-        sctx.beginPath();
-        sctx.moveTo(bx + bw, by);
-        sctx.lineTo(bx + bw + dx, by + dy);
-        sctx.lineTo(bx + bw + dx, by + bh + dy);
-        sctx.lineTo(bx + dx, by + bh + dy);
-        sctx.lineTo(bx, by + bh);
-        sctx.closePath();
-        sctx.fill();
-      }
-      sctx.restore();
-
-      ctx.save();
-      ctx.globalAlpha = 0.56;
-      ctx.drawImage(sc, 0, 0, worldW, worldH);
-      ctx.restore();
-    }
-  }
-
-  // 2. Ambient occlusion wall contact shading & recessed edge darkening
-  ctx.save();
-  for (const s of structures) {
-    if (s.isBorder) continue;
-    const bx = s.col * ts;
-    const by = s.row * ts;
-    const bw = s.w * ts;
-    const bh = s.h * ts;
-
-    ctx.strokeStyle = 'rgba(4, 7, 16, 0.34)';
-    ctx.lineWidth = 14;
-    ctx.strokeRect(bx, by, bw, bh);
-
-    ctx.strokeStyle = 'rgba(3, 5, 12, 0.62)';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(bx, by, bw, bh);
-  }
+  const list = rect ? filterStructuresInRegion(structures, ts, rect, 72) : structures;
 
   // Localized emissive light pools (cyan on reactors/labs, subtle violet on capacitor hubs)
-  for (const s of structures) {
+  ctx.save();
+  for (const s of list) {
     if (s.isBorder) continue;
     const cx = (s.col + s.w * 0.5) * ts;
     const cy = (s.row + s.h * 0.5) * ts;
@@ -307,8 +273,14 @@ function drawFortressShadowsAndLighting(
       ctx.fill();
     }
   }
+  ctx.restore();
+}
 
-  // Subtle ambient darkening along facility outer bulkheads
+function drawFortressOuterEdgeShade(ctx: CanvasRenderingContext2D, map: MapData): void {
+  const ts = map.tileSize;
+  const worldW = map.width * ts;
+  const worldH = map.height * ts;
+  ctx.save();
   const shadeEdge = (x0: number, y0: number, x1: number, y1: number, rx: number, ry: number, rw: number, rh: number) => {
     const g = ctx.createLinearGradient(x0, y0, x1, y1);
     g.addColorStop(0, 'rgba(4, 7, 15, 0.5)');
@@ -333,6 +305,7 @@ export function bakeFortressGroundLayer(
   structures: readonly FortressStructure[],
   textures: FortressTextureAtlas,
   existingCanvas?: HTMLCanvasElement | null,
+  skipDynamicShadows = false,
 ): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
 
@@ -420,8 +393,12 @@ export function bakeFortressGroundLayer(
     }
   }
 
+  drawFortressOuterEdgeShade(ctx, map);
+
   // 7. Directional cast shadows, AO & localized cyan/violet emissive lighting
-  drawFortressShadowsAndLighting(ctx, map, structures);
+  if (!skipDynamicShadows) {
+    drawFortressShadowsForRect(ctx, map, structures);
+  }
 
   return canvas;
 }

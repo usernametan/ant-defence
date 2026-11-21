@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { RenderQuality } from '../../render';
+import type { RenderQualitySetting } from '../../render';
 import { MAP_THEME_PALETTES } from '../../render/palette';
 import type { MapTheme } from '../../shared/types';
 import {
@@ -157,10 +157,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {tab === 'video' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <Select<RenderQuality>
+            <Select<RenderQualitySetting>
               label="Lighting & Bloom Quality"
               value={settings.quality}
               options={[
+                { value: 'auto', label: 'Auto (Recommended · Adapts to FPS)' },
                 { value: 'high', label: 'High (Dynamic Shadows + Bloom)' },
                 { value: 'med', label: 'Medium (Dynamic Shadows)' },
                 { value: 'low', label: 'Low (Max FPS)' },

@@ -262,26 +262,37 @@ function steer(unit: Unit, point: Vec2): Vec2 {
   return { x: dx / range, y: dy / range };
 }
 
-/** Follow a cached A* route toward a world-space goal. */
+const MAX_ASTAR_PER_TICK = 3;
+
+/** Follow a cached A* route toward a world-space goal with staggered version repaths & tick budget. */
 function moveToward(world: SimWorld, unit: Unit, goal: Vec2, dt: number): void {
   const runtime = world.runtime(unit);
   const ai = runtime.ai;
   const goalTile = worldToTile(goal);
-  const goalKey = `${goalTile.x},${goalTile.y}`;
+  const goalKey = goalTile.y * world.state.map.width + goalTile.x;
   ai.repathTimer -= dt;
 
-  if (
-    ai.path.length === 0 ||
-    ai.pathGoal !== goalKey ||
-    ai.pathVersion !== world.mapVersion ||
-    ai.repathTimer <= 0
-  ) {
-    ai.path = world.pathCache
-      .get(world.state.map, worldToTile(unit.pos), goalTile, world.mapVersion)
-      .slice();
-    ai.pathGoal = goalKey;
-    ai.pathVersion = world.mapVersion;
-    ai.repathTimer = 0.6 + world.rng.next() * 0.4;
+  const versionStale = ai.pathVersion >= 0 && ai.pathVersion !== world.mapVersion;
+  if (versionStale && !ai.versionRepathScheduled) {
+    ai.versionRepathScheduled = true;
+    ai.repathTimer = Math.min(ai.repathTimer, world.rng.next() * 0.5);
+  }
+
+  if (ai.path.length === 0 || ai.pathGoalKey !== goalKey || ai.repathTimer <= 0) {
+    const computed = world.pathCache.getWithinBudget(
+      world.state.map,
+      worldToTile(unit.pos),
+      goalTile,
+      world.mapVersion,
+      MAX_ASTAR_PER_TICK,
+    );
+    if (computed !== null) {
+      ai.path = computed.slice();
+      ai.pathGoalKey = goalKey;
+      ai.pathVersion = world.mapVersion;
+      ai.versionRepathScheduled = false;
+      ai.repathTimer = 0.6 + world.rng.next() * 0.4;
+    }
   }
 
   let waypoint = ai.path[0] ?? goal;
@@ -405,6 +416,7 @@ function advanceMode(
 
 /** Update every bot's intent for one fixed step. Player intent is untouched. */
 export function updateAi(world: SimWorld, dt: number): void {
+  world.pathCache.misses = 0;
   const playerProfile = DIFFICULTY[world.state.matchConfig.difficulty];
   const enemyProfile =
     DIFFICULTY[world.state.matchConfig.enemyDifficulty ?? world.state.matchConfig.difficulty];

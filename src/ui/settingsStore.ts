@@ -1,4 +1,4 @@
-import type { RenderQuality } from '../render';
+import type { RenderQualitySetting } from '../render';
 
 export type CrosshairStyle = 'tactical' | 'dot' | 'chevron' | 'ring';
 export type ScopeMode = 'hold' | 'toggle' | 'off';
@@ -7,7 +7,7 @@ export interface GameSettings {
   masterVolume: number; // 0..100
   sfxVolume: number; // 0..100
   musicVolume: number; // 0..100
-  quality: RenderQuality;
+  quality: RenderQualitySetting;
   screenShake: number; // 0..150
   crosshairStyle: CrosshairStyle;
   scopeMode: ScopeMode;
@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   masterVolume: 80,
   sfxVolume: 85,
   musicVolume: 45,
-  quality: 'high',
+  quality: 'auto',
   screenShake: 100,
   crosshairStyle: 'tactical',
   scopeMode: 'hold',

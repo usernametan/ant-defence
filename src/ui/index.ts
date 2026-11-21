@@ -15,6 +15,7 @@ export { ObjectivesCard } from './hud/ObjectivesCard';
 export type { ObjectivesCardProps } from './hud/ObjectivesCard';
 export { OperatorCard } from './hud/OperatorCard';
 export type { OperatorCardProps } from './hud/OperatorCard';
+export { PerfOverlay } from './hud/PerfOverlay';
 export { WeaponCard } from './hud/WeaponCard';
 export type { WeaponCardProps } from './hud/WeaponCard';
 export { generatePreviewMap } from './previewMap';

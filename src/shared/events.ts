@@ -47,6 +47,7 @@ export interface EventMap {
     angle?: number;
     radius?: number;
   };
+  'sim:tickPerf': { astarCalls: number };
 }
 
 export type EventKey = keyof EventMap;

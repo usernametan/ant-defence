@@ -7,19 +7,11 @@ import {
 import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from '../../render/palette';
 import { WEAPON_DEFS } from '../../shared/api';
 import type { GameMode, MapTheme, MatchConfig, MatchDifficulty, WeaponId } from '../../shared/types';
-import {
-  Badge,
-  Button,
-  Card,
-  Icon,
-  Panel,
-  Slider,
-  StatBar,
-  useMenuNavigation,
-} from '../design';
-import type { IconName } from '../design';
+import { Icon, useMenuNavigation } from '../design';
+import { playUiClick, playUiConfirm, playUiHover } from '../design/uiSound';
 import { generatePreviewMap } from '../previewMap';
-import '../ui.css';
+import { TacticalSketchBackdrop } from './TacticalSketchBackdrop';
+import './landing.css';
 
 export interface MatchSetupProps {
   initialConfig: MatchConfig;
@@ -27,37 +19,13 @@ export interface MatchSetupProps {
   onBack: () => void;
 }
 
-const DIFFICULTIES: Array<{
-  id: MatchDifficulty;
-  label: string;
-  icon: IconName;
-  desc: string;
-  tone: 'success' | 'player' | 'enemy';
-}> = [
-  {
-    id: 'easy',
-    label: 'Recruit',
-    icon: 'shield',
-    desc: 'Relaxed bot reaction and lighter flanking pressure.',
-    tone: 'success',
-  },
-  {
-    id: 'normal',
-    label: 'Operative',
-    icon: 'crosshair',
-    desc: 'Balanced tactical squads contesting every zone.',
-    tone: 'player',
-  },
-  {
-    id: 'hard',
-    label: 'Vanguard',
-    icon: 'skull',
-    desc: 'Sharp accuracy, coordinated pushes, relentless cover fire.',
-    tone: 'enemy',
-  },
+const DIFFICULTIES: ReadonlyArray<{ id: MatchDifficulty; label: string }> = [
+  { id: 'easy', label: 'Easy' },
+  { id: 'normal', label: 'Normal' },
+  { id: 'hard', label: 'Hard' },
 ];
 
-const WEAPON_LIST: WeaponId[] = [
+const WEAPON_LIST: readonly WeaponId[] = [
   'pistol',
   'smg',
   'shotgun',
@@ -66,78 +34,30 @@ const WEAPON_LIST: WeaponId[] = [
   'rocket',
 ];
 
-const MAP_THEMES: Array<{
-  id: MapTheme;
-  label: string;
-  tagline: string;
-  tone: 'player' | 'success' | 'gold';
-}> = [
-  {
-    id: 'fortress',
-    label: 'Sci-Fi Arena',
-    tagline: 'Steel walls, hazard stripes & yellow crates',
-    tone: 'player',
-  },
-  {
-    id: 'jungle',
-    label: 'Jungle Outpost',
-    tagline: 'Mossy stone walls, vines & brown crates',
-    tone: 'success',
-  },
-  {
-    id: 'temple',
-    label: 'Ancient Temple',
-    tagline: 'Glyph sandstone walls & dark-brown crates',
-    tone: 'gold',
-  },
-  {
-    id: 'slumside',
-    label: 'Slumside',
-    tagline: 'Tin roofs, blue tarps, crate alleys & railway flank',
-    tone: 'gold',
-  },
+const MAP_THEMES: ReadonlyArray<{ id: MapTheme; label: string }> = [
+  { id: 'slumside', label: 'Slumside' },
+  { id: 'fortress', label: 'Sci-Fi Arena' },
+  { id: 'jungle', label: 'Jungle Outpost' },
+  { id: 'temple', label: 'Ancient Temple' },
 ];
 
-const MapThemeEmblem: React.FC<{ theme: MapTheme }> = ({ theme }) => {
-  if (theme === 'slumside') {
-    return (
-      <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="2" y="2" width="20" height="20" rx="4" fill="#4D453C" stroke="#F59E0B" strokeWidth="1.4" />
-        <rect x="4" y="4" width="7" height="6" rx="1" fill="#2563EB" />
-        <rect x="12" y="5" width="5" height="5" rx="1" fill="#B8532F" />
-        <rect x="5" y="12" width="9" height="7" rx="1" fill="#9A9286" />
-        <circle cx="9.5" cy="15.5" r="2.2" fill="#1D2228" stroke="#475569" strokeWidth="0.8" />
-        <line x1="19" y1="3" x2="19" y2="21" stroke="#8C959F" strokeWidth="1.5" />
-      </svg>
-    );
-  }
-  if (theme === 'jungle') {
-    return (
-      <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="2" y="2" width="20" height="20" rx="4" fill="#1D2A1E" stroke="#368247" strokeWidth="1.4" />
-        <path d="M4 17 Q11 13 20 18" stroke="#176A7E" strokeWidth="3" fill="none" />
-        <circle cx="9" cy="10" r="4" fill="#255E3D" />
-        <circle cx="15" cy="9" r="3.5" fill="#3D8C52" />
-      </svg>
-    );
-  }
-  if (theme === 'temple') {
-    return (
-      <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="2" y="2" width="20" height="20" rx="4" fill="#4A3C2A" stroke="#DFC79D" strokeWidth="1.4" />
-        <path d="M5 18 L12 6 L19 18 Z" fill="#BCA178" stroke="#14100A" strokeWidth="1" />
-        <rect x="10.5" y="13" width="3" height="5" fill="#1A7B8D" />
-      </svg>
-    );
-  }
-  return (
-    <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="2" y="2" width="20" height="20" rx="4" fill="#141D33" stroke="#22D3EE" strokeWidth="1.4" />
-      <polygon points="12,5 18,8.5 18,15.5 12,19 6,15.5 6,8.5" fill="#2A3347" stroke="#67E8F9" strokeWidth="1.2" />
-      <circle cx="12" cy="12" r="2.2" fill="#22D3EE" />
-    </svg>
-  );
-};
+const ZoneLogoMark: React.FC = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <rect
+      x="2"
+      y="2"
+      width="20"
+      height="20"
+      rx="2"
+      fill="#161C23"
+      stroke="#3B4654"
+      strokeWidth="1.5"
+    />
+    <path d="M7 12 A5 5 0 0 1 12 7" stroke="#5897BA" strokeWidth="2" strokeLinecap="round" />
+    <path d="M17 12 A5 5 0 0 1 12 17" stroke="#C85D4C" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="12" cy="12" r="2.3" fill="#D99A38" />
+  </svg>
+);
 
 export const MatchSetup: React.FC<MatchSetupProps> = ({
   initialConfig,
@@ -147,7 +67,6 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [config, setConfig] = useState<MatchConfig>(initialConfig);
-  const [seedFlash, setSeedFlash] = useState(false);
 
   useMenuNavigation({ containerRef, onEscape: onBack });
 
@@ -156,12 +75,6 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
     () => generatePreviewMap(config.seed, activeTheme),
     [config.seed, activeTheme],
   );
-
-  useEffect(() => {
-    setSeedFlash(true);
-    const id = window.setTimeout(() => setSeedFlash(false), 260);
-    return () => window.clearTimeout(id);
-  }, [config.seed, activeTheme]);
 
   useEffect(() => {
     const canvas = previewCanvasRef.current;
@@ -177,24 +90,6 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
 
     ctx.fillStyle = tp.floorBase;
     ctx.fillRect(0, 0, w, h);
-
-    // Subtle thematic floor accents (drifted sand or mossy patches)
-    for (let r = 0; r < previewMap.height; r += 2) {
-      for (let c = 0; c < previewMap.width; c += 2) {
-        if (previewMap.tiles[r][c] !== 'floor') continue;
-        if ((c * 7 + r * 11 + previewMap.seed) % 13 !== 0) continue;
-        if (previewMap.theme === 'temple') {
-          ctx.fillStyle = 'rgba(212, 185, 134, 0.28)';
-          ctx.fillRect(c * scaleX, r * scaleY, scaleX * 2.2, scaleY * 1.4);
-        } else if (previewMap.theme === 'jungle') {
-          ctx.fillStyle = 'rgba(54, 130, 71, 0.25)';
-          ctx.fillRect(c * scaleX, r * scaleY, scaleX * 1.8, scaleY * 1.5);
-        } else if (previewMap.theme === 'slumside') {
-          ctx.fillStyle = 'rgba(154, 137, 112, 0.26)';
-          ctx.fillRect(c * scaleX, r * scaleY, scaleX * 2, scaleY * 1.4);
-        }
-      }
-    }
 
     if (previewMap.theme === 'slumside') {
       ctx.fillStyle = '#4D453C';
@@ -213,27 +108,14 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
           ctx.fillStyle = tp.waterMid;
           ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         } else if (tile === 'spawnPlayer') {
-          ctx.fillStyle = 'rgba(34, 211, 238, 0.34)';
+          ctx.fillStyle = 'rgba(88, 151, 186, 0.35)';
           ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         } else if (tile === 'spawnEnemy') {
-          ctx.fillStyle = 'rgba(255, 90, 60, 0.34)';
+          ctx.fillStyle = 'rgba(200, 93, 76, 0.35)';
           ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
-        }
-      }
-    }
-
-    // Flat 2D top-down preview pass for 1x1 crates and flat block walls
-    for (let r = 0; r < previewMap.height; r += 1) {
-      for (let c = 0; c < previewMap.width; c += 1) {
-        const tile = previewMap.tiles[r][c];
-        const px = c * scaleX;
-        const py = r * scaleY;
-        if (tile === 'lowCover') {
+        } else if (tile === 'lowCover') {
           ctx.fillStyle = tp.crateBody;
           ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
-          ctx.strokeStyle = PALETTE.bg0;
-          ctx.lineWidth = 0.8;
-          ctx.strokeRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         } else if (tile === 'wall') {
           ctx.fillStyle =
             previewMap.theme === 'slumside'
@@ -247,17 +129,17 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
     for (const z of previewMap.zones) {
       const zx = (z.center.x / previewMap.tileSize) * scaleX;
       const zy = (z.center.y / previewMap.tileSize) * scaleY;
-      ctx.fillStyle = 'rgba(34, 211, 238, 0.16)';
+      ctx.fillStyle = 'rgba(217, 154, 56, 0.2)';
       ctx.beginPath();
       ctx.arc(zx, zy, 13, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = previewMap.theme === 'fortress' ? PALETTE.gold : PALETTE.playerGlow;
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = '#D99A38';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
       const zoneLabel = formatZoneCode(z.id);
       ctx.fillStyle = PALETTE.textHi;
-      ctx.font = '800 10px Bahnschrift, "Segoe UI", system-ui, sans-serif';
+      ctx.font = '700 10px "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(zoneLabel, zx, zy + 0.5);
@@ -300,325 +182,332 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
   };
 
   const selectedWeapon = WEAPON_DEFS[config.startingWeapon];
+  const activeDamageLabel =
+    selectedWeapon.pellets > 1
+      ? `${selectedWeapon.damage}×${selectedWeapon.pellets}`
+      : `${selectedWeapon.damage}`;
+
+  const enemyMin = isRampage ? 3 : 2;
+  const enemyMax = isRampage ? 12 : 10;
+  const enemyPct = Math.max(
+    0,
+    Math.min(100, ((config.enemyCount - enemyMin) / (enemyMax - enemyMin)) * 100),
+  );
+
+  const scoreMin = isRampage ? 5 : isHellcell ? 300 : 200;
+  const scoreMax = isRampage ? 50 : isHellcell ? 1500 : 1000;
+  const scoreStep = isRampage ? 5 : 50;
+  const scorePct = Math.max(
+    0,
+    Math.min(100, ((config.scoreToWin - scoreMin) / (scoreMax - scoreMin)) * 100),
+  );
 
   return (
-    <div
-      ref={containerRef}
-      className="ht-root ht-screen-full ht-screen-enter"
-      style={{ background: 'radial-gradient(circle at 50% 0%, #101A30 0%, #070B14 75%)' }}
-    >
-      <div className="ht-setup-grid">
-        <Panel bracketed style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div className="ht-display" style={{ fontSize: 11, color: 'var(--player)' }}>
-                OPERATION BRIEFING
-              </div>
-              <h2 className="ht-display" style={{ fontSize: 24, marginTop: 2 }}>
-                MATCH SETUP
-              </h2>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onBack}>
-              Back
-            </Button>
-          </div>
-
-          <div className="ht-stagger" style={{ ['--stagger-i' as string]: 1 }}>
-            <div className="ht-display" style={{ fontSize: 12, color: 'var(--text-mid)', marginBottom: 8 }}>
-              Combat Mode
-            </div>
-            <div className="ht-diff-segmented" role="radiogroup" aria-label="Combat Mode" style={{ marginBottom: 14 }}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={activeMode === 'zoneControl'}
-                className={`ht-diff-pill ${activeMode === 'zoneControl' ? 'is-selected' : ''}`}
-                onClick={() => switchMode('zoneControl')}
-              >
-                <Icon name="zone" size={14} color="var(--player)" />
-                <span>Zone Control</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={isHellcell}
-                className={`ht-diff-pill ${isHellcell ? 'is-selected' : ''}`}
-                onClick={() => switchMode('hellcell')}
-              >
-                <Icon name="boss" size={14} color="var(--gold)" />
-                <span>Hellcell (PvPvE)</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={isRampage}
-                className={`ht-diff-pill ${isRampage ? 'is-selected' : ''}`}
-                onClick={() => switchMode('rampage')}
-              >
-                <Icon name="skull" size={14} color="var(--enemy)" />
-                <span>Rampage (FFA)</span>
-              </button>
-            </div>
-            <p style={{ fontSize: 11, color: 'var(--text-mid)', marginBottom: 14 }}>
-              {isRampage
-                ? 'No teams. All bots fight each other — highest kill count wins!'
-                : isHellcell
-                  ? 'Hellcell mode: PvPvE battle where capturing Zones A & C triggers a temporary ceasefire and unleashes a wall-crushing Boss from Zone B. Dealing majority damage scores bonus points and refuels HP/ammo.'
-                  : 'Squad vs squad tactical battle for zones A, B, and C.'}
-            </p>
-
-            <div className="ht-display" style={{ fontSize: 12, color: 'var(--text-mid)', marginBottom: 8 }}>
-              Difficulty Tier
-            </div>
-            <div className="ht-diff-segmented" role="radiogroup" aria-label="Difficulty Tier">
-              {DIFFICULTIES.map((d) => {
-                const isSel = config.difficulty === d.id;
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSel}
-                    className={`ht-diff-pill ${isSel ? 'is-selected' : ''}`}
-                    onClick={() => setConfig((p) => ({ ...p, difficulty: d.id }))}
-                  >
-                    <Icon name={d.icon} size={14} color={`var(--${d.tone})`} />
-                    <span>{d.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: 11, color: 'var(--text-mid)', marginTop: 6 }}>
-              {DIFFICULTIES.find((d) => d.id === config.difficulty)?.desc}
-            </p>
-          </div>
-
-          <div
-            className="ht-stagger"
-            style={{
-              ['--stagger-i' as string]: 2,
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: 16,
+    <div ref={containerRef} className="zc-landing">
+      <TacticalSketchBackdrop />
+      <div className="zc-shell">
+        <header className="zc-nav">
+          <button
+            type="button"
+            className="zc-brand"
+            onMouseEnter={() => playUiHover()}
+            onClick={() => {
+              playUiClick();
+              onBack();
             }}
           >
-            <Slider
-              label={isRampage ? 'Arena Bots' : 'Team Size'}
-              min={isRampage ? 3 : 2}
-              max={isRampage ? 12 : 10}
-              value={config.enemyCount}
-              onChange={(enemyCount) => setConfig((p) => ({ ...p, enemyCount }))}
-            />
-            <Slider
-              label={isRampage ? 'Kills To Win' : 'Score To Win'}
-              min={isRampage ? 5 : isHellcell ? 300 : 200}
-              max={isRampage ? 50 : isHellcell ? 1500 : 1000}
-              step={isRampage ? 5 : 50}
-              value={config.scoreToWin}
-              onChange={(scoreToWin) => setConfig((p) => ({ ...p, scoreToWin }))}
-            />
-          </div>
+            <ZoneLogoMark />
+            <span className="zc-brand-name">Zone Control</span>
+          </button>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--text-mid)' }}>
-            {isRampage ? (
-              <>
-                <Badge tone="enemy">
-                  FREE-FOR-ALL: YOU VS {config.enemyCount} BOTS
-                </Badge>
-                <Badge tone="gold">
-                  NO TEAMS · MAX KILLS WINS · 2 GRENADES (G)
-                </Badge>
-              </>
-            ) : (
-              <>
-                <Badge tone="player">
-                  BLUE SQUAD: YOU + {Math.max(0, config.enemyCount - 1)} ALLIES
-                </Badge>
-                <Badge tone="enemy">
-                  RED SQUAD: {config.enemyCount} BOTS
-                </Badge>
-              </>
-            )}
-          </div>
-
-          <div className="ht-stagger" style={{ ['--stagger-i' as string]: 3 }}>
-            <div className="ht-display" style={{ fontSize: 12, color: 'var(--text-mid)', marginBottom: 8 }}>
-              Starting Weapon
-            </div>
-            <div className="ht-weapon-grid">
-              {WEAPON_LIST.map((wid) => {
-                const def = WEAPON_DEFS[wid];
-                const isSel = config.startingWeapon === wid;
-                return (
-                  <Card
-                    key={wid}
-                    interactive
-                    selected={isSel}
-                    style={{ padding: 10 }}
-                    onClick={() => setConfig((p) => ({ ...p, startingWeapon: wid }))}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Icon name={wid} size={20} color={isSel ? 'var(--player)' : 'var(--text-hi)'} />
-                      <Badge tone={def.rarity}>{def.rarity}</Badge>
-                    </div>
-                    <div className="ht-display" style={{ fontSize: 12, marginTop: 6 }}>
-                      {def.name}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-
-            <Panel tone="subtle" style={{ marginTop: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="ht-display" style={{ fontSize: 12, color: 'var(--player-glow)' }}>
-                  {selectedWeapon.name} Telemetry
-                </span>
-                <Badge tone={selectedWeapon.rarity}>{selectedWeapon.automatic ? 'AUTO' : 'SEMI'}</Badge>
-              </div>
-              <StatBar
-                label="Damage"
-                value={selectedWeapon.damage * selectedWeapon.pellets}
-                max={100}
-              />
-              <StatBar
-                label="Fire Rate"
-                value={selectedWeapon.fireRate}
-                max={12}
-                decimals={1}
-                suffix="/s"
-              />
-              <StatBar
-                label="Range"
-                value={selectedWeapon.range}
-                max={1500}
-                color="var(--gold)"
-              />
-            </Panel>
-          </div>
-        </Panel>
-
-        <Panel
-          bracketed
-          style={{
-            padding: 24,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: 16,
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="ht-display" style={{ fontSize: 14 }}>
-                {MAP_THEME_PALETTES[activeTheme].name}
-              </span>
-              <Badge tone="gold">SEED #{config.seed}</Badge>
-            </div>
-
-            <div>
-              <div className="ht-display" style={{ fontSize: 11, color: 'var(--text-mid)', marginBottom: 6 }}>
-                Battleground Map
-              </div>
-              <div className="ht-diff-grid">
-                {MAP_THEMES.map((m) => {
-                  const isSel = activeTheme === m.id;
-                  return (
-                    <Card
-                      key={m.id}
-                      interactive
-                      selected={isSel}
-                      style={{ padding: 10 }}
-                      onClick={() => setConfig((p) => ({ ...p, mapTheme: m.id }))}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <MapThemeEmblem theme={m.id} />
-                        <span className="ht-display" style={{ fontSize: 11 }}>
-                          {m.label}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: 10, color: 'var(--text-mid)', lineHeight: 1.35 }}>
-                        {m.tagline}
-                      </p>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div
-              style={{
-                position: 'relative',
-                borderRadius: 'var(--radius-md)',
-                overflow: 'hidden',
-                border: '1px solid var(--line)',
-                boxShadow: seedFlash ? 'var(--glow-player)' : 'var(--shadow-sm)',
-                transition: 'box-shadow 220ms var(--ease-standard)',
+          <div className="zc-nav-right">
+            <button
+              type="button"
+              className="zc-nav-link"
+              onMouseEnter={() => playUiHover()}
+              onClick={() => {
+                playUiClick();
+                onBack();
               }}
             >
-              <canvas
-                ref={previewCanvasRef}
-                width={420}
-                height={280}
-                style={{
-                  width: '100%',
-                  height: 'auto',
-                  display: 'block',
-                  transform: seedFlash ? 'scale(1.02)' : 'scale(1)',
-                  transition: 'transform 220ms var(--ease-snappy)',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-mid)', textTransform: 'uppercase' }}>
-                  Map Seed
-                </span>
-                <input
-                  type="number"
-                  className="ht-select ht-num"
-                  value={config.seed}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      seed: Math.max(1, Number(e.target.value) || 1),
-                    }))
-                  }
-                />
-              </label>
-              <Button
-                variant="secondary"
-                style={{ marginTop: 18 }}
-                onClick={randomizeSeed}
-                aria-label="Randomize Seed"
-              >
-                <Icon name="dice" size={16} /> Randomize
-              </Button>
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 11, color: 'var(--text-mid)' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                <Badge tone="player">BLUE</Badge> Friendly Base
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                <Badge tone="enemy">ORANGE</Badge> Hostile Base
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                <Badge tone="gold">A B C</Badge> Capture Zones
-              </span>
-            </div>
+              Back to Home
+            </button>
           </div>
+        </header>
 
-          <Button
-            variant="primary"
-            size="lg"
-            style={{ width: '100%' }}
-            onClick={() => onDeploy(config)}
-          >
-            <Icon name="play" size={18} /> DEPLOY TO ARENA
-          </Button>
-        </Panel>
+        <main className="zc-main">
+          <section className="zc-hero zc-enter" aria-label="Match Setup">
+            {/* Left Column: Simple Flat Controls matching MainMenu */}
+            <div className="zc-hero-copy">
+              <h1 className="zc-title">MATCH SETUP</h1>
+              <p className="zc-subtitle">
+                Pick a game mode, adjust match rules, and choose your starting weapon.
+              </p>
+
+              <div className="zc-setup-block">
+                <div className="zc-setup-row">
+                  <div className="zc-setup-label-row">
+                    <span>Game Mode</span>
+                  </div>
+                  <div className="zc-weapon-tabs" role="radiogroup" aria-label="Combat Mode">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={activeMode === 'zoneControl'}
+                      className={`zc-weapon-tab ${activeMode === 'zoneControl' ? 'is-active' : ''}`}
+                      onMouseEnter={() => playUiHover()}
+                      onClick={() => {
+                        playUiClick();
+                        switchMode('zoneControl');
+                      }}
+                    >
+                      Zone Control
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isHellcell}
+                      className={`zc-weapon-tab ${isHellcell ? 'is-active' : ''}`}
+                      onMouseEnter={() => playUiHover()}
+                      onClick={() => {
+                        playUiClick();
+                        switchMode('hellcell');
+                      }}
+                    >
+                      Hellcell
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isRampage}
+                      className={`zc-weapon-tab ${isRampage ? 'is-active' : ''}`}
+                      onMouseEnter={() => playUiHover()}
+                      onClick={() => {
+                        playUiClick();
+                        switchMode('rampage');
+                      }}
+                    >
+                      Rampage
+                    </button>
+                  </div>
+                  <p className="zc-setup-hint">
+                    {isRampage
+                      ? 'Free-for-all — every player for themselves. Most kills wins.'
+                      : isHellcell
+                        ? 'Capture any 2 zones to summon a boss monster at the 3rd zone.'
+                        : 'Capture and hold zones A, B, and C to reach the target score.'}
+                  </p>
+                </div>
+
+                <div className="zc-setup-row">
+                  <div className="zc-setup-label-row">
+                    <span>Difficulty</span>
+                  </div>
+                  <div className="zc-weapon-tabs" role="radiogroup" aria-label="Difficulty Tier">
+                    {DIFFICULTIES.map((d) => {
+                      const isSel = config.difficulty === d.id;
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSel}
+                          className={`zc-weapon-tab ${isSel ? 'is-active' : ''}`}
+                          onMouseEnter={() => playUiHover()}
+                          onClick={() => {
+                            playUiClick();
+                            setConfig((p) => ({ ...p, difficulty: d.id }));
+                          }}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="zc-slider-grid">
+                  <label className="zc-slider-field">
+                    <span className="zc-setup-label-row">
+                      <span>{isRampage ? 'Bots' : 'Team Size'}</span>
+                      <strong>
+                        {isRampage ? config.enemyCount : `${config.enemyCount}v${config.enemyCount}`}
+                      </strong>
+                    </span>
+                    <input
+                      type="range"
+                      className="zc-slider-input"
+                      min={enemyMin}
+                      max={enemyMax}
+                      value={config.enemyCount}
+                      style={{
+                        background: `linear-gradient(to right, var(--zc-accent) ${enemyPct}%, var(--zc-border) ${enemyPct}%)`,
+                      }}
+                      onChange={(e) =>
+                        setConfig((p) => ({ ...p, enemyCount: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
+
+                  <label className="zc-slider-field">
+                    <span className="zc-setup-label-row">
+                      <span>{isRampage ? 'Target Kills' : 'Target Score'}</span>
+                      <strong>{config.scoreToWin}</strong>
+                    </span>
+                    <input
+                      type="range"
+                      className="zc-slider-input"
+                      min={scoreMin}
+                      max={scoreMax}
+                      step={scoreStep}
+                      value={config.scoreToWin}
+                      style={{
+                        background: `linear-gradient(to right, var(--zc-accent) ${scorePct}%, var(--zc-border) ${scorePct}%)`,
+                      }}
+                      onChange={(e) =>
+                        setConfig((p) => ({ ...p, scoreToWin: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="zc-loadout-strip" aria-label="Starting weapon">
+                <div className="zc-loadout-meta">
+                  <span>
+                    Starting Weapon: <strong>{selectedWeapon.name}</strong>
+                  </span>
+                  <span>
+                    {`DMG ${activeDamageLabel} · ${selectedWeapon.fireRate.toFixed(1)}/s · MAG ${selectedWeapon.magSize}`}
+                  </span>
+                </div>
+                <div className="zc-weapon-tabs" role="group" aria-label="Starting Weapon">
+                  {WEAPON_LIST.map((wid) => {
+                    const def = WEAPON_DEFS[wid];
+                    const isSel = config.startingWeapon === wid;
+                    return (
+                      <button
+                        key={wid}
+                        type="button"
+                        aria-pressed={isSel}
+                        className={`zc-weapon-tab ${isSel ? 'is-active' : ''}`}
+                        onMouseEnter={() => playUiHover()}
+                        onClick={() => {
+                          playUiClick();
+                          setConfig((p) => ({ ...p, startingWeapon: wid }));
+                        }}
+                      >
+                        <Icon name={wid} size={14} />
+                        <span>{def.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="zc-actions">
+                <button
+                  type="button"
+                  className="zc-play-btn"
+                  onMouseEnter={() => playUiHover()}
+                  onClick={() => {
+                    playUiConfirm();
+                    onDeploy(config);
+                  }}
+                >
+                  <Icon name="play" size={15} />
+                  <span>START MATCH</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="zc-secondary-btn"
+                  onMouseEnter={() => playUiHover()}
+                  onClick={() => {
+                    playUiClick();
+                    onBack();
+                  }}
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column: Clean Map Preview Frame matching BattlefieldPreview */}
+            <div className="zc-hero-media">
+              <figure className="zc-preview-frame">
+                <div className="zc-preview-viewport">
+                  <canvas
+                    ref={previewCanvasRef}
+                    width={480}
+                    height={300}
+                    className="zc-preview-canvas"
+                    aria-label={`Map preview: ${MAP_THEME_PALETTES[activeTheme].name}`}
+                  />
+                </div>
+
+                <figcaption className="zc-preview-bar">
+                  <div className="zc-theme-switcher" role="group" aria-label="Battleground Map">
+                    {MAP_THEMES.map((m) => {
+                      const active = activeTheme === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          aria-pressed={active}
+                          className={`zc-feed-tab ${active ? 'is-active' : ''}`}
+                          onMouseEnter={() => playUiHover()}
+                          onClick={() => {
+                            playUiClick();
+                            setConfig((p) => ({ ...p, mapTheme: m.id }));
+                          }}
+                        >
+                          <span
+                            className="zc-arena-dot"
+                            style={{ backgroundColor: MAP_THEME_PALETTES[m.id].accent }}
+                            aria-hidden="true"
+                          />
+                          <span>{m.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="zc-seed-inline">
+                    <label className="zc-seed-label-inline" htmlFor="zc-seed-input">
+                      Seed
+                    </label>
+                    <input
+                      id="zc-seed-input"
+                      type="number"
+                      className="zc-seed-input-inline"
+                      value={config.seed}
+                      onChange={(e) =>
+                        setConfig((p) => ({
+                          ...p,
+                          seed: Math.max(1, Number(e.target.value) || 1),
+                        }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="zc-feed-tab"
+                      onMouseEnter={() => playUiHover()}
+                      onClick={() => {
+                        playUiClick();
+                        randomizeSeed();
+                      }}
+                      aria-label="Randomize Seed"
+                    >
+                      <Icon name="dice" size={13} />
+                      <span>Random</span>
+                    </button>
+                  </div>
+                </figcaption>
+              </figure>
+            </div>
+          </section>
+        </main>
       </div>
     </div>
   );

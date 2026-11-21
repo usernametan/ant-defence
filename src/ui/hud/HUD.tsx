@@ -23,7 +23,11 @@ import '../ui.css';
 export interface HUDProps {
   state: Readonly<GameState>;
   viewTransform?: ViewTransform | null;
+  viewTransformRef?: React.RefObject<ViewTransform | null>;
   aimScreenPos?: { x: number; y: number } | null;
+  subscribeAimPos?: (
+    listener: (pos: { x: number; y: number } | null) => void,
+  ) => () => void;
   crosshairStyle?: CrosshairStyle;
   colorblindAssist?: boolean;
   showHints?: boolean;
@@ -71,10 +75,12 @@ function formatZoneLabel(zoneId: string): string {
   return formatZoneCode(zoneId);
 }
 
-export const HUD: React.FC<HUDProps> = ({
+export const HUD = React.memo<HUDProps>(({
   state,
   viewTransform = null,
+  viewTransformRef,
   aimScreenPos = null,
+  subscribeAimPos,
   crosshairStyle = 'tactical',
   colorblindAssist = false,
   showHints = true,
@@ -142,13 +148,19 @@ export const HUD: React.FC<HUDProps> = ({
   useEffect(() => {
     const id = window.setInterval(() => {
       const now = performance.now();
-      setShotKick((k) => Math.max(0, k - 2.2));
+      setShotKick((k) => (k === 0 ? k : Math.max(0, k - 2.2)));
       setDamageIndicators((list) =>
-        list
-          .map((d) => ({ ...d, ttl: d.ttl - 0.08 }))
-          .filter((d) => d.ttl > 0),
+        list.length === 0
+          ? list
+          : list
+              .map((d) => ({ ...d, ttl: d.ttl - 0.08 }))
+              .filter((d) => d.ttl > 0),
       );
-      setZonePings((list) => list.filter((p) => p.until > now));
+      setZonePings((list) => {
+        if (list.length === 0) return list;
+        const next = list.filter((p) => p.until > now);
+        return next.length === list.length ? list : next;
+      });
     }, 60);
     return () => window.clearInterval(id);
   }, []);
@@ -330,6 +342,7 @@ export const HUD: React.FC<HUDProps> = ({
       {!player?.dead && (
         <CrosshairOverlay
           screenPos={aimScreenPos}
+          subscribeScreenPos={subscribeAimPos}
           style={crosshairStyle}
           gap={crosshairGap}
           hitFlash={hitFlash}
@@ -794,7 +807,7 @@ export const HUD: React.FC<HUDProps> = ({
         <PickupPrompt
           pickup={nearbyPickup}
           currentWeapon={player.weaponId}
-          viewTransform={viewTransform}
+          viewTransform={viewTransformRef?.current ?? viewTransform}
         />
       )}
 
@@ -865,7 +878,7 @@ export const HUD: React.FC<HUDProps> = ({
       )}
     </div>
   );
-};
+});
 
 interface PickupPromptProps {
   pickup: Pickup;

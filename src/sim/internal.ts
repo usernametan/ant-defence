@@ -14,8 +14,9 @@ export interface AiRuntime {
   mode: AiMode;
   targetId: string | null;
   path: Vec2[];
-  pathGoal: string;
+  pathGoalKey: number;
   pathVersion: number;
+  versionRepathScheduled: boolean;
   repathTimer: number;
   reactionTimer: number;
   strafeSign: number;
@@ -74,8 +75,9 @@ export function createUnitRuntime(): UnitRuntime {
       mode: 'capture',
       targetId: null,
       path: [],
-      pathGoal: '',
+      pathGoalKey: -1,
       pathVersion: -1,
+      versionRepathScheduled: false,
       repathTimer: 0,
       reactionTimer: 0,
       strafeSign: 1,

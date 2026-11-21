@@ -245,7 +245,7 @@ function bakeBrokenPillarCanvas(
   ry: number,
   ts: number,
 ): void {
-  const groundTopY = ry + ruin.elevation;
+  const groundTopY = ry;
   const plinthH = 8;
 
   // 1. Stepped square stone plinth base resting on tile footprint
@@ -267,8 +267,8 @@ function bakeBrokenPillarCanvas(
   // 2. Tall cylindrical fluted column shaft rising into roof plane
   const colW = ts - 10;
   const colX = rx + 5;
-  const shaftBotY = groundTopY + ts * 0.52;
-  const shaftTopY = ry + 6;
+  const shaftBotY = groundTopY + ts * 0.72;
+  const shaftTopY = ry + 4;
 
   const cylGrad = ctx.createLinearGradient(colX, 0, colX + colW, 0);
   cylGrad.addColorStop(0, '#8C8B74');
@@ -487,21 +487,23 @@ export function bakeRuinCanvas(
 ): void {
   if (typeof document === 'undefined') return;
   const padX = 12;
-  const padTop = ruin.elevation + 16;
+  const padTop = 16;
   const padBottom = 6;
   const bw = ruin.w * tileSize;
-  const bh = ruin.h * tileSize;
+  const fullBh = ruin.h * tileSize;
+  const facadeH = Math.min(ruin.elevation, Math.max(10, Math.floor(fullBh * 0.32)));
+  const bh = fullBh - facadeH;
 
   const canvas = ruin.canvas ?? document.createElement('canvas');
   canvas.width = bw + padX * 2;
-  canvas.height = bh + padTop + padBottom;
+  canvas.height = fullBh + padTop + padBottom;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const rx = padX;
-  const ry = padTop - ruin.elevation;
+  const ry = padTop;
 
   if (ruin.kind === 'pillar') {
     bakeBrokenPillarCanvas(ctx, ruin, textures, rx, ry, tileSize);
@@ -512,7 +514,7 @@ export function bakeRuinCanvas(
   }
 
   // 1. South-facing 2.5D monumental temple facade
-  drawRuinFacade(ctx, ruin, textures, rx, ry + bh, bw, ruin.elevation);
+  drawRuinFacade(ctx, ruin, textures, rx, ry + bh, bw, facadeH);
 
   // 2. Monumental ancient masonry parapet top
   ctx.save();

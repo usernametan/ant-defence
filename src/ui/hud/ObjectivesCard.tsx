@@ -6,7 +6,7 @@ export interface ObjectivesCardProps {
   state: Readonly<GameState>;
 }
 
-export const ObjectivesCard: React.FC<ObjectivesCardProps> = ({ state }) => {
+export const ObjectivesCard = React.memo<ObjectivesCardProps>(({ state }) => {
   const theme = getThemePalette(state.map.theme);
   const isRampage = state.matchConfig.mode === 'rampage';
 
@@ -154,4 +154,4 @@ export const ObjectivesCard: React.FC<ObjectivesCardProps> = ({ state }) => {
       </div>
     </div>
   );
-};
+});

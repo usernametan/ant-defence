@@ -9,6 +9,7 @@ import {
   bakeFortressGroundLayer,
   drawFortressAnimatedWater,
   drawFortressAtmosphere,
+  drawFortressShadowsForRect,
 } from './lighting';
 import {
   drawSciFiAtlasCell,
@@ -16,6 +17,8 @@ import {
   drawSciFiPropShadow,
   drawSciFiYellowTechCrate,
 } from './props';
+import { ChunkedGroundCache } from '../groundCache';
+import { perfMonitor } from '../perf';
 import { FortressTextureAtlas } from './textures';
 
 export { decomposeFortressStructures } from './architecture';
@@ -23,34 +26,90 @@ export type { FortressStructure } from './architecture';
 
 export class FortressRenderer {
   private readonly textures = new FortressTextureAtlas();
+  private readonly chunkCache = new ChunkedGroundCache<FortressStructure>();
   private structures: FortressStructure[] = [];
   private byBottomRow = new Map<number, FortressStructure[]>();
   private groundCacheCanvas: HTMLCanvasElement | null = null;
-  private cacheKey = '';
 
-  private ensureCache(map: MapData): void {
+  markDirtyTile(tileKeyStr: string, mapWidth: number): void {
+    this.chunkCache.markDirtyTileKey(tileKeyStr, mapWidth);
+  }
+
+  getCacheStats() {
+    return {
+      fullRebuilds: this.chunkCache.fullRebuilds,
+      chunkRebuilds: this.chunkCache.chunkRebuilds,
+      structuresBaked: this.chunkCache.structuresBaked,
+      structuresReused: this.chunkCache.structuresReused,
+      pendingChunks: this.chunkCache.pendingChunkCount(),
+    };
+  }
+
+  ensureCache(map: MapData): void {
     this.textures.ensureLoading();
-    const key = `${map.seed}:${map.width}x${map.height}:${map.tileSize}:w${map.wallRevision ?? 0}:t${this.textures.getRevision()}`;
-    if (this.cacheKey === key && this.groundCacheCanvas) return;
-
     const ts = map.tileSize;
-    this.structures = decomposeFortressStructures(map);
-    this.byBottomRow.clear();
-
-    for (const s of this.structures) {
-      bakeFortressStructureCanvas(s, this.textures, ts);
-      const list = this.byBottomRow.get(s.bottomRow);
-      if (list) list.push(s);
-      else this.byBottomRow.set(s.bottomRow, [s]);
-    }
-
-    this.groundCacheCanvas = bakeFortressGroundLayer(
+    this.chunkCache.sync(
       map,
-      this.structures,
-      this.textures,
-      this.groundCacheCanvas,
+      this.textures.getRevision(),
+      () => {
+        const rebuildStart = perfMonitor.enabled ? performance.now() : 0;
+        const next = decomposeFortressStructures(map);
+        this.byBottomRow.clear();
+        for (const s of next) {
+          bakeFortressStructureCanvas(s, this.textures, ts);
+          const list = this.byBottomRow.get(s.bottomRow);
+          if (list) list.push(s);
+          else this.byBottomRow.set(s.bottomRow, [s]);
+        }
+        this.structures = next;
+
+        const baseFloor = bakeFortressGroundLayer(
+          map,
+          this.structures,
+          this.textures,
+          this.chunkCache.baseFloorCanvas,
+          true,
+        );
+        const ground = this.groundCacheCanvas ?? (typeof document !== 'undefined' ? document.createElement('canvas') : null);
+        if (ground && baseFloor) {
+          ground.width = baseFloor.width;
+          ground.height = baseFloor.height;
+          const gctx = ground.getContext('2d');
+          if (gctx) {
+            gctx.clearRect(0, 0, ground.width, ground.height);
+            gctx.drawImage(baseFloor, 0, 0);
+            drawFortressShadowsForRect(gctx, map, this.structures);
+          }
+        }
+        this.groundCacheCanvas = ground;
+        if (perfMonitor.enabled) {
+          perfMonitor.recordSubsystem('ensureCache', performance.now() - rebuildStart, 'fortress');
+        }
+        return { baseFloor, ground };
+      },
+      () => {
+        const next = decomposeFortressStructures(map);
+        this.chunkCache.reconcileStructures(
+          this.structures,
+          next,
+          (s) => bakeFortressStructureCanvas(s, this.textures, ts),
+          this.byBottomRow,
+        );
+        this.structures = next;
+      },
+      (rect, groundCanvas, baseFloorCanvas, shadowScratch) => {
+        if (!groundCanvas || !baseFloorCanvas) return;
+        const gctx = groundCanvas.getContext('2d');
+        if (!gctx) return;
+        gctx.save();
+        gctx.beginPath();
+        gctx.rect(rect.x, rect.y, rect.w, rect.h);
+        gctx.clip();
+        gctx.drawImage(baseFloorCanvas, rect.x, rect.y, rect.w, rect.h, rect.x, rect.y, rect.w, rect.h);
+        drawFortressShadowsForRect(gctx, map, this.structures, rect, shadowScratch);
+        gctx.restore();
+      },
     );
-    this.cacheKey = key;
   }
 
   drawGround(

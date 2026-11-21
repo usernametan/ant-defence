@@ -577,24 +577,26 @@ export function bakeBuildingCanvas(
 ): void {
   if (typeof document === 'undefined') return;
   const padX = 10;
-  const padTop = b.elevation + 14;
+  const padTop = 14;
   const padBottom = 4;
   const bw = b.w * tileSize;
-  const bh = b.h * tileSize;
+  const fullBh = b.h * tileSize;
+  const facadeH = Math.min(b.elevation, Math.max(10, Math.floor(fullBh * 0.32)));
+  const bh = fullBh - facadeH;
 
   const canvas = b.canvas ?? document.createElement('canvas');
   canvas.width = bw + padX * 2;
-  canvas.height = bh + padTop + padBottom;
+  canvas.height = fullBh + padTop + padBottom;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const rx = padX;
-  const ry = padTop - b.elevation; // Roof top shifted upward by elevation
+  const ry = padTop;
 
   // 1. Draw south-facing 2.5D facade wall below roof edge down to ground footprint
-  drawBuildingFacade(ctx, b, rx, ry + bh, bw, b.elevation);
+  drawBuildingFacade(ctx, b, rx, ry + bh, bw, facadeH);
 
   // 2. Draw textured rooftop
   ctx.save();

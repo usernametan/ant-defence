@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { CrosshairStyle } from '../settingsStore';
 
 export interface DamageIndicator {
@@ -128,7 +128,10 @@ export const CrosshairGlyph: React.FC<CrosshairGlyphProps> = ({
 };
 
 export interface CrosshairOverlayProps {
-  screenPos: { x: number; y: number } | null;
+  screenPos?: { x: number; y: number } | null;
+  subscribeScreenPos?: (
+    listener: (pos: { x: number; y: number } | null) => void,
+  ) => () => void;
   style: CrosshairStyle;
   gap: number;
   hitFlash: 'hit' | 'kill' | null;
@@ -138,8 +141,9 @@ export interface CrosshairOverlayProps {
   scoped?: boolean;
 }
 
-export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
-  screenPos,
+export const CrosshairOverlay = React.memo<CrosshairOverlayProps>(({
+  screenPos = null,
+  subscribeScreenPos,
   style,
   gap,
   hitFlash,
@@ -148,11 +152,26 @@ export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
   isLowAmmo = false,
   scoped = false,
 }) => {
-  const x = screenPos?.x ?? (typeof window !== 'undefined' ? window.innerWidth * 0.5 : 640);
-  const y = screenPos?.y ?? (typeof window !== 'undefined' ? window.innerHeight * 0.5 : 360);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const lastPosRef = useRef<{ x: number; y: number } | null>(screenPos);
+  if (screenPos) lastPosRef.current = screenPos;
+  const activePos = screenPos ?? lastPosRef.current;
+  const x = activePos?.x ?? (typeof window !== 'undefined' ? window.innerWidth * 0.5 : 640);
+  const y = activePos?.y ?? (typeof window !== 'undefined' ? window.innerHeight * 0.5 : 360);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !subscribeScreenPos) return;
+    return subscribeScreenPos((pos) => {
+      if (!pos) return;
+      lastPosRef.current = pos;
+      el.style.transform = `translate3d(${pos.x - 34}px, ${pos.y - 34}px, 0)`;
+    });
+  }, [subscribeScreenPos]);
 
   return (
     <div
+      ref={containerRef}
       style={{
         position: 'fixed',
         left: 0,
@@ -199,4 +218,4 @@ export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
       ))}
     </div>
   );
-};
+});

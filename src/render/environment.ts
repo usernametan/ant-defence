@@ -66,6 +66,21 @@ export class EnvironmentRenderer {
   private slumside = new SlumsideRenderer();
   private temple = new TempleRenderer();
 
+  markDirtyTile(tileKeyStr: string, map: MapData): void {
+    const theme = map.theme ?? 'fortress';
+    if (theme === 'fortress') this.fortress.markDirtyTile(tileKeyStr, map.width);
+    else if (theme === 'jungle') this.jungle.markDirtyTile(tileKeyStr, map.width);
+    else if (theme === 'slumside') this.slumside.markDirtyTile(tileKeyStr, map.width);
+    else if (theme === 'temple') this.temple.markDirtyTile(tileKeyStr, map.width);
+  }
+
+  getThemeCacheStats(theme: MapTheme) {
+    if (theme === 'fortress') return this.fortress.getCacheStats();
+    if (theme === 'jungle') return this.jungle.getCacheStats();
+    if (theme === 'slumside') return this.slumside.getCacheStats();
+    return this.temple.getCacheStats();
+  }
+
   private ensureFloorPattern(
     ctx: CanvasRenderingContext2D,
     theme: MapTheme,

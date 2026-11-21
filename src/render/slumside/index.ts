@@ -6,9 +6,11 @@ import {
   type SlumBuilding,
 } from './architecture';
 import {
+  bakeSlumsideBaseFloorLayer,
   bakeSlumsideGroundLayer,
   drawSlumAnimatedWater,
   drawSlumsideAtmosphere,
+  drawSlumsideShadowsForRect,
 } from './lighting';
 import {
   drawSlumAutoRickshaw,
@@ -19,6 +21,8 @@ import {
   drawSlumPalmTree,
   drawSlumPropShadow,
 } from './props';
+import { ChunkedGroundCache } from '../groundCache';
+import { perfMonitor } from '../perf';
 import { SlumsideTextureAtlas } from './textures';
 
 export { decomposeSlumBuildings } from './architecture';
@@ -33,37 +37,78 @@ interface UtilityPole {
 
 export class SlumsideRenderer {
   private readonly textures = new SlumsideTextureAtlas();
+  private readonly chunkCache = new ChunkedGroundCache<SlumBuilding>();
   private buildings: SlumBuilding[] = [];
   private buildingsByBottomRow = new Map<number, SlumBuilding[]>();
   private poles: UtilityPole[] = [];
   private poleLinks: Array<[UtilityPole, UtilityPole]> = [];
   private groundCacheCanvas: HTMLCanvasElement | null = null;
-  private cacheKey = '';
 
-  private ensureCache(map: MapData): void {
+  markDirtyTile(tileKeyStr: string, mapWidth: number): void {
+    this.chunkCache.markDirtyTileKey(tileKeyStr, mapWidth);
+  }
+
+  getCacheStats() {
+    return {
+      fullRebuilds: this.chunkCache.fullRebuilds,
+      chunkRebuilds: this.chunkCache.chunkRebuilds,
+      structuresBaked: this.chunkCache.structuresBaked,
+      structuresReused: this.chunkCache.structuresReused,
+      pendingChunks: this.chunkCache.pendingChunkCount(),
+    };
+  }
+
+  ensureCache(map: MapData): void {
     this.textures.ensureLoading();
-    const key = `${map.seed}:${map.width}x${map.height}:${map.tileSize}:w${map.wallRevision ?? 0}:t${this.textures.getRevision()}`;
-    if (this.cacheKey === key && this.groundCacheCanvas) return;
-
     const ts = map.tileSize;
-    this.buildings = decomposeSlumBuildings(map);
-    this.buildingsByBottomRow.clear();
-
-    for (const b of this.buildings) {
-      bakeBuildingCanvas(b, this.textures, ts);
-      const list = this.buildingsByBottomRow.get(b.bottomRow);
-      if (list) list.push(b);
-      else this.buildingsByBottomRow.set(b.bottomRow, [b]);
-    }
-
-    this.buildUtilityNetwork(map);
-    this.groundCacheCanvas = bakeSlumsideGroundLayer(
+    this.chunkCache.sync(
       map,
-      this.buildings,
-      this.textures,
-      this.groundCacheCanvas,
+      this.textures.getRevision(),
+      () => {
+        const rebuildStart = perfMonitor.enabled ? performance.now() : 0;
+        const next = decomposeSlumBuildings(map);
+        this.buildingsByBottomRow.clear();
+        for (const b of next) {
+          bakeBuildingCanvas(b, this.textures, ts);
+          const list = this.buildingsByBottomRow.get(b.bottomRow);
+          if (list) list.push(b);
+          else this.buildingsByBottomRow.set(b.bottomRow, [b]);
+        }
+        this.buildings = next;
+        this.buildUtilityNetwork(map);
+
+        const baseFloor = bakeSlumsideBaseFloorLayer(map, this.textures, this.chunkCache.baseFloorCanvas);
+        const ground = bakeSlumsideGroundLayer(map, this.buildings, this.textures, this.groundCacheCanvas, baseFloor);
+        this.groundCacheCanvas = ground;
+        if (perfMonitor.enabled) {
+          perfMonitor.recordSubsystem('ensureCache', performance.now() - rebuildStart, 'slumside');
+        }
+        return { baseFloor, ground };
+      },
+      () => {
+        const next = decomposeSlumBuildings(map);
+        this.chunkCache.reconcileStructures(
+          this.buildings,
+          next,
+          (b) => bakeBuildingCanvas(b, this.textures, ts),
+          this.buildingsByBottomRow,
+        );
+        this.buildings = next;
+        this.buildUtilityNetwork(map);
+      },
+      (rect, groundCanvas, baseFloorCanvas, shadowScratch) => {
+        if (!groundCanvas || !baseFloorCanvas) return;
+        const gctx = groundCanvas.getContext('2d');
+        if (!gctx) return;
+        gctx.save();
+        gctx.beginPath();
+        gctx.rect(rect.x, rect.y, rect.w, rect.h);
+        gctx.clip();
+        gctx.drawImage(baseFloorCanvas, rect.x, rect.y, rect.w, rect.h, rect.x, rect.y, rect.w, rect.h);
+        drawSlumsideShadowsForRect(gctx, map, this.buildings, rect, shadowScratch);
+        gctx.restore();
+      },
     );
-    this.cacheKey = key;
   }
 
   private buildUtilityNetwork(map: MapData): void {

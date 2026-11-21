@@ -3,6 +3,7 @@ import { AudioEngine } from '../audio';
 import { Renderer } from '../render';
 import type { ViewTransform as RenderViewTransform } from '../render';
 import { bus } from '../shared/events';
+import { perfMonitor } from '../render/perf';
 import type { MatchConfig, Team } from '../shared/types';
 import { createSim } from '../sim';
 import {
@@ -13,6 +14,7 @@ import {
   MainMenu,
   MatchSetup,
   PauseMenu,
+  PerfOverlay,
   SettingsModal,
   applySettingsToDom,
   loadSettings,
@@ -52,6 +54,9 @@ function GameRoot() {
   const audioRef = useRef<AudioEngine | null>(null);
   const viewRef = useRef<RenderViewTransform | null>(null);
   const aimScreenRef = useRef<{ x: number; y: number } | null>(null);
+  const aimListenersRef = useRef(
+    new Set<(pos: { x: number; y: number } | null) => void>(),
+  );
   const scopedRef = useRef(false);
 
   const [screen, setScreen] = useState<Screen>('menu');
@@ -59,9 +64,7 @@ function GameRoot() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [matchConfig, setMatchConfig] = useState<MatchConfig>(INITIAL_CONFIG);
-  const [aimScreenPos, setAimScreenPos] = useState<{ x: number; y: number } | null>(null);
   const [isScoped, setIsScoped] = useState(false);
-  const [viewTransform, setViewTransform] = useState<RenderViewTransform | null>(null);
   const [endStats, setEndStats] = useState<MatchStats | null>(null);
   const [endScore, setEndScore] = useState<{ player: number; enemy: number }>({
     player: 0,
@@ -125,8 +128,8 @@ function GameRoot() {
 
     let rafId = 0;
     let prev = 0;
-    let lastViewPublish = 0;
     const frame = (now: number): void => {
+      const frameMs = prev === 0 ? 16.67 : Math.max(0, now - prev);
       const dt = prev === 0 ? 1 / 60 : Math.min(0.05, Math.max(0.001, (now - prev) / 1000));
       prev = now;
       if (aimScreenRef.current && viewRef.current) {
@@ -145,7 +148,12 @@ function GameRoot() {
         scopedRef.current = scoping;
         setIsScoped(scoping);
       }
-      renderer.draw(live);
+      const drawStart = perfMonitor.enabled ? performance.now() : 0;
+      renderer.draw(live, controller.getAlpha(), dt);
+      if (perfMonitor.enabled) {
+        const drawMs = performance.now() - drawStart;
+        perfMonitor.recordFrame(frameMs, drawMs, controller.getLastSimSteps(), now);
+      }
 
       if (player) {
         audio.setListenerPos(player.pos);
@@ -156,10 +164,6 @@ function GameRoot() {
           scoreToWin: live.matchConfig.scoreToWin,
           boss: live.hellcell?.boss ?? null,
         });
-      }
-      if (viewRef.current && now - lastViewPublish >= 50) {
-        lastViewPublish = now;
-        setViewTransform(viewRef.current);
       }
       rafId = requestAnimationFrame(frame);
     };
@@ -256,7 +260,9 @@ function GameRoot() {
       controller.getSim().pause();
       aimScreenRef.current = null;
       scopedRef.current = false;
-      setAimScreenPos(null);
+      for (const listener of aimListenersRef.current) {
+        listener(null);
+      }
       setIsScoped(false);
       setEndStats(null);
       setScreen('countdown');
@@ -298,10 +304,23 @@ function GameRoot() {
     return () => window.removeEventListener('keydown', onKey);
   }, [screen, settingsOpen, howToOpen, togglePause, playAgain]);
 
+  const subscribeAimPos = useCallback(
+    (listener: (pos: { x: number; y: number } | null) => void) => {
+      aimListenersRef.current.add(listener);
+      if (aimScreenRef.current) listener(aimScreenRef.current);
+      return () => {
+        aimListenersRef.current.delete(listener);
+      };
+    },
+    [],
+  );
+
   const onMouseMove = (event: ReactMouseEvent<HTMLDivElement>): void => {
     const pos = { x: event.clientX, y: event.clientY };
     aimScreenRef.current = pos;
-    setAimScreenPos(pos);
+    for (const listener of aimListenersRef.current) {
+      listener(pos);
+    }
     const vt = viewRef.current;
     if (vt) rendererRef.current?.setAimTarget(vt.screenToWorld(event.clientX, event.clientY));
   };
@@ -327,8 +346,8 @@ function GameRoot() {
       {inMatch && (
         <HUD
           state={state}
-          viewTransform={viewTransform}
-          aimScreenPos={aimScreenPos}
+          viewTransformRef={viewRef}
+          subscribeAimPos={subscribeAimPos}
           crosshairStyle={settings.crosshairStyle}
           colorblindAssist={settings.colorblindAssist}
           showHints={settings.showHints}
@@ -406,6 +425,7 @@ function GameRoot() {
         onClose={() => setSettingsOpen(false)}
       />
       <HowToPlayModal open={howToOpen} onClose={() => setHowToOpen(false)} />
+      <PerfOverlay />
     </div>
   );
 }

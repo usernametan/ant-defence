@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getThemePalette } from '../../render/palette';
 import type { GameMode, MapTheme, MatchDifficulty } from '../../shared/types';
-import { Badge, Panel } from '../design';
-import '../ui.css';
+import './landing.css';
 
 export interface CountdownOverlayProps {
   seconds?: number;
@@ -46,55 +45,30 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
     return () => window.clearTimeout(timer);
   }, [remaining]);
 
+  const modeLabel =
+    mode === 'rampage' ? 'Rampage' : mode === 'hellcell' ? 'Hellcell' : 'Zone Control';
+  const diffLabel =
+    difficulty === 'easy' ? 'Easy' : difficulty === 'hard' ? 'Hard' : 'Normal';
+  const goalLabel =
+    mode === 'rampage' ? `${scoreToWin} kills to win` : `${scoreToWin} score to win`;
+
   return (
     <div
-      className="ht-root ht-blur-backdrop"
+      className="zc-overlay-backdrop"
       style={{ zIndex: 'var(--z-transition)' }}
       aria-live="assertive"
     >
-      <div style={{ textAlign: 'center', position: 'relative' }}>
-        <Panel
-          bracketed
-          style={{
-            padding: '18px 36px',
-            marginBottom: 18,
-            display: 'inline-block',
-          }}
-        >
-          <Badge tone="gold" className="ht-stagger">
-            DEPLOYING TO {theme.name.toUpperCase()}
-          </Badge>
-          <h1
-            className="ht-display"
-            style={{ fontSize: 'clamp(28px, 5vw, 52px)', marginTop: 6 }}
-          >
-            {mode === 'rampage' ? 'RAMPAGE' : mode === 'hellcell' ? 'HELLCELL' : 'ZONE CONTROL'}
-          </h1>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: 8,
-              marginTop: 10,
-              flexWrap: 'wrap',
-            }}
-          >
-            <Badge tone={mode === 'rampage' ? 'enemy' : mode === 'hellcell' ? 'gold' : 'player'}>
-              {mode === 'rampage'
-                ? 'FREE FOR ALL · NO TEAMS'
-                : mode === 'hellcell'
-                  ? 'PVPVE · BOSS CEASEFIRE BREACH'
-                  : 'CAPTURE A · B · C'}
-            </Badge>
-            <Badge tone="gold">
-              {mode === 'rampage' ? `${scoreToWin} KILLS TO WIN` : `${scoreToWin} SCORE TO WIN`}
-            </Badge>
-            <Badge tone="common">{difficulty.toUpperCase()}</Badge>
-          </div>
-        </Panel>
+      <div className="zc-card-surface zc-countdown-card zc-enter">
+        <div className="zc-countdown-context">
+          {`${theme.name} · ${modeLabel}`}
+        </div>
 
-        <div key={remaining} className="ht-display ht-countdown-num">
-          {remaining > 0 ? remaining : 'ENGAGE'}
+        <div key={remaining} className="zc-countdown-num">
+          {remaining > 0 ? remaining : 'GO'}
+        </div>
+
+        <div className="zc-countdown-meta">
+          {`${goalLabel} · ${diffLabel}`}
         </div>
       </div>
     </div>

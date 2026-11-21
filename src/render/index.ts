@@ -3,7 +3,7 @@ export type { ViewTransform, ViewTransformHook } from './camera';
 export { EffectsSystem } from './effects';
 export { PALETTE, rarityColor, teamColor, teamGlowColor } from './palette';
 export { Renderer } from './Renderer';
-export type { RenderQuality, RendererOptions } from './Renderer';
+export type { RenderQuality, RenderQualitySetting, RendererOptions } from './Renderer';
 export {
   computeVisibilityPolygon,
   extractWallSegments,

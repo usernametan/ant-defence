@@ -16,7 +16,7 @@ export interface KillFeedProps {
   streakText: string | null;
 }
 
-export const KillFeed: React.FC<KillFeedProps> = ({ entries, streakText }) => {
+export const KillFeed = React.memo<KillFeedProps>(({ entries, streakText }) => {
   return (
     <>
       {streakText && (
@@ -96,4 +96,4 @@ export const KillFeed: React.FC<KillFeedProps> = ({ entries, streakText }) => {
       )}
     </>
   );
-};
+});

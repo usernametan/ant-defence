@@ -51,6 +51,7 @@ export function createSim(): SimApi {
     const state = world.state;
     state.tick += 1;
     state.time += dt;
+    world.pathCache.misses = 0;
 
     updateAi(world, dt);
     updateUnits(world, dt);
@@ -62,7 +63,12 @@ export function createSim(): SimApi {
     updatePickups(world, dt);
     updateZones(world, dt);
     updateBaseCores(world, dt);
+    world.flushMapVersion(false);
     checkWin(world);
+
+    if (world.pathCache.misses > 0) {
+      bus.emit('sim:tickPerf', { astarCalls: world.pathCache.misses });
+    }
   }
 
   return {

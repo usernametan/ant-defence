@@ -1,4 +1,9 @@
 import type { MapData } from '../../shared/types';
+import {
+  drawStructureShadowsAndAoRegion,
+  type ChunkRect,
+  type ShadowStrokeOptions,
+} from '../groundCache';
 import { hash2, type JungleRuin } from './ruins';
 import type { JungleTextureAtlas } from './textures';
 import {
@@ -290,70 +295,74 @@ function drawCourtyardArchitectureDetails(
   }
 }
 
-function drawJungleShadowsAndAo(
+const JUNGLE_SHADOW_OPTS: ShadowStrokeOptions = {
+  shadowColor: '#071009',
+  shadowAlpha: 0.44,
+  shadowOffsetXFactor: 0.72,
+  shadowOffsetYFactor: 0.6,
+  blurPx: 6,
+  aoOuterColor: 'rgba(8, 14, 9, 0.22)',
+  aoOuterWidth: 14,
+  aoInnerColor: 'rgba(6, 10, 7, 0.4)',
+  aoInnerWidth: 5,
+};
+
+export function drawJungleShadowsForRect(
   ctx: CanvasRenderingContext2D,
   map: MapData,
   ruins: readonly JungleRuin[],
+  rect?: ChunkRect,
+  scratchCanvas?: HTMLCanvasElement | null,
 ): void {
+  drawStructureShadowsAndAoRegion(ctx, map, ruins, JUNGLE_SHADOW_OPTS, rect, scratchCanvas);
+}
+
+function drawJungleBorderCanopyAndSunlight(ctx: CanvasRenderingContext2D, map: MapData): void {
   const ts = map.tileSize;
   const worldW = map.width * ts;
   const worldH = map.height * ts;
 
-  // 1. Soft directional afternoon shadows from ruins & perimeter canopy trees
+  // Irregular leaf-crown shadow silhouettes cast inward from border forest trees
   if (typeof document !== 'undefined') {
     const sc = document.createElement('canvas');
     sc.width = Math.max(1, Math.floor(worldW * 0.5));
     sc.height = Math.max(1, Math.floor(worldH * 0.5));
     const sctx = sc.getContext('2d');
     if (sctx) {
-      sctx.save();
-      sctx.scale(0.5, 0.5);
-      if ('filter' in sctx) sctx.filter = 'blur(6px)';
       sctx.fillStyle = '#071009';
-
-      for (const r of ruins) {
-        const bx = r.col * ts;
-        const by = r.row * ts;
-        const bw = r.w * ts;
-        const bh = r.h * ts;
-        const dx = r.elevation * 0.72;
-        const dy = r.elevation * 0.6;
-
-        sctx.beginPath();
-        sctx.moveTo(bx + bw, by);
-        sctx.lineTo(bx + bw + dx, by + dy);
-        sctx.lineTo(bx + bw + dx, by + bh + dy);
-        sctx.lineTo(bx + dx, by + bh + dy);
-        sctx.lineTo(bx, by + bh);
-        sctx.closePath();
-        sctx.fill();
-      }
-
-      // Irregular leaf-crown shadow silhouettes cast inward from border forest trees
-      for (let r = 0; r < map.height; r += 1) {
-        for (let c = 0; c < map.width; c += 1) {
-          const isBorder = r === 0 || c === 0 || r === map.height - 1 || c === map.width - 1;
-          if (!isBorder) continue;
-          const h = hash2(c, r, map.seed + 607);
-          if (h >= 0.34) continue;
-          const cx = c * ts + 24;
-          const cy = r * ts + 24;
-          const rad = 28 + h * 50;
-          sctx.beginPath();
-          for (let i = 0; i <= 10; i += 1) {
-            const a = (i / 10) * Math.PI * 2;
-            const rr = rad * (0.7 + hash2(i, c + r, map.seed + 19) * 0.42);
-            const px = cx + Math.cos(a) * rr;
-            const py = cy + Math.sin(a) * rr;
-            if (i === 0) sctx.moveTo(px, py);
-            else sctx.lineTo(px, py);
+      for (const tap of [
+        { ox: 0, oy: 0, alpha: 0.5 },
+        { ox: 3, oy: 3, alpha: 0.25 },
+        { ox: -2.5, oy: 2.5, alpha: 0.2 },
+      ]) {
+        sctx.save();
+        sctx.scale(0.5, 0.5);
+        sctx.translate(tap.ox, tap.oy);
+        sctx.globalAlpha = tap.alpha;
+        for (let r = 0; r < map.height; r += 1) {
+          for (let c = 0; c < map.width; c += 1) {
+            const isBorder = r === 0 || c === 0 || r === map.height - 1 || c === map.width - 1;
+            if (!isBorder) continue;
+            const h = hash2(c, r, map.seed + 607);
+            if (h >= 0.34) continue;
+            const cx = c * ts + 24;
+            const cy = r * ts + 24;
+            const rad = 28 + h * 50;
+            sctx.beginPath();
+            for (let i = 0; i <= 10; i += 1) {
+              const a = (i / 10) * Math.PI * 2;
+              const rr = rad * (0.7 + hash2(i, c + r, map.seed + 19) * 0.42);
+              const px = cx + Math.cos(a) * rr;
+              const py = cy + Math.sin(a) * rr;
+              if (i === 0) sctx.moveTo(px, py);
+              else sctx.lineTo(px, py);
+            }
+            sctx.closePath();
+            sctx.fill();
           }
-          sctx.closePath();
-          sctx.fill();
         }
+        sctx.restore();
       }
-      sctx.restore();
-
       ctx.save();
       ctx.globalAlpha = 0.44;
       ctx.drawImage(sc, 0, 0, worldW, worldH);
@@ -361,7 +370,7 @@ function drawJungleShadowsAndAo(
     }
   }
 
-  // 2. Darker shaded vegetation canopy borders around map edges
+  // Darker shaded vegetation canopy borders around map edges
   ctx.save();
   const topShade = ctx.createLinearGradient(0, 0, 0, ts * 4);
   topShade.addColorStop(0, 'rgba(6, 15, 9, 0.55)');
@@ -386,26 +395,9 @@ function drawJungleShadowsAndAo(
   rightShade.addColorStop(1, 'rgba(6, 15, 9, 0.48)');
   ctx.fillStyle = rightShade;
   ctx.fillRect(worldW - ts * 3.5, 0, ts * 3.5, worldH);
-
-  // 3. Tight ambient occlusion contact creases around interior ruin structures
-  for (const r of ruins) {
-    if (r.isBorder) continue;
-    const bx = r.col * ts;
-    const by = r.row * ts;
-    const bw = r.w * ts;
-    const bh = r.h * ts;
-
-    ctx.strokeStyle = 'rgba(8, 14, 9, 0.22)';
-    ctx.lineWidth = 14;
-    ctx.strokeRect(bx, by, bw, bh);
-
-    ctx.strokeStyle = 'rgba(6, 10, 7, 0.4)';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(bx, by, bw, bh);
-  }
   ctx.restore();
 
-  // 4. Warm golden afternoon highlights on exposed central courtyard & stone avenues
+  // Warm golden afternoon highlights on exposed central courtyard & stone avenues
   ctx.save();
   for (const z of map.zones) {
     const sunGrad = ctx.createRadialGradient(
@@ -437,6 +429,7 @@ export function bakeJungleGroundLayer(
   ruins: readonly JungleRuin[],
   textures: JungleTextureAtlas,
   existingCanvas?: HTMLCanvasElement | null,
+  skipDynamicShadows = false,
 ): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
 
@@ -679,8 +672,12 @@ export function bakeJungleGroundLayer(
     }
   }
 
-  // 8. Directional ruin shadows + irregular tree canopy shadows + ambient occlusion + courtyard sunlight
-  drawJungleShadowsAndAo(ctx, map, ruins);
+  drawJungleBorderCanopyAndSunlight(ctx, map);
+
+  // 8. Directional ruin shadows & ambient occlusion
+  if (!skipDynamicShadows) {
+    drawJungleShadowsForRect(ctx, map, ruins);
+  }
 
   return canvas;
 }

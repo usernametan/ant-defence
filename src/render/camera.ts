@@ -16,8 +16,8 @@ export interface ViewTransform {
 
 export type ViewTransformHook = (transform: ViewTransform) => void;
 
-export const DEFAULT_BASE_ZOOM = 1.18;
-export const DEFAULT_SCOPE_ZOOM = 1.44;
+export const DEFAULT_BASE_ZOOM = 1.34;
+export const DEFAULT_SCOPE_ZOOM = 1.62;
 
 export class Camera {
   x = 0;

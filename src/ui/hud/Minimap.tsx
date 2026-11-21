@@ -7,6 +7,8 @@ import {
 import { PALETTE, getThemePalette, rarityColor, teamColor } from '../../render/palette';
 import type { GameState } from '../../shared/types';
 
+type GameMap = GameState['map'];
+
 export interface ZonePing {
   zoneId: string;
   until: number;
@@ -18,12 +20,97 @@ export interface MinimapProps {
   colorblindAssist?: boolean;
 }
 
-export const Minimap: React.FC<MinimapProps> = ({
+function drawStaticMinimapTerrain(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  map: Readonly<GameMap>,
+): void {
+  const tp = getThemePalette(map.theme);
+  const worldW = map.width * map.tileSize;
+  const worldH = map.height * map.tileSize;
+  const sx = w / worldW;
+  const sy = h / worldH;
+
+  ctx.fillStyle = tp.bgVoid;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.fillStyle = tp.floorBase;
+  ctx.fillRect(1, 1, w - 2, h - 2);
+
+  const tileW = map.tileSize * sx;
+  const tileH = map.tileSize * sy;
+  if (map.theme === 'slumside') {
+    ctx.fillStyle = '#4D453C';
+    ctx.fillRect(51 * tileW, tileH, tileW * 3, (map.height - 2) * tileH);
+    ctx.fillStyle = '#8C959F';
+    ctx.fillRect(51.4 * tileW, tileH, Math.max(1, tileW * 0.28), (map.height - 2) * tileH);
+    ctx.fillRect(52.5 * tileW, tileH, Math.max(1, tileW * 0.28), (map.height - 2) * tileH);
+  }
+
+  for (let r = 0; r < map.height; r += 1) {
+    for (let c = 0; c < map.width; c += 1) {
+      const kind = map.tiles[r][c];
+      if (kind === 'wall') {
+        ctx.fillStyle =
+          map.theme === 'slumside'
+            ? SLUM_ROOF_PREVIEW_COLORS[slumRoofStyle(c, r, map.seed)]
+            : tp.wallTop;
+        ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
+      } else if (kind === 'lowCover') {
+        ctx.fillStyle = tp.crateBody;
+        ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
+      } else if (kind === 'water') {
+        ctx.fillStyle = tp.waterMid;
+        ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
+      }
+    }
+  }
+}
+
+/** Offscreen cache for static minimap terrain so 60x40 tiles only draw when walls change. */
+export class MinimapTerrainCache {
+  private canvas: HTMLCanvasElement | null = null;
+  private cachedKey = '';
+  public fullRebuilds = 0;
+
+  ensureTerrain(
+    width: number,
+    height: number,
+    map: Readonly<GameMap>,
+    createCanvas?: (w: number, h: number) => HTMLCanvasElement | null,
+  ): HTMLCanvasElement | null {
+    const key = `${width}x${height}:${map.seed}:${map.theme ?? 'fortress'}:w${map.wallRevision ?? 0}`;
+    if (this.canvas && this.cachedKey === key) {
+      return this.canvas;
+    }
+    if (!this.canvas || this.canvas.width !== width || this.canvas.height !== height) {
+      if (createCanvas) {
+        this.canvas = createCanvas(width, height);
+      } else if (typeof document !== 'undefined') {
+        const off = document.createElement('canvas');
+        off.width = width;
+        off.height = height;
+        this.canvas = off;
+      }
+    }
+    if (!this.canvas) return null;
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) return null;
+    drawStaticMinimapTerrain(ctx, width, height, map);
+    this.cachedKey = key;
+    this.fullRebuilds += 1;
+    return this.canvas;
+  }
+}
+
+export const Minimap = React.memo<MinimapProps>(({
   state,
   pings,
   colorblindAssist = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const terrainCacheRef = useRef<MinimapTerrainCache | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -34,45 +121,19 @@ export const Minimap: React.FC<MinimapProps> = ({
     const w = canvas.width;
     const h = canvas.height;
     const map = state.map;
-    const tp = getThemePalette(map.theme);
     const worldW = map.width * map.tileSize;
     const worldH = map.height * map.tileSize;
     const sx = w / worldW;
     const sy = h / worldH;
 
-    ctx.fillStyle = tp.bgVoid;
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.fillStyle = tp.floorBase;
-    ctx.fillRect(1, 1, w - 2, h - 2);
-
-    const tileW = map.tileSize * sx;
-    const tileH = map.tileSize * sy;
-    if (map.theme === 'slumside') {
-      ctx.fillStyle = '#4D453C';
-      ctx.fillRect(51 * tileW, tileH, tileW * 3, (map.height - 2) * tileH);
-      ctx.fillStyle = '#8C959F';
-      ctx.fillRect(51.4 * tileW, tileH, Math.max(1, tileW * 0.28), (map.height - 2) * tileH);
-      ctx.fillRect(52.5 * tileW, tileH, Math.max(1, tileW * 0.28), (map.height - 2) * tileH);
+    if (!terrainCacheRef.current) {
+      terrainCacheRef.current = new MinimapTerrainCache();
     }
-
-    for (let r = 0; r < map.height; r += 1) {
-      for (let c = 0; c < map.width; c += 1) {
-        const kind = map.tiles[r][c];
-        if (kind === 'wall') {
-          ctx.fillStyle =
-            map.theme === 'slumside'
-              ? SLUM_ROOF_PREVIEW_COLORS[slumRoofStyle(c, r, map.seed)]
-              : tp.wallTop;
-          ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
-        } else if (kind === 'lowCover') {
-          ctx.fillStyle = tp.crateBody;
-          ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
-        } else if (kind === 'water') {
-          ctx.fillStyle = tp.waterMid;
-          ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
-        }
-      }
+    const terrain = terrainCacheRef.current.ensureTerrain(w, h, map);
+    if (terrain) {
+      ctx.drawImage(terrain, 0, 0);
+    } else {
+      drawStaticMinimapTerrain(ctx, w, h, map);
     }
 
     const isRampage = state.matchConfig.mode === 'rampage';
@@ -242,4 +303,4 @@ export const Minimap: React.FC<MinimapProps> = ({
       />
     </div>
   );
-};
+});

@@ -8,8 +8,8 @@ import {
 import type { GameState } from '../shared/types';
 import type { GameController } from './GameController';
 
-/** HUD snapshots refresh at 15 Hz while the renderer reads live state each frame. */
-const HUD_INTERVAL_MS = 1000 / 15;
+/** HUD snapshots refresh at 10 Hz while the renderer reads live state each frame. */
+const HUD_INTERVAL_MS = 1000 / 10;
 
 interface GameContextValue {
   controller: GameController;
@@ -42,17 +42,25 @@ function snapshot(state: Readonly<GameState>): GameState {
       pos: { ...unit.pos },
       vel: { ...unit.vel },
     })),
-    projectiles: state.projectiles.map((projectile) => ({
-      ...projectile,
-      pos: { ...projectile.pos },
-      vel: { ...projectile.vel },
-    })),
+    // HUD does not read per-projectile motion or coverHp maps; pass immutable refs without cloning.
+    projectiles: state.projectiles,
     pickups: state.pickups.map((pickup) => ({ ...pickup, pos: { ...pickup.pos } })),
     zones: state.zones.map((zone) => ({ ...zone })),
     score: { ...state.score },
     baseHp: { ...state.baseHp },
     matchConfig: { ...state.matchConfig },
-    map: { ...state.map, coverHp: { ...state.map.coverHp } },
+    map: state.map,
+    hellcell: state.hellcell
+      ? {
+          ...state.hellcell,
+          boss: state.hellcell.boss
+            ? {
+                ...state.hellcell.boss,
+                pos: { ...state.hellcell.boss.pos },
+              }
+            : null,
+        }
+      : undefined,
   };
 }
 

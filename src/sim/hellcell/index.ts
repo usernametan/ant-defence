@@ -193,10 +193,27 @@ function pickRandomBossSpawnPos(world: SimWorld): Vec2 {
   return tileCenter(fallbackX, fallbackY);
 }
 
+const crushedTileSets = new WeakMap<HellcellState, Set<number>>();
+
+function getCrushedTileSet(hc: HellcellState, mapWidth: number): Set<number> {
+  let set = crushedTileSets.get(hc);
+  if (!set) {
+    set = new Set<number>();
+    if (hc.crushedTiles) {
+      for (const t of hc.crushedTiles) {
+        set.add(t.y * mapWidth + t.x);
+      }
+    }
+    crushedTileSets.set(hc, set);
+  }
+  return set;
+}
+
 /** Crush interior block walls and destructible cover blocks touched by the monster's colossal frame. */
 export function crushObstaclesInRadius(world: SimWorld, center: Vec2, radius: number): void {
   const map = world.state.map;
   const hc = world.state.hellcell;
+  const crushedSet = hc ? getCrushedTileSet(hc, map.width) : null;
   const centerTile = worldToTile(center);
   const span = Math.ceil(radius / TILE_SIZE);
   let wallChanged = false;
@@ -213,9 +230,11 @@ export function crushObstaclesInRadius(world: SimWorld, center: Vec2, radius: nu
       if (Math.hypot(tc.x - center.x, tc.y - center.y) > radius) continue;
 
       if (kind === 'wall') {
-        if (hc) {
+        if (hc && crushedSet) {
           if (!hc.crushedTiles) hc.crushedTiles = [];
-          if (!hc.crushedTiles.some((t) => t.x === x && t.y === y)) {
+          const idxKey = y * map.width + x;
+          if (!crushedSet.has(idxKey)) {
+            crushedSet.add(idxKey);
             hc.crushedTiles.push({ x, y, prevKind: 'wall' });
           }
         }
@@ -226,9 +245,11 @@ export function crushObstaclesInRadius(world: SimWorld, center: Vec2, radius: nu
         const key = tileKey(x, y);
         const hp = map.coverHp[key] ?? COVER_HP;
         if (hp > 0) {
-          if (hc) {
+          if (hc && crushedSet) {
             if (!hc.crushedTiles) hc.crushedTiles = [];
-            if (!hc.crushedTiles.some((t) => t.x === x && t.y === y)) {
+            const idxKey = y * map.width + x;
+            if (!crushedSet.has(idxKey)) {
+              crushedSet.add(idxKey);
               hc.crushedTiles.push({ x, y, prevKind: 'lowCover' });
             }
           }
@@ -239,7 +260,7 @@ export function crushObstaclesInRadius(world: SimWorld, center: Vec2, radius: nu
   }
 
   if (wallChanged) {
-    world.mapVersion += 1;
+    world.mapDirty = true;
     map.wallRevision = (map.wallRevision ?? 0) + 1;
   }
 }
@@ -261,7 +282,9 @@ function restoreCrushedObstacles(world: SimWorld): void {
   }
 
   hc.crushedTiles = [];
-  world.mapVersion += 1;
+  crushedTileSets.get(hc)?.clear();
+  world.mapDirty = true;
+  world.flushMapVersion(true);
   map.wallRevision = (map.wallRevision ?? 0) + 1;
 
   // Ensure no living unit gets trapped inside a newly restored wall or cover block
@@ -458,7 +481,7 @@ function spawnBoss(world: SimWorld, spawnPos: Vec2): HellcellBoss {
   const maxHp = computeBossMaxHp(world, kind);
   const isTrain = kind === 'mumbaiTrain';
   const radius = isTrain ? TILE_SIZE * 2.15 : TILE_SIZE * 2.95;
-  const initialTimer = isTrain ? 1.35 : 0.55;
+  const initialTimer = isTrain ? 1.6 : 1.1;
   const map = world.state.map;
   const center = { x: (map.width * TILE_SIZE) * 0.5, y: (map.height * TILE_SIZE) * 0.5 };
   const moveAngle = isTrain
@@ -500,7 +523,7 @@ function spawnBoss(world: SimWorld, spawnPos: Vec2): HellcellBoss {
       attackAnim: 1.0,
       trainState: {
         coaches,
-        speed: 190,
+        speed: 150,
         behavior: 'cruise',
         behaviorTimer: 1.35,
         actionIndex: 0,
@@ -623,11 +646,11 @@ function updateTrainBoss(world: SimWorld, boss: HellcellBoss, dt: number): void 
       boss.targetAngle = Math.atan2(desiredY, desiredX);
     }
     const turnDiff = normalizeAngle(boss.targetAngle - boss.angle);
-    const turnRate = (enraged ? 2.85 : 2.35) * dt;
+    const turnRate = (enraged ? 2.1 : 1.75) * dt;
     boss.angle = normalizeAngle(boss.angle + Math.max(-turnRate, Math.min(turnRate, turnDiff)));
 
-    const cruiseSpeed = enraged ? 375 : 300;
-    train.speed = advanceTrainSpeed(train.speed, cruiseSpeed, 420, dt);
+    const cruiseSpeed = enraged ? 230 : 185;
+    train.speed = advanceTrainSpeed(train.speed, cruiseSpeed, 320, dt);
 
     if (train.behaviorTimer <= 0) {
       const doCharge = train.actionIndex % 2 === 0;
@@ -646,7 +669,7 @@ function updateTrainBoss(world: SimWorld, boss: HellcellBoss, dt: number): void 
           chargeAngle = Math.atan2(worldH * 0.5 - boss.pos.y, worldW * 0.5 - boss.pos.x);
         }
         train.behavior = 'chargeWindup';
-        train.behaviorTimer = enraged ? 0.85 : 1.05;
+        train.behaviorTimer = enraged ? 1.0 : 1.25;
         train.chargeAngle = chargeAngle;
         train.chargeLength = enraged ? 390 : 350;
         boss.targetAngle = chargeAngle;
@@ -658,7 +681,7 @@ function updateTrainBoss(world: SimWorld, boss: HellcellBoss, dt: number): void 
         });
       } else {
         train.behavior = 'electricWindup';
-        train.behaviorTimer = enraged ? 0.85 : 1.05;
+        train.behaviorTimer = enraged ? 1.0 : 1.25;
         bus.emit('boss:action', {
           kind: boss.kind,
           action: 'electricWarning',
@@ -688,23 +711,23 @@ function updateTrainBoss(world: SimWorld, boss: HellcellBoss, dt: number): void 
       });
     }
   } else if (train.behavior === 'chargeDash') {
-    const dashSpeed = enraged ? 840 : 740;
-    train.speed = advanceTrainSpeed(train.speed, dashSpeed, 2600, dt);
+    const dashSpeed = enraged ? 520 : 450;
+    train.speed = advanceTrainSpeed(train.speed, dashSpeed, 1800, dt);
     if (train.behaviorTimer <= 0) {
       train.behavior = 'chargeRecover';
       train.behaviorTimer = enraged ? 0.68 : 0.85;
     }
   } else if (train.behavior === 'chargeRecover') {
-    train.speed = advanceTrainSpeed(train.speed, 195, 760, dt);
+    train.speed = advanceTrainSpeed(train.speed, 140, 760, dt);
     if (train.behaviorTimer <= 0) {
       train.behavior = 'cruise';
-      train.behaviorTimer = enraged ? 1.0 : 1.4;
+      train.behaviorTimer = enraged ? 1.45 : 1.9;
       train.hitUnitIds = [];
     }
   } else if (train.behavior === 'electricWindup') {
     const diff = normalizeAngle(boss.targetAngle - boss.angle);
     boss.angle = normalizeAngle(boss.angle + Math.max(-1.6 * dt, Math.min(1.6 * dt, diff)));
-    train.speed = advanceTrainSpeed(train.speed, 120, 360, dt);
+    train.speed = advanceTrainSpeed(train.speed, 95, 360, dt);
 
     if (train.behaviorTimer <= 0) {
       train.behavior = 'electricPulse';
@@ -719,8 +742,8 @@ function updateTrainBoss(world: SimWorld, boss: HellcellBoss, dt: number): void 
       });
     }
   } else if (train.behavior === 'electricPulse') {
-    train.speed = advanceTrainSpeed(train.speed, 105, 220, dt);
-    const pulseDmg = enraged ? 96 : 82;
+    train.speed = advanceTrainSpeed(train.speed, 85, 220, dt);
+    const pulseDmg = enraged ? 52 : 40;
 
     for (const unit of world.livingUnits()) {
       if (train.hitUnitIds.includes(unit.id)) continue;
@@ -745,7 +768,7 @@ function updateTrainBoss(world: SimWorld, boss: HellcellBoss, dt: number): void 
 
     if (train.behaviorTimer <= 0) {
       train.behavior = 'cruise';
-      train.behaviorTimer = enraged ? 1.05 : 1.5;
+      train.behaviorTimer = enraged ? 1.5 : 2.0;
       train.hitUnitIds = [];
     }
   }
@@ -812,7 +835,7 @@ function updateTrainBoss(world: SimWorld, boss: HellcellBoss, dt: number): void 
 
   // Charge impact ramming check BEFORE unit pushout so players in the dash path get hit fairly once per charge
   if (train.behavior === 'chargeDash') {
-    const chargeDmg = enraged ? 115 : 95;
+    const chargeDmg = enraged ? 62 : 48;
     for (const unit of world.livingUnits()) {
       if (train.hitUnitIds.includes(unit.id)) continue;
       const hull = measureBossHullDistance(unit.pos, boss);
@@ -861,11 +884,11 @@ function updateTrainBoss(world: SimWorld, boss: HellcellBoss, dt: number): void 
 function updateBossMotion(world: SimWorld, boss: HellcellBoss, dt: number): void {
   const map = world.state.map;
   const enraged = boss.hp < boss.maxHp * 0.5;
-  const speedMult = enraged ? 1.28 : 1.0;
+  const speedMult = enraged ? 1.18 : 1.0;
 
-  let baseSpeed = 350;
-  if (boss.kind === 'venomCobra') baseSpeed = 420;
-  else if (boss.kind === 'pharaohSkeleton') baseSpeed = 380;
+  let baseSpeed = 165;
+  if (boss.kind === 'venomCobra') baseSpeed = 200;
+  else if (boss.kind === 'pharaohSkeleton') baseSpeed = 180;
   const moveSpeed = baseSpeed * speedMult;
 
   boss.moveTimer = (boss.moveTimer ?? 0) - dt;
@@ -922,7 +945,7 @@ function updateBossMotion(world: SimWorld, boss: HellcellBoss, dt: number): void
   if (boss.attackAnim < 0.25) {
     boss.targetAngle = boss.moveAngle;
   }
-  const turnSpeed = (boss.kind === 'venomCobra' ? 20 : 16) * speedMult;
+  const turnSpeed = (boss.kind === 'venomCobra' ? 14 : 11) * speedMult;
   const turn = normalizeAngle(boss.targetAngle - boss.angle);
   boss.angle += turn * Math.min(1, dt * turnSpeed);
 }
@@ -931,7 +954,7 @@ function triggerRocketSalvo(world: SimWorld, boss: HellcellBoss): void {
   const hc = world.state.hellcell;
   if (!hc) return;
   const living = world.livingUnits();
-  const count = world.rng.int(9, 12);
+  const count = world.rng.int(5, 7);
   boss.attackAnim = 1.0;
 
   for (let i = 0; i < count; i += 1) {
@@ -945,8 +968,8 @@ function triggerRocketSalvo(world: SimWorld, boss: HellcellBoss): void {
     if (i === 0) {
       boss.targetAngle = Math.atan2(targetPos.y - boss.pos.y, targetPos.x - boss.pos.x);
     }
-    const flightTime = 0.92;
-    const splashRadius = TILE_SIZE * 2.15;
+    const flightTime = 1.2;
+    const splashRadius = TILE_SIZE * 1.7;
     hc.reticles.push({
       id: world.nextId('reticle'),
       startPos: { x: boss.pos.x, y: boss.pos.y },
@@ -954,7 +977,7 @@ function triggerRocketSalvo(world: SimWorld, boss: HellcellBoss): void {
       timer: flightTime,
       maxTimer: flightTime,
       splashRadius,
-      damage: 115,
+      damage: 52,
     });
     const podSide = i % 2 === 0 ? 1 : -1;
     const perpAngle = boss.angle + (Math.PI / 2) * podSide;
@@ -1019,17 +1042,17 @@ function triggerVenomSprayAndBlobs(world: SimWorld, boss: HellcellBoss): void {
     if (!hasWallOnlyLineOfSight(world.state.map, boss.pos, unit.pos)) continue;
 
     const behindCrate = hasCrateAlongSegment(world.state.map, boss.pos, unit.pos);
-    const dmg = behindCrate ? 55 : 105;
+    const dmg = behindCrate ? 24 : 48;
     world.damageUnit(unit, dmg, boss.id, 'boss', { x: unit.pos.x, y: unit.pos.y });
   }
 
-  const blobCount = world.rng.int(8, 11);
+  const blobCount = world.rng.int(4, 6);
   for (let i = 0; i < blobCount; i += 1) {
     const targetPos =
       living.length > 0 && i < living.length && world.rng.chance(0.6)
         ? pickRandomWalkableTileNear(world, living[i % living.length].pos, 0, 2)
         : pickRandomWalkableTileNear(world, boss.pos, 3, 11);
-    const flightTime = 0.34;
+    const flightTime = 0.52;
     const dx = targetPos.x - boss.pos.x;
     const dy = targetPos.y - boss.pos.y;
     hc.bossProjectiles.push({
@@ -1042,8 +1065,8 @@ function triggerVenomSprayAndBlobs(world: SimWorld, boss: HellcellBoss): void {
       spinSpeed: 9,
       bouncesLeft: 0,
       life: flightTime,
-      damage: 48,
-      splashRadius: TILE_SIZE * 1.45,
+      damage: 24,
+      splashRadius: TILE_SIZE * 1.2,
     });
   }
 }
@@ -1051,7 +1074,7 @@ function triggerVenomSprayAndBlobs(world: SimWorld, boss: HellcellBoss): void {
 function triggerBoneBarrage(world: SimWorld, boss: HellcellBoss): void {
   const hc = world.state.hellcell;
   if (!hc) return;
-  const boneCount = world.rng.int(10, 14);
+  const boneCount = world.rng.int(6, 8);
   const nearest = findNearestLivingUnit(world, boss.pos);
   const baseAngle = nearest
     ? Math.atan2(nearest.pos.y - boss.pos.y, nearest.pos.x - boss.pos.x)
@@ -1061,7 +1084,7 @@ function triggerBoneBarrage(world: SimWorld, boss: HellcellBoss): void {
 
   for (let i = 0; i < boneCount; i += 1) {
     const angle = baseAngle + (i / boneCount) * Math.PI * 2 + world.rng.spread(0.22);
-    const speed = 580;
+    const speed = 360;
     hc.bossProjectiles.push({
       id: world.nextId('bproj'),
       kind: 'bone',
@@ -1077,7 +1100,7 @@ function triggerBoneBarrage(world: SimWorld, boss: HellcellBoss): void {
       spinSpeed: 16,
       bouncesLeft: 1,
       life: 3.8,
-      damage: 88,
+      damage: 42,
       splashRadius: 0,
     });
   }
@@ -1152,7 +1175,7 @@ function updateBossProjectiles(world: SimWorld, dt: number): void {
             tileY: tile.y,
             ttl: 6.0,
             maxTtl: 6.0,
-            dps: 52,
+            dps: 22,
           });
         }
         for (const unit of world.livingUnits()) {
@@ -1360,13 +1383,13 @@ export function updateHellcell(world: SimWorld, dt: number): void {
       boss.attackTimer -= dt;
       if (boss.attackTimer <= 0) {
         if (boss.kind === 'rocketSiegeBot') {
-          boss.attackTimer = enraged ? 0.65 : 0.9;
+          boss.attackTimer = enraged ? 1.25 : 1.65;
           triggerRocketSalvo(world, boss);
         } else if (boss.kind === 'venomCobra') {
-          boss.attackTimer = enraged ? 0.55 : 0.8;
+          boss.attackTimer = enraged ? 1.15 : 1.5;
           triggerVenomSprayAndBlobs(world, boss);
         } else {
-          boss.attackTimer = enraged ? 0.5 : 0.72;
+          boss.attackTimer = enraged ? 1.1 : 1.45;
           triggerBoneBarrage(world, boss);
         }
       }

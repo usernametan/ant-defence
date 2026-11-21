@@ -1,6 +1,50 @@
 import type { HellcellBoss, HellcellState, Vec2 } from '../shared/types';
 import { PALETTE } from './palette';
 
+export interface HellcellViewBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+const glowStampCache = new Map<string, HTMLCanvasElement>();
+
+function getRadialGlowStamp(
+  key: string,
+  innerRatio: number,
+  stops: ReadonlyArray<readonly [number, string]>,
+): HTMLCanvasElement | null {
+  const cached = glowStampCache.get(key);
+  if (cached) return cached;
+  if (typeof document === 'undefined') return null;
+  const size = 128;
+  const half = size * 0.5;
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const gctx = c.getContext('2d');
+  if (!gctx) return null;
+  const grad = gctx.createRadialGradient(half, half, half * innerRatio, half, half, half);
+  for (let i = 0; i < stops.length; i += 1) {
+    grad.addColorStop(stops[i][0], stops[i][1]);
+  }
+  gctx.fillStyle = grad;
+  gctx.fillRect(0, 0, size, size);
+  glowStampCache.set(key, c);
+  return c;
+}
+
+function inView(x: number, y: number, margin: number, view?: HellcellViewBounds): boolean {
+  if (!view) return true;
+  return (
+    x + margin >= view.minX &&
+    x - margin <= view.maxX &&
+    y + margin >= view.minY &&
+    y - margin <= view.maxY
+  );
+}
+
 /** Draw ground telegraphs, Zone B emergence breach portal, acid puddles, rocket reticles, and venom spray cone. */
 export function drawHellcellGroundLayer(
   ctx: CanvasRenderingContext2D,
@@ -8,6 +52,7 @@ export function drawHellcellGroundLayer(
   tileSize: number,
   time: number,
   zoneBCenter?: Vec2,
+  view?: HellcellViewBounds,
 ): void {
   if (!hellcell) return;
 
@@ -17,48 +62,64 @@ export function drawHellcellGroundLayer(
     const isWarning = hellcell.phase === 'WARNING';
     const pulse = 0.5 + 0.5 * Math.sin(time * (isWarning ? 9 : 4.5));
     const outerR = tileSize * (isWarning ? 2.8 : 3.2);
-    ctx.save();
-    ctx.translate(breachCenter.x, breachCenter.y);
+    if (inView(breachCenter.x, breachCenter.y, outerR + 16, view)) {
+      ctx.save();
+      ctx.translate(breachCenter.x, breachCenter.y);
 
-    // Abyssal ground fissure glow
-    const grad = ctx.createRadialGradient(0, 0, 8, 0, 0, outerR);
-    grad.addColorStop(0, isWarning ? 'rgba(244, 63, 94, 0.52)' : 'rgba(220, 38, 38, 0.38)');
-    grad.addColorStop(0.55, 'rgba(255, 90, 60, 0.22)');
-    grad.addColorStop(1, 'rgba(7, 11, 20, 0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(0, 0, outerR, 0, Math.PI * 2);
-    ctx.fill();
+      // Abyssal ground fissure glow (cached sprite blit avoids per-frame createRadialGradient)
+      const stamp = getRadialGlowStamp(
+        isWarning ? 'breach-warning' : 'breach-active',
+        0.08,
+        [
+          [0, isWarning ? 'rgba(244, 63, 94, 0.52)' : 'rgba(220, 38, 38, 0.38)'],
+          [0.55, 'rgba(255, 90, 60, 0.22)'],
+          [1, 'rgba(7, 11, 20, 0)'],
+        ],
+      );
+      if (stamp) {
+        ctx.drawImage(stamp, -outerR, -outerR, outerR * 2, outerR * 2);
+      } else {
+        const grad = ctx.createRadialGradient(0, 0, 8, 0, 0, outerR);
+        grad.addColorStop(0, isWarning ? 'rgba(244, 63, 94, 0.52)' : 'rgba(220, 38, 38, 0.38)');
+        grad.addColorStop(0.55, 'rgba(255, 90, 60, 0.22)');
+        grad.addColorStop(1, 'rgba(7, 11, 20, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, outerR, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-    // Jagged magma/energy ground cracks radiating from Zone B
-    ctx.strokeStyle = isWarning ? 'rgba(253, 164, 175, 0.75)' : 'rgba(255, 90, 60, 0.55)';
-    ctx.lineWidth = 2.4;
-    for (let i = 0; i < 8; i += 1) {
-      const a = (i / 8) * Math.PI * 2 + 0.2;
-      const r1 = tileSize * 0.7;
-      const r2 = tileSize * 1.65;
-      const r3 = outerR * (0.85 + 0.12 * ((i % 2) * 2 - 1));
+      // Jagged magma/energy ground cracks radiating from Zone B
+      ctx.strokeStyle = isWarning ? 'rgba(253, 164, 175, 0.75)' : 'rgba(255, 90, 60, 0.55)';
+      ctx.lineWidth = 2.4;
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i / 8) * Math.PI * 2 + 0.2;
+        const r1 = tileSize * 0.7;
+        const r2 = tileSize * 1.65;
+        const r3 = outerR * (0.85 + 0.12 * ((i % 2) * 2 - 1));
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+        ctx.lineTo(Math.cos(a + 0.14) * r2, Math.sin(a + 0.14) * r2);
+        ctx.lineTo(Math.cos(a - 0.08) * r3, Math.sin(a - 0.08) * r3);
+        ctx.stroke();
+      }
+
+      // Rotating breach containment ring
+      ctx.rotate(time * (isWarning ? 1.8 : 0.75));
+      ctx.strokeStyle = isWarning ? '#F43F5E' : 'rgba(250, 204, 21, 0.55)';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([14, 10]);
       ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
-      ctx.lineTo(Math.cos(a + 0.14) * r2, Math.sin(a + 0.14) * r2);
-      ctx.lineTo(Math.cos(a - 0.08) * r3, Math.sin(a - 0.08) * r3);
+      ctx.arc(0, 0, tileSize * (2.25 + pulse * 0.15), 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
     }
-
-    // Rotating breach containment ring
-    ctx.rotate(time * (isWarning ? 1.8 : 0.75));
-    ctx.strokeStyle = isWarning ? '#F43F5E' : 'rgba(250, 204, 21, 0.55)';
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([14, 10]);
-    ctx.beginPath();
-    ctx.arc(0, 0, tileSize * (2.25 + pulse * 0.15), 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
   }
 
   // 1. Glowing neon-green acid puddles (Jungle Outpost Leviathan hazard)
   for (const pool of hellcell.acidPools) {
+    if (!inView(pool.pos.x, pool.pos.y, tileSize, view)) continue;
     const fade = Math.min(1, pool.ttl / 0.8);
     const pulse = 1 + 0.07 * Math.sin(time * 6.5 + pool.tileX);
     ctx.save();
@@ -115,6 +176,7 @@ export function drawHellcellGroundLayer(
 
   // 2. Translucent red target reticles before Dreadnought rocket impact
   for (const ret of hellcell.reticles) {
+    if (!inView(ret.targetPos.x, ret.targetPos.y, ret.splashRadius + 24, view)) continue;
     const progress = 1 - Math.max(0, Math.min(1, ret.timer / Math.max(0.01, ret.maxTimer)));
     ctx.save();
     ctx.translate(ret.targetPos.x, ret.targetPos.y);
@@ -415,6 +477,8 @@ export interface HellcellRenderOptions {
   bossHitFlash?: number;
   /** Optional snapshot of a recently defeated boss playing its defeat animation. */
   shutdownBoss?: { boss: HellcellBoss; progress: number } | null;
+  /** Optional world-space camera bounds for offscreen culling. */
+  view?: HellcellViewBounds;
 }
 
 /** Draw enormous 2D code-animated Hellcell Bosses, world health bars, and projectiles. */
@@ -451,6 +515,7 @@ export function drawHellcellEntities(
 
   // Draw Boss Projectiles (heavy siege missiles, toxic venom globs, spinning cursed bone scythes)
   for (const proj of hellcell.bossProjectiles) {
+    if (!inView(proj.pos.x, proj.pos.y, 48, options?.view)) continue;
     ctx.save();
     if (proj.kind === 'rocket') {
       const backX = proj.pos.x - Math.cos(proj.rotation) * 26;
@@ -2810,13 +2875,24 @@ function drawMumbaiTrainCoach(
     if (power > 0.08) {
       const coreR = isElectric ? 13 : 8.5;
       const coreAlpha = isElectric ? 0.55 : 0.24 + corruptPulse * 0.22;
-      const coreGrad = ctx.createRadialGradient(22, 0, 1, 22, 0, coreR);
-      coreGrad.addColorStop(0, `rgba(251, 191, 36, ${coreAlpha.toFixed(2)})`);
-      coreGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
-      ctx.fillStyle = coreGrad;
-      ctx.beginPath();
-      ctx.arc(22, 0, coreR, 0, Math.PI * 2);
-      ctx.fill();
+      const stamp = getRadialGlowStamp('pantograph-orange', 0.08, [
+        [0, 'rgba(251, 191, 36, 1)'],
+        [1, 'rgba(234, 88, 12, 0)'],
+      ]);
+      if (stamp) {
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = prevAlpha * coreAlpha;
+        ctx.drawImage(stamp, 22 - coreR, -coreR, coreR * 2, coreR * 2);
+        ctx.globalAlpha = prevAlpha;
+      } else {
+        const coreGrad = ctx.createRadialGradient(22, 0, 1, 22, 0, coreR);
+        coreGrad.addColorStop(0, `rgba(251, 191, 36, ${coreAlpha.toFixed(2)})`);
+        coreGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(22, 0, coreR, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     // Diamond / scissor steel pantograph arm assembly + copper contact collector head

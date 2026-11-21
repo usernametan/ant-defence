@@ -164,7 +164,7 @@ describe('simulation integration', () => {
     unsubscribers.push(bus.on('shot', shot), bus.on('kill', kill));
     const sim = createSim();
     sim.start({ ...CONFIG, enemyCount: 6 });
-    for (let i = 0; i < 900; i += 1) sim.step(1 / 60);
+    for (let i = 0; i < 1200; i += 1) sim.step(1 / 60);
 
     expect(shot.mock.calls.length).toBeGreaterThan(0);
     expect(kill.mock.calls.length).toBeGreaterThan(0);

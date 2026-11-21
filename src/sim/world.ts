@@ -44,6 +44,7 @@ export class SimWorld {
   readonly spatial = new SpatialGrid();
   readonly pathCache = new PathCache();
   mapVersion = 0;
+  mapDirty = false;
   crateTimer = 18;
   readonly zoneContested = new Set<string>();
   readonly zoneOwner = new Map<string, Team | 'neutral'>();
@@ -175,8 +176,17 @@ export class SimWorld {
     this.state.map.coverHp[key] = hpLeft;
     bus.emit('cover:damaged', { tile: key, hpLeft });
     if (hpLeft === 0) {
-      this.mapVersion += 1;
+      this.mapDirty = true;
       bus.emit('cover:destroyed', { tile: key });
+    }
+  }
+
+  /** Batch mapVersion bumps so multiple tile breaks in a window invalidate AI paths only once. */
+  flushMapVersion(force = false): void {
+    if (!this.mapDirty) return;
+    if (force || this.state.tick % 10 === 0) {
+      this.mapVersion += 1;
+      this.mapDirty = false;
     }
   }
 

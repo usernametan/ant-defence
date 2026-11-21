@@ -463,29 +463,7 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = ({
       env.drawZonesAndBases(ctx, frameState, { player: 0, enemy: 0 });
       drawHellcellGroundLayer(ctx, frameState.hellcell, frameState.map.tileSize, simTime, scene.zoneB);
 
-      const ts = frameState.map.tileSize;
-      const minRow = Math.max(0, Math.floor(minY / ts) - 1);
-      const maxRow = Math.min(frameState.map.height - 1, Math.ceil(maxY / ts) + 2);
-      const clampRow = (y: number): number =>
-        Math.max(minRow, Math.min(maxRow, Math.floor(y / ts)));
-
-      const pickupsByRow = new Map<number, typeof frameState.pickups>();
-      for (const pickup of frameState.pickups) {
-        const row = clampRow(pickup.pos.y + 8);
-        const list = pickupsByRow.get(row);
-        if (list) list.push(pickup);
-        else pickupsByRow.set(row, [pickup]);
-      }
-
-      const unitsByRow = new Map<number, Unit[]>();
       const sortedUnits = [...frameState.units].sort((a, b) => a.pos.y - b.pos.y);
-      for (const unit of sortedUnits) {
-        const row = clampRow(unit.pos.y + 12);
-        const list = unitsByRow.get(row);
-        if (list) list.push(unit);
-        else unitsByRow.set(row, [unit]);
-      }
-
       const isRampage = mode === 'rampage';
 
       env.drawDepthSortedStructures(
@@ -496,21 +474,14 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = ({
         minY,
         maxX,
         maxY,
-        (row) => {
-          const rowPickups = pickupsByRow.get(row);
-          if (rowPickups) {
-            for (const pickup of rowPickups) {
-              env.drawSinglePickup(ctx, pickup, simTime);
-            }
-          }
-          const rowUnits = unitsByRow.get(row);
-          if (rowUnits) {
-            for (const unit of rowUnits) {
-              drawUnitBody(ctx, unit, 1, false, simTime, isRampage);
-            }
-          }
-        },
       );
+
+      for (const pickup of frameState.pickups) {
+        env.drawSinglePickup(ctx, pickup, simTime);
+      }
+      for (const unit of sortedUnits) {
+        drawUnitBody(ctx, unit, 1, false, simTime, isRampage);
+      }
 
       drawHellcellEntities(ctx, frameState.hellcell, simTime);
       drawTracerVolley(ctx, animatedUnits, reduced ? 0.15 : elapsed, mode, scene.zoneB);

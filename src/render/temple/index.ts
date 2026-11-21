@@ -9,6 +9,7 @@ import {
   bakeTempleGroundLayer,
   drawTempleAnimatedWater,
   drawTempleAtmosphere,
+  drawTempleShadowsForRect,
 } from './lighting';
 import {
   drawBrokenEgyptianColumnCover,
@@ -22,6 +23,8 @@ import {
   drawSphinxStatueCover,
   drawTemplePropShadow,
 } from './props';
+import { ChunkedGroundCache } from '../groundCache';
+import { perfMonitor } from '../perf';
 import { TempleTextureAtlas } from './textures';
 
 export { decomposeTempleStructures } from './architecture';
@@ -29,34 +32,90 @@ export type { TempleStructure } from './architecture';
 
 export class TempleRenderer {
   private readonly textures = new TempleTextureAtlas();
+  private readonly chunkCache = new ChunkedGroundCache<TempleStructure>();
   private structures: TempleStructure[] = [];
   private byBottomRow = new Map<number, TempleStructure[]>();
   private groundCacheCanvas: HTMLCanvasElement | null = null;
-  private cacheKey = '';
 
-  private ensureCache(map: MapData): void {
+  markDirtyTile(tileKeyStr: string, mapWidth: number): void {
+    this.chunkCache.markDirtyTileKey(tileKeyStr, mapWidth);
+  }
+
+  getCacheStats() {
+    return {
+      fullRebuilds: this.chunkCache.fullRebuilds,
+      chunkRebuilds: this.chunkCache.chunkRebuilds,
+      structuresBaked: this.chunkCache.structuresBaked,
+      structuresReused: this.chunkCache.structuresReused,
+      pendingChunks: this.chunkCache.pendingChunkCount(),
+    };
+  }
+
+  ensureCache(map: MapData): void {
     this.textures.ensureLoading();
-    const key = `${map.seed}:${map.width}x${map.height}:${map.tileSize}:w${map.wallRevision ?? 0}:t${this.textures.getRevision()}`;
-    if (this.cacheKey === key && this.groundCacheCanvas) return;
-
     const ts = map.tileSize;
-    this.structures = decomposeTempleStructures(map);
-    this.byBottomRow.clear();
-
-    for (const s of this.structures) {
-      bakeTempleStructureCanvas(s, this.textures, ts);
-      const list = this.byBottomRow.get(s.bottomRow);
-      if (list) list.push(s);
-      else this.byBottomRow.set(s.bottomRow, [s]);
-    }
-
-    this.groundCacheCanvas = bakeTempleGroundLayer(
+    this.chunkCache.sync(
       map,
-      this.structures,
-      this.textures,
-      this.groundCacheCanvas,
+      this.textures.getRevision(),
+      () => {
+        const rebuildStart = perfMonitor.enabled ? performance.now() : 0;
+        const next = decomposeTempleStructures(map);
+        this.byBottomRow.clear();
+        for (const s of next) {
+          bakeTempleStructureCanvas(s, this.textures, ts);
+          const list = this.byBottomRow.get(s.bottomRow);
+          if (list) list.push(s);
+          else this.byBottomRow.set(s.bottomRow, [s]);
+        }
+        this.structures = next;
+
+        const baseFloor = bakeTempleGroundLayer(
+          map,
+          this.structures,
+          this.textures,
+          this.chunkCache.baseFloorCanvas,
+          true,
+        );
+        const ground = this.groundCacheCanvas ?? (typeof document !== 'undefined' ? document.createElement('canvas') : null);
+        if (ground && baseFloor) {
+          ground.width = baseFloor.width;
+          ground.height = baseFloor.height;
+          const gctx = ground.getContext('2d');
+          if (gctx) {
+            gctx.clearRect(0, 0, ground.width, ground.height);
+            gctx.drawImage(baseFloor, 0, 0);
+            drawTempleShadowsForRect(gctx, map, this.structures);
+          }
+        }
+        this.groundCacheCanvas = ground;
+        if (perfMonitor.enabled) {
+          perfMonitor.recordSubsystem('ensureCache', performance.now() - rebuildStart, 'temple');
+        }
+        return { baseFloor, ground };
+      },
+      () => {
+        const next = decomposeTempleStructures(map);
+        this.chunkCache.reconcileStructures(
+          this.structures,
+          next,
+          (s) => bakeTempleStructureCanvas(s, this.textures, ts),
+          this.byBottomRow,
+        );
+        this.structures = next;
+      },
+      (rect, groundCanvas, baseFloorCanvas, shadowScratch) => {
+        if (!groundCanvas || !baseFloorCanvas) return;
+        const gctx = groundCanvas.getContext('2d');
+        if (!gctx) return;
+        gctx.save();
+        gctx.beginPath();
+        gctx.rect(rect.x, rect.y, rect.w, rect.h);
+        gctx.clip();
+        gctx.drawImage(baseFloorCanvas, rect.x, rect.y, rect.w, rect.h, rect.x, rect.y, rect.w, rect.h);
+        drawTempleShadowsForRect(gctx, map, this.structures, rect, shadowScratch);
+        gctx.restore();
+      },
     );
-    this.cacheKey = key;
   }
 
   drawGround(

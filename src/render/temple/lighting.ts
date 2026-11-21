@@ -1,4 +1,9 @@
 import type { MapData } from '../../shared/types';
+import {
+  drawStructureShadowsAndAoRegion,
+  type ChunkRect,
+  type ShadowStrokeOptions,
+} from '../groundCache';
 import { hash2, type TempleStructure } from './architecture';
 import {
   drawCarvedFloorAnkh,
@@ -273,71 +278,34 @@ function drawTempleCourtyardDetails(
   }
 }
 
-function drawTempleShadowsAndAo(
+const TEMPLE_SHADOW_OPTS: ShadowStrokeOptions = {
+  shadowColor: '#241407',
+  shadowAlpha: 0.42,
+  shadowOffsetXFactor: 0.85,
+  shadowOffsetYFactor: 0.62,
+  blurPx: 5,
+  aoOuterColor: 'rgba(28, 16, 6, 0.22)',
+  aoOuterWidth: 14,
+  aoInnerColor: 'rgba(20, 11, 4, 0.44)',
+  aoInnerWidth: 5,
+};
+
+export function drawTempleShadowsForRect(
   ctx: CanvasRenderingContext2D,
   map: MapData,
   structures: readonly TempleStructure[],
+  rect?: ChunkRect,
+  scratchCanvas?: HTMLCanvasElement | null,
 ): void {
+  drawStructureShadowsAndAoRegion(ctx, map, structures, TEMPLE_SHADOW_OPTS, rect, scratchCanvas);
+}
+
+function drawTempleEdgeShadeAndSunPools(ctx: CanvasRenderingContext2D, map: MapData): void {
   const ts = map.tileSize;
   const worldW = map.width * ts;
   const worldH = map.height * ts;
 
-  // 1. Long golden-desert afternoon directional cast shadows (upper-left sun -> down-right)
-  if (typeof document !== 'undefined') {
-    const sc = document.createElement('canvas');
-    sc.width = Math.max(1, Math.floor(worldW * 0.5));
-    sc.height = Math.max(1, Math.floor(worldH * 0.5));
-    const sctx = sc.getContext('2d');
-    if (sctx) {
-      sctx.save();
-      sctx.scale(0.5, 0.5);
-      if ('filter' in sctx) sctx.filter = 'blur(5px)';
-      sctx.fillStyle = '#241407';
-
-      for (const s of structures) {
-        const bx = s.col * ts;
-        const by = s.row * ts;
-        const bw = s.w * ts;
-        const bh = s.h * ts;
-        const dx = s.elevation * 0.85;
-        const dy = s.elevation * 0.62;
-
-        sctx.beginPath();
-        sctx.moveTo(bx + bw, by);
-        sctx.lineTo(bx + bw + dx, by + dy);
-        sctx.lineTo(bx + bw + dx, by + bh + dy);
-        sctx.lineTo(bx + dx, by + bh + dy);
-        sctx.lineTo(bx, by + bh);
-        sctx.closePath();
-        sctx.fill();
-      }
-      sctx.restore();
-
-      ctx.save();
-      ctx.globalAlpha = 0.42;
-      ctx.drawImage(sc, 0, 0, worldW, worldH);
-      ctx.restore();
-    }
-  }
-
-  // 2. Ambient occlusion contact shadow & darkened perimeter desert enclosure shade
   ctx.save();
-  for (const s of structures) {
-    if (s.isBorder) continue;
-    const bx = s.col * ts;
-    const by = s.row * ts;
-    const bw = s.w * ts;
-    const bh = s.h * ts;
-
-    ctx.strokeStyle = 'rgba(28, 16, 6, 0.22)';
-    ctx.lineWidth = 14;
-    ctx.strokeRect(bx, by, bw, bh);
-
-    ctx.strokeStyle = 'rgba(20, 11, 4, 0.44)';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(bx, by, bw, bh);
-  }
-
   const edgeShade = (x0: number, y0: number, x1: number, y1: number, rx: number, ry: number, rw: number, rh: number) => {
     const g = ctx.createLinearGradient(x0, y0, x1, y1);
     g.addColorStop(0, 'rgba(36, 20, 8, 0.42)');
@@ -351,7 +319,7 @@ function drawTempleShadowsAndAo(
   edgeShade(worldW, 0, worldW - ts * 3.2, 0, worldW - ts * 3.2, 0, ts * 3.2, worldH);
   ctx.restore();
 
-  // 3. Warm golden desert sunlight pools across open courtyard centers & sandstone avenues
+  // Warm golden desert sunlight pools across open courtyard centers & sandstone avenues
   ctx.save();
   for (const z of map.zones) {
     const sunGrad = ctx.createRadialGradient(
@@ -384,6 +352,7 @@ export function bakeTempleGroundLayer(
   structures: readonly TempleStructure[],
   textures: TempleTextureAtlas,
   existingCanvas?: HTMLCanvasElement | null,
+  skipDynamicShadows = false,
 ): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
 
@@ -526,8 +495,12 @@ export function bakeTempleGroundLayer(
     }
   }
 
-  // 7. Long afternoon shadows, warm umber AO, and golden sunlight highlights
-  drawTempleShadowsAndAo(ctx, map, structures);
+  drawTempleEdgeShadeAndSunPools(ctx, map);
+
+  // 7. Long afternoon shadows, warm umber AO
+  if (!skipDynamicShadows) {
+    drawTempleShadowsForRect(ctx, map, structures);
+  }
 
   return canvas;
 }

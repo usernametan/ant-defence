@@ -3,6 +3,7 @@ import {
   bakeJungleGroundLayer,
   drawJungleAnimatedWater,
   drawJungleAtmosphere,
+  drawJungleShadowsForRect,
 } from './lighting';
 import {
   bakeRuinCanvas,
@@ -10,6 +11,8 @@ import {
   hash2,
   type JungleRuin,
 } from './ruins';
+import { ChunkedGroundCache } from '../groundCache';
+import { perfMonitor } from '../perf';
 import { JungleTextureAtlas } from './textures';
 import {
   drawAncientTempleStatue,
@@ -27,34 +30,90 @@ export type { JungleRuin } from './ruins';
 
 export class JungleRenderer {
   private readonly textures = new JungleTextureAtlas();
+  private readonly chunkCache = new ChunkedGroundCache<JungleRuin>();
   private ruins: JungleRuin[] = [];
   private ruinsByBottomRow = new Map<number, JungleRuin[]>();
   private groundCacheCanvas: HTMLCanvasElement | null = null;
-  private cacheKey = '';
 
-  private ensureCache(map: MapData): void {
+  markDirtyTile(tileKeyStr: string, mapWidth: number): void {
+    this.chunkCache.markDirtyTileKey(tileKeyStr, mapWidth);
+  }
+
+  getCacheStats() {
+    return {
+      fullRebuilds: this.chunkCache.fullRebuilds,
+      chunkRebuilds: this.chunkCache.chunkRebuilds,
+      structuresBaked: this.chunkCache.structuresBaked,
+      structuresReused: this.chunkCache.structuresReused,
+      pendingChunks: this.chunkCache.pendingChunkCount(),
+    };
+  }
+
+  ensureCache(map: MapData): void {
     this.textures.ensureLoading();
-    const key = `${map.seed}:${map.width}x${map.height}:${map.tileSize}:w${map.wallRevision ?? 0}:t${this.textures.getRevision()}`;
-    if (this.cacheKey === key && this.groundCacheCanvas) return;
-
     const ts = map.tileSize;
-    this.ruins = decomposeJungleRuins(map);
-    this.ruinsByBottomRow.clear();
-
-    for (const ruin of this.ruins) {
-      bakeRuinCanvas(ruin, this.textures, ts);
-      const list = this.ruinsByBottomRow.get(ruin.bottomRow);
-      if (list) list.push(ruin);
-      else this.ruinsByBottomRow.set(ruin.bottomRow, [ruin]);
-    }
-
-    this.groundCacheCanvas = bakeJungleGroundLayer(
+    this.chunkCache.sync(
       map,
-      this.ruins,
-      this.textures,
-      this.groundCacheCanvas,
+      this.textures.getRevision(),
+      () => {
+        const rebuildStart = perfMonitor.enabled ? performance.now() : 0;
+        const next = decomposeJungleRuins(map);
+        this.ruinsByBottomRow.clear();
+        for (const ruin of next) {
+          bakeRuinCanvas(ruin, this.textures, ts);
+          const list = this.ruinsByBottomRow.get(ruin.bottomRow);
+          if (list) list.push(ruin);
+          else this.ruinsByBottomRow.set(ruin.bottomRow, [ruin]);
+        }
+        this.ruins = next;
+
+        const baseFloor = bakeJungleGroundLayer(
+          map,
+          this.ruins,
+          this.textures,
+          this.chunkCache.baseFloorCanvas,
+          true,
+        );
+        const ground = this.groundCacheCanvas ?? (typeof document !== 'undefined' ? document.createElement('canvas') : null);
+        if (ground && baseFloor) {
+          ground.width = baseFloor.width;
+          ground.height = baseFloor.height;
+          const gctx = ground.getContext('2d');
+          if (gctx) {
+            gctx.clearRect(0, 0, ground.width, ground.height);
+            gctx.drawImage(baseFloor, 0, 0);
+            drawJungleShadowsForRect(gctx, map, this.ruins);
+          }
+        }
+        this.groundCacheCanvas = ground;
+        if (perfMonitor.enabled) {
+          perfMonitor.recordSubsystem('ensureCache', performance.now() - rebuildStart, 'jungle');
+        }
+        return { baseFloor, ground };
+      },
+      () => {
+        const next = decomposeJungleRuins(map);
+        this.chunkCache.reconcileStructures(
+          this.ruins,
+          next,
+          (r) => bakeRuinCanvas(r, this.textures, ts),
+          this.ruinsByBottomRow,
+        );
+        this.ruins = next;
+      },
+      (rect, groundCanvas, baseFloorCanvas, shadowScratch) => {
+        if (!groundCanvas || !baseFloorCanvas) return;
+        const gctx = groundCanvas.getContext('2d');
+        if (!gctx) return;
+        gctx.save();
+        gctx.beginPath();
+        gctx.rect(rect.x, rect.y, rect.w, rect.h);
+        gctx.clip();
+        gctx.drawImage(baseFloorCanvas, rect.x, rect.y, rect.w, rect.h, rect.x, rect.y, rect.w, rect.h);
+        drawJungleShadowsForRect(gctx, map, this.ruins, rect, shadowScratch);
+        gctx.restore();
+      },
     );
-    this.cacheKey = key;
   }
 
   drawGround(

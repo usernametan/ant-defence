@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
 import { getThemePalette } from '../../render/palette';
 import type { GameMode, MapTheme } from '../../shared/types';
-import { Badge, Button, Icon, Panel, useMenuNavigation } from '../design';
-import '../ui.css';
+import { Icon, useMenuNavigation } from '../design';
+import { playUiClick, playUiConfirm, playUiHover } from '../design/uiSound';
+import './landing.css';
 
 export interface PauseMenuProps {
   mode?: GameMode;
@@ -37,67 +38,83 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const theme = getThemePalette(mapTheme);
 
   return (
-    <div ref={containerRef} className="ht-root ht-blur-backdrop">
-      <Panel
-        bracketed
-        style={{
-          width: 'min(420px, 100%)',
-          padding: 28,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 14,
-        }}
-      >
-        <div style={{ textAlign: 'center', marginBottom: 4 }}>
-          <Badge tone="player">SIMULATION SUSPENDED</Badge>
-          <h2 className="ht-display" style={{ fontSize: 28, marginTop: 6 }}>
-            PAUSED
-          </h2>
+    <div ref={containerRef} className="zc-overlay-backdrop">
+      <div className="zc-card-surface zc-pause-card zc-enter">
+        <div className="zc-pause-header">
+          <h2 className="zc-pause-title">Paused</h2>
+          <span className="zc-pause-meta">
+            {elapsedSeconds !== undefined
+              ? `${theme.name} · ${formatClock(elapsedSeconds)}`
+              : theme.name}
+          </span>
         </div>
 
         {score && (
-          <Panel
-            tone="subtle"
-            style={{
-              padding: '10px 14px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: 12,
-            }}
-          >
-            <span className="ht-display" style={{ fontSize: 14, color: 'var(--player-glow)' }}>
-              {mode === 'rampage' ? `${score.player}K` : score.player}
+          <div className="zc-pause-scoreboard">
+            <span className="zc-pause-team zc-pause-team--player">
+              <span>You</span>
+              <strong>{mode === 'rampage' ? `${score.player}K` : score.player}</strong>
             </span>
-            <div style={{ textAlign: 'center' }}>
-              <div className="ht-display" style={{ fontSize: 10, color: theme.accent }}>
-                {mode === 'rampage' ? `RAMPAGE · ${theme.name}` : theme.name}
-              </div>
-              {elapsedSeconds !== undefined && (
-                <div className="ht-num" style={{ fontSize: 11, color: 'var(--text-mid)' }}>
-                  {formatClock(elapsedSeconds)}
-                </div>
-              )}
-            </div>
-            <span className="ht-display" style={{ fontSize: 14, color: 'var(--enemy-glow)' }}>
-              {mode === 'rampage' ? `${score.enemy}K` : score.enemy}
+            <span className="zc-pause-vs">vs</span>
+            <span className="zc-pause-team zc-pause-team--enemy">
+              <strong>{mode === 'rampage' ? `${score.enemy}K` : score.enemy}</strong>
+              <span>{mode === 'rampage' ? 'Top Bot' : 'Enemy'}</span>
             </span>
-          </Panel>
+          </div>
         )}
 
-        <Button variant="primary" size="lg" onClick={onResume}>
-          <Icon name="play" size={16} /> Resume Match
-        </Button>
-        <Button variant="secondary" onClick={onSettings}>
-          <Icon name="settings" size={16} /> Settings
-        </Button>
-        <Button variant="secondary" onClick={onRestart}>
-          Restart Sector
-        </Button>
-        <Button variant="danger" onClick={onQuit}>
-          Quit to Command
-        </Button>
-      </Panel>
+        <div className="zc-pause-actions">
+          <button
+            type="button"
+            className="zc-play-btn zc-pause-btn"
+            onMouseEnter={() => playUiHover()}
+            onClick={() => {
+              playUiConfirm();
+              onResume();
+            }}
+          >
+            <Icon name="play" size={14} />
+            <span>Resume</span>
+          </button>
+
+          <button
+            type="button"
+            className="zc-secondary-btn zc-pause-btn"
+            onMouseEnter={() => playUiHover()}
+            onClick={() => {
+              playUiClick();
+              onSettings();
+            }}
+          >
+            <Icon name="settings" size={14} />
+            <span>Settings</span>
+          </button>
+
+          <button
+            type="button"
+            className="zc-secondary-btn zc-pause-btn"
+            onMouseEnter={() => playUiHover()}
+            onClick={() => {
+              playUiClick();
+              onRestart();
+            }}
+          >
+            <span>Restart Match</span>
+          </button>
+
+          <button
+            type="button"
+            className="zc-danger-btn"
+            onMouseEnter={() => playUiHover()}
+            onClick={() => {
+              playUiClick();
+              onQuit();
+            }}
+          >
+            <span>Exit to Menu</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

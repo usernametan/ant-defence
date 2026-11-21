@@ -39,6 +39,8 @@ export class GameController {
   private rafId: number | null = null;
   private lastFrame: number | null = null;
   private accumulator = 0;
+  private alpha = 1;
+  private lastSimSteps = 0;
   private readonly input: InputState = {
     moveX: 0,
     moveY: 0,
@@ -82,6 +84,14 @@ export class GameController {
   /** Live snapshot for the renderer; never cache or mutate this object. */
   getState(): Readonly<GameState> {
     return this.sim.getState();
+  }
+
+  getLastSimSteps(): number {
+    return this.lastSimSteps;
+  }
+
+  getAlpha(): number {
+    return this.sim.getState().status === 'playing' ? this.alpha : 1;
   }
 
   /** Camera mapping from the renderer, e.g. setViewTransform({ offsetX, offsetY, scale }). */
@@ -224,6 +234,8 @@ export class GameController {
       steps += 1;
     }
     if (steps === MAX_SUBSTEPS) this.accumulator = 0;
+    this.lastSimSteps = steps;
+    this.alpha = this.sim.getState().status === 'playing' ? this.accumulator / FIXED_DT : 1;
 
     this.rafId = requestAnimationFrame(this.frame);
   };

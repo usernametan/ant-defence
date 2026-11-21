@@ -144,6 +144,19 @@ describe('AI', () => {
     expect(thrown.mock.calls.length).toBeGreaterThanOrEqual(1);
     expect(bot.grenades).toBeLessThan(2);
   });
+
+  it('batches map changes and caps A* searches to at most 3 per tick during repath bursts', () => {
+    const world = makeWorld(makeMap(40, 20, { x: 25, y: 10 }), 'normal');
+    spawnBots(world, { seed: 7, difficulty: 'normal', scoreToWin: 100, enemyCount: 10, startingWeapon: 'rifle' });
+
+    for (let burst = 0; burst < 12; burst += 1) {
+      // Simulate repeated map breaks across consecutive ticks
+      world.damageCover({ x: 10 + (burst % 6), y: 10 }, 999);
+      world.flushMapVersion(burst % 10 === 0);
+      tick(world);
+      expect(world.pathCache.misses).toBeLessThanOrEqual(3);
+    }
+  });
 });
 
 function reactionOf(world: SimWorld, unit: Unit): number {

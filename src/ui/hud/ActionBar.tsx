@@ -12,7 +12,7 @@ export interface ActionBarProps {
   grenadeMaxCooldown?: number;
 }
 
-export const ActionBar: React.FC<ActionBarProps> = ({
+export const ActionBar = React.memo<ActionBarProps>(({
   hasNearbyPickup,
   reloading,
   lowAmmo,
@@ -157,4 +157,4 @@ export const ActionBar: React.FC<ActionBarProps> = ({
       ))}
     </div>
   );
-};
+});
