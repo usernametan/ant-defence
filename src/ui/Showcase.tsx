@@ -177,7 +177,6 @@ export const Showcase: React.FC = () => {
             firing: false,
             reload: false,
             interact: false,
-            swapWeapon: false,
             dash: false,
           });
         }
@@ -388,7 +387,7 @@ export const Showcase: React.FC = () => {
               <Button size="sm" variant="secondary" onClick={() => sim.triggerRespawnPreview()}>
                 Respawn Screen
               </Button>
-              {(['jungle', 'temple', 'fortress'] as const).map((theme) => (
+              {(['jungle', 'temple', 'fortress', 'slumside'] as const).map((theme) => (
                 <Button
                   key={theme}
                   size="sm"

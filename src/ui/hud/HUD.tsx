@@ -27,6 +27,7 @@ export interface HUDProps {
   crosshairStyle?: CrosshairStyle;
   colorblindAssist?: boolean;
   showHints?: boolean;
+  scoped?: boolean;
   initialKillFeed?: KillFeedEntry[];
   onStreak?: (count: number) => void;
 }
@@ -77,6 +78,7 @@ export const HUD: React.FC<HUDProps> = ({
   crosshairStyle = 'tactical',
   colorblindAssist = false,
   showHints = true,
+  scoped = false,
   initialKillFeed = [],
   onStreak,
 }) => {
@@ -258,7 +260,8 @@ export const HUD: React.FC<HUDProps> = ({
   }
 
   const speed = player ? Math.hypot(player.vel.x, player.vel.y) : 0;
-  const crosshairGap = 5 + weaponDef.spread * 36 + speed * 0.02 + shotKick;
+  const crosshairGap =
+    (5 + weaponDef.spread * 36 + speed * 0.02 + shotKick) * (scoped ? 0.72 : 1);
 
   const isRampage = state.matchConfig.mode === 'rampage';
   const contestedZones = isRampage
@@ -333,6 +336,7 @@ export const HUD: React.FC<HUDProps> = ({
           damageIndicators={damageIndicators}
           reloadProgress={player?.reloading ? player.reloadProgress : null}
           isLowAmmo={isLowAmmo}
+          scoped={scoped}
         />
       )}
 
@@ -398,7 +402,7 @@ export const HUD: React.FC<HUDProps> = ({
               >
                 {state.hellcell.phase === 'WARNING'
                   ? (state.hellcell.bossCount ?? 0) === 0
-                    ? `ZONES A & C SECURED · ZONE B BOSS EMERGING IN ${Math.max(1, Math.ceil(state.hellcell.countdown))}...`
+                    ? `2 ZONES SECURED · ZONE ${formatZoneCode(state.hellcell.emergenceZoneId ?? 'zone-2')} BOSS EMERGING IN ${Math.max(1, Math.ceil(state.hellcell.countdown))}...`
                     : `HELLCELL BREACH IN ${Math.max(1, Math.ceil(state.hellcell.countdown))}...`
                   : `PVP RESUMING IN ${Math.max(1, Math.ceil(state.hellcell.countdown))}...`}
               </span>
@@ -532,6 +536,11 @@ export const HUD: React.FC<HUDProps> = ({
                     </span>
                     <span className="ht-display" style={{ color: 'var(--text-hi)', fontSize: 11, fontWeight: 800 }}>
                       {state.hellcell.boss.name}
+                      {state.hellcell.boss.subtitle ? (
+                        <span style={{ color: 'var(--text-mid)', fontSize: 9, fontWeight: 600, marginLeft: 6, letterSpacing: '0.09em' }}>
+                          · {state.hellcell.boss.subtitle}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="ht-num" style={{ color: 'var(--enemy-glow)', fontWeight: 800 }}>
                       {Math.ceil(state.hellcell.boss.hp)} / {state.hellcell.boss.maxHp}
@@ -754,7 +763,12 @@ export const HUD: React.FC<HUDProps> = ({
             hasNearbyPickup={Boolean(nearbyPickup)}
             reloading={Boolean(player?.reloading)}
             lowAmmo={isLowAmmo}
+            dashReady={(player?.dashCooldown ?? 0) <= 0.05}
+            dashCooldown={player?.dashCooldown ?? 0}
+            dashMaxCooldown={player?.dashMaxCooldown ?? 3.2}
             grenades={player?.grenades ?? 2}
+            grenadeCooldown={player?.grenadeCooldown ?? 0}
+            grenadeMaxCooldown={player?.grenadeMaxCooldown ?? 3.0}
           />
         </div>
 
@@ -766,6 +780,7 @@ export const HUD: React.FC<HUDProps> = ({
               ammoInMag={player.ammoInMag}
               reserveAmmo={player.reserveAmmo}
               grenades={player.grenades ?? 2}
+              grenadeCooldown={player.grenadeCooldown ?? 0}
               reloading={player.reloading}
               reloadProgress={player.reloadProgress}
               flipKey={weaponFlipKey}

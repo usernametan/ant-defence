@@ -5,7 +5,11 @@ export interface ActionBarProps {
   reloading: boolean;
   lowAmmo: boolean;
   dashReady?: boolean;
+  dashCooldown?: number;
+  dashMaxCooldown?: number;
   grenades?: number;
+  grenadeCooldown?: number;
+  grenadeMaxCooldown?: number;
 }
 
 export const ActionBar: React.FC<ActionBarProps> = ({
@@ -13,7 +17,11 @@ export const ActionBar: React.FC<ActionBarProps> = ({
   reloading,
   lowAmmo,
   dashReady = true,
+  dashCooldown = 0,
+  dashMaxCooldown = 3.2,
   grenades = 2,
+  grenadeCooldown = 0,
+  grenadeMaxCooldown = 3.0,
 }) => {
   const [pressedKey, setPressedKey] = useState<string | null>(null);
 
@@ -33,12 +41,26 @@ export const ActionBar: React.FC<ActionBarProps> = ({
     };
   }, []);
 
+  const dashCooling = dashCooldown > 0.05;
+  const dashRatio = dashCooling ? Math.max(0, Math.min(1, dashCooldown / Math.max(0.01, dashMaxCooldown))) : 0;
+  const dashAvailable = dashReady && !dashCooling;
+
+  const grenadeCooling = grenades > 0 && grenadeCooldown > 0.05;
+  const grenadeRatio = grenadeCooling
+    ? Math.max(0, Math.min(1, grenadeCooldown / Math.max(0.01, grenadeMaxCooldown)))
+    : 0;
+  const grenadeAvailable = grenades > 0 && !grenadeCooling;
+
   const slots = [
     {
       key: 'Q',
-      title: 'Tactical Dash (Shift)',
-      active: pressedKey === 'Q' || dashReady,
-      highlight: pressedKey === 'Q',
+      title: dashCooling
+        ? `Tactical Dash (Shift) — ${dashCooldown.toFixed(1)}s cooldown`
+        : 'Tactical Dash (Shift) — Ready',
+      active: dashAvailable,
+      highlight: dashAvailable && pressedKey === 'Q',
+      cooldown: dashCooling ? dashCooldown : 0,
+      cooldownRatio: dashRatio,
       badge: null as number | null,
       icon: (
         <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={2}>
@@ -52,6 +74,8 @@ export const ActionBar: React.FC<ActionBarProps> = ({
       title: 'Swap / Interact (E)',
       active: hasNearbyPickup || pressedKey === 'E',
       highlight: hasNearbyPickup || pressedKey === 'E',
+      cooldown: 0,
+      cooldownRatio: 0,
       badge: hasNearbyPickup ? 1 : null,
       icon: (
         <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={2}>
@@ -66,6 +90,8 @@ export const ActionBar: React.FC<ActionBarProps> = ({
       title: 'Reload Weapon (R)',
       active: reloading || lowAmmo || pressedKey === 'R',
       highlight: reloading || lowAmmo || pressedKey === 'R',
+      cooldown: 0,
+      cooldownRatio: 0,
       badge: lowAmmo ? 1 : null,
       icon: (
         <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={2}>
@@ -77,9 +103,13 @@ export const ActionBar: React.FC<ActionBarProps> = ({
     },
     {
       key: 'G',
-      title: `Throw Grenade Straight (G) — ${grenades} left`,
-      active: grenades > 0 || pressedKey === 'G',
-      highlight: pressedKey === 'G',
+      title: grenadeCooling
+        ? `Throw Grenade (G) — ${grenadeCooldown.toFixed(1)}s cooldown (${grenades} left)`
+        : `Throw Grenade Straight (G) — ${grenades} left`,
+      active: grenadeAvailable,
+      highlight: grenadeAvailable && pressedKey === 'G',
+      cooldown: grenadeCooling ? grenadeCooldown : 0,
+      cooldownRatio: grenadeRatio,
       badge: grenades,
       icon: (
         <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={2}>
@@ -100,9 +130,24 @@ export const ActionBar: React.FC<ActionBarProps> = ({
           title={slot.title}
         >
           <div
-            className={`ht-action-slot ${slot.highlight ? 'is-highlight' : ''} ${!slot.active ? 'is-dim' : ''}`}
+            className={`ht-action-slot ${slot.highlight ? 'is-highlight' : ''} ${!slot.active ? 'is-dim' : ''} ${slot.cooldown > 0 ? 'is-cooldown' : ''}`}
           >
             {slot.icon}
+            {slot.cooldown > 0 && (
+              <>
+                <span
+                  className="ht-action-cooldown-fill"
+                  style={{ height: `${Math.round(slot.cooldownRatio * 100)}%` }}
+                  aria-hidden="true"
+                />
+                <span
+                  className="ht-action-cooldown-text"
+                  aria-label={`${slot.key} cooldown ${slot.cooldown.toFixed(1)} seconds`}
+                >
+                  {slot.cooldown.toFixed(1)}s
+                </span>
+              </>
+            )}
             {slot.badge !== null && (
               <span className="ht-action-badge">{slot.badge}</span>
             )}

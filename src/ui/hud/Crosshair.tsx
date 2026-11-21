@@ -13,6 +13,7 @@ export interface CrosshairGlyphProps {
   hitFlash: 'hit' | 'kill' | null;
   reloadProgress?: number | null;
   isLowAmmo?: boolean;
+  scoped?: boolean;
 }
 
 export const CrosshairGlyph: React.FC<CrosshairGlyphProps> = ({
@@ -21,6 +22,7 @@ export const CrosshairGlyph: React.FC<CrosshairGlyphProps> = ({
   hitFlash,
   reloadProgress = null,
   isLowAmmo = false,
+  scoped = false,
 }) => {
   const stroke = isLowAmmo && reloadProgress === null ? 'var(--gold)' : 'var(--player-glow)';
   const g = Math.max(4, Math.min(26, gap));
@@ -74,6 +76,16 @@ export const CrosshairGlyph: React.FC<CrosshairGlyphProps> = ({
         </g>
       )}
 
+      {scoped && (
+        <g stroke="var(--player-glow)" fill="none" opacity={0.78}>
+          <circle cx={0} cy={0} r={24} strokeWidth={1.3} strokeDasharray="7 5" />
+          <line x1={0} y1={-29} x2={0} y2={-23} strokeWidth={1.6} strokeLinecap="round" />
+          <line x1={0} y1={23} x2={0} y2={29} strokeWidth={1.6} strokeLinecap="round" />
+          <line x1={-29} y1={0} x2={-23} y2={0} strokeWidth={1.6} strokeLinecap="round" />
+          <line x1={23} y1={0} x2={29} y2={0} strokeWidth={1.6} strokeLinecap="round" />
+        </g>
+      )}
+
       {reloadProgress !== null && reloadProgress >= 0 && (
         <g>
           <circle
@@ -123,6 +135,7 @@ export interface CrosshairOverlayProps {
   damageIndicators: DamageIndicator[];
   reloadProgress?: number | null;
   isLowAmmo?: boolean;
+  scoped?: boolean;
 }
 
 export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
@@ -133,6 +146,7 @@ export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
   damageIndicators,
   reloadProgress = null,
   isLowAmmo = false,
+  scoped = false,
 }) => {
   const x = screenPos?.x ?? (typeof window !== 'undefined' ? window.innerWidth * 0.5 : 640);
   const y = screenPos?.y ?? (typeof window !== 'undefined' ? window.innerHeight * 0.5 : 360);
@@ -155,6 +169,7 @@ export const CrosshairOverlay: React.FC<CrosshairOverlayProps> = ({
         hitFlash={hitFlash}
         reloadProgress={reloadProgress}
         isLowAmmo={isLowAmmo}
+        scoped={scoped}
       />
 
       {/* Damage direction arcs around crosshair */}

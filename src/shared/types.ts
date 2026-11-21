@@ -67,7 +67,7 @@ export interface BaseDef {
   coreHp: number;
 }
 
-export type MapTheme = 'fortress' | 'jungle' | 'temple';
+export type MapTheme = 'fortress' | 'jungle' | 'temple' | 'slumside';
 
 export interface MapData {
   seed: number;
@@ -113,6 +113,14 @@ export interface Unit {
   ammoInMag: number;
   reserveAmmo: number;
   grenades?: number;
+  /** Remaining dash cooldown in seconds (0 when ready). */
+  dashCooldown?: number;
+  /** Total dash cooldown duration in seconds. */
+  dashMaxCooldown?: number;
+  /** Remaining grenade throw cooldown in seconds (0 when ready). */
+  grenadeCooldown?: number;
+  /** Total grenade throw cooldown duration in seconds. */
+  grenadeMaxCooldown?: number;
   reloading: boolean;
   /** 0..1 while reloading. */
   reloadProgress: number;
@@ -164,12 +172,38 @@ export interface Pickup {
 
 export type HellcellPhase = 'NORMAL' | 'WARNING' | 'CEASEFIRE_BOSS' | 'RESUME_COUNTDOWN';
 
-export type BossKind = 'rocketSiegeBot' | 'venomCobra' | 'pharaohSkeleton';
+export type BossKind = 'rocketSiegeBot' | 'venomCobra' | 'pharaohSkeleton' | 'mumbaiTrain';
+
+export type TrainBehavior =
+  | 'cruise'
+  | 'chargeWindup'
+  | 'chargeDash'
+  | 'chargeRecover'
+  | 'electricWindup'
+  | 'electricPulse';
+
+export interface TrainCoachState {
+  pos: Vec2;
+  angle: number;
+}
+
+export interface TrainBossState {
+  coaches: TrainCoachState[];
+  speed: number;
+  behavior: TrainBehavior;
+  behaviorTimer: number;
+  actionIndex: number;
+  chargeAngle: number;
+  chargeLength: number;
+  electricRadius: number;
+  hitUnitIds: string[];
+}
 
 export interface HellcellBoss {
   id: string;
   kind: BossKind;
   name: string;
+  subtitle?: string;
   pos: Vec2;
   radius: number;
   angle: number;
@@ -181,6 +215,8 @@ export interface HellcellBoss {
   attackTimer: number;
   /** 0..1 recoil/punch animation timer. */
   attackAnim: number;
+  /** Articulated multi-coach state for the Slumside Mumbai Local Train boss. */
+  trainState?: TrainBossState;
 }
 
 export interface BossReticle {
@@ -240,6 +276,8 @@ export interface HellcellState {
   bossCount?: number;
   nextSpawnIn?: number;
   spawnPos?: Vec2;
+  /** Zone ID of the third uncaptured zone from which the first boss emerges. */
+  emergenceZoneId?: string;
   crushedTiles?: CrushedTileRecord[];
   triggerTime: number;
   countdown: number;
@@ -267,6 +305,8 @@ export interface MatchConfig {
   seed: number;
   mode?: GameMode;
   difficulty: MatchDifficulty;
+  /** Optional difficulty override for the enemy team (used by headless balance suites). */
+  enemyDifficulty?: MatchDifficulty;
   scoreToWin: number;
   enemyCount: number;
   startingWeapon: WeaponId;
@@ -308,7 +348,6 @@ export interface InputState {
   firing: boolean;
   reload: boolean;
   interact: boolean;
-  swapWeapon: boolean;
   dash: boolean;
   throwGrenade?: boolean;
 }

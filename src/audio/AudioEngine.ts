@@ -151,7 +151,14 @@ export class AudioEngine {
     );
     if (this.ctx && this.ambientFilter && this.musicGain) {
       const now = this.ctx.currentTime;
-      const baseCut = this.mapTheme === 'jungle' ? 300 : this.mapTheme === 'temple' ? 260 : 220;
+      const baseCut =
+        this.mapTheme === 'jungle'
+          ? 300
+          : this.mapTheme === 'temple'
+            ? 260
+            : this.mapTheme === 'slumside'
+              ? 240
+              : 220;
       const cutoff = baseCut + this.combatHeat * 740;
       this.ambientFilter.frequency.setTargetAtTime(cutoff, now, 0.18);
       this.musicGain.gain.setTargetAtTime(
@@ -295,6 +302,13 @@ export class AudioEngine {
       this.playTone(108, 66, 0.44, 'sawtooth', vol * 0.65, pan, 0.08);
       this.playTone(540, 360, 0.16, 'sine', vol * 0.45, pan, 0.18);
       this.playTone(430, 290, 0.14, 'sine', vol * 0.35, pan, 0.3);
+    } else if (kind === 'mumbaiTrain') {
+      // Classic twin-tone Mumbai local air horn blast + overhead 25kV crackle
+      const vol = 0.15 * level;
+      this.playTone(277, 272, 0.42, 'sawtooth', vol, pan);
+      this.playTone(349, 344, 0.42, 'sawtooth', vol * 0.85, pan, 0.02);
+      this.playTone(138, 132, 0.44, 'triangle', vol * 0.7, pan);
+      this.playNoiseBurst(0.14, 2400, vol * 0.55, pan);
     } else {
       // Giant Venom Cobra sibilant snake whisper ("sssss... sssss...")
       const vol = 0.2 * level;
@@ -454,6 +468,15 @@ export class AudioEngine {
       filter.frequency.value = 460;
       lfo.frequency.value = 6.2;
       lfoGain.gain.value = 180;
+    } else if (kind === 'mumbaiTrain') {
+      // Heavy EMU traction motor hum + rhythmic steel track-joint cadence
+      oscA.type = 'sawtooth';
+      oscA.frequency.value = 54;
+      oscB.type = 'triangle';
+      oscB.frequency.value = 81;
+      filter.frequency.value = 340;
+      lfo.frequency.value = 4.6;
+      lfoGain.gain.value = 150;
     } else {
       oscA.type = 'triangle';
       oscA.frequency.value = 58;
@@ -706,6 +729,34 @@ export class AudioEngine {
       bus.on('hellcell:resumed', () => {
         this.playTone(523.25, 783.99, 0.16, 'triangle', 0.16, 0);
       }),
+      bus.on('boss:action', ({ kind, action, pos }) => {
+        if (kind !== 'mumbaiTrain') return;
+        const prox = Math.max(0.22, computeBossProximity(pos, this.listenerPos, 920));
+        const pan = this.computePan(pos);
+        if (action === 'chargeWarning') {
+          // Urgent double-blast Mumbai suburban train horn before charge
+          this.playTone(277, 274, 0.24, 'sawtooth', 0.22 * prox, pan);
+          this.playTone(349, 346, 0.24, 'sawtooth', 0.18 * prox, pan);
+          this.playTone(277, 270, 0.34, 'sawtooth', 0.24 * prox, pan, 0.28);
+          this.playTone(349, 342, 0.34, 'sawtooth', 0.2 * prox, pan, 0.28);
+        } else if (action === 'chargeDash') {
+          this.playNoiseBurst(0.32, 820, 0.28 * prox, pan);
+          this.playTone(118, 62, 0.38, 'sawtooth', 0.22 * prox, pan);
+        } else if (action === 'electricWarning') {
+          // Rising 25kV catenary transformer buzz
+          this.playTone(180, 420, 0.48, 'sawtooth', 0.12 * prox, pan);
+          this.playNoiseBurst(0.22, 3200, 0.12 * prox, pan);
+        } else if (action === 'electricPulse') {
+          // High-voltage arc discharge snap & rumble
+          this.playNoiseBurst(0.28, 3800, 0.28 * prox, pan);
+          this.playTone(620, 140, 0.24, 'square', 0.18 * prox, pan);
+          this.playTone(110, 48, 0.32, 'sawtooth', 0.2 * prox, pan);
+        } else if (action === 'weakPointHit') {
+          if (!this.throttleEvent('boss:weakpoint', 70)) return;
+          this.playTone(1480, 760, 0.08, 'square', 0.12 * prox, pan);
+          this.playNoiseBurst(0.06, 4200, 0.12 * prox, pan);
+        }
+      }),
       bus.on('match:end', ({ winner }) => {
         this.stopBossLoop();
         if (winner === 'player') {
@@ -786,6 +837,11 @@ export class AudioEngine {
       this.ambientOscB.type = 'sine';
       this.ambientOscA.frequency.setTargetAtTime(73.42, now, 0.25);
       this.ambientOscB.frequency.setTargetAtTime(110.0, now, 0.25);
+    } else if (this.mapTheme === 'slumside') {
+      this.ambientOscA.type = 'triangle';
+      this.ambientOscB.type = 'sine';
+      this.ambientOscA.frequency.setTargetAtTime(65.41, now, 0.25);
+      this.ambientOscB.frequency.setTargetAtTime(98.0, now, 0.25);
     } else {
       this.ambientOscA.type = 'sawtooth';
       this.ambientOscB.type = 'triangle';

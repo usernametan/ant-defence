@@ -58,6 +58,12 @@ const ZONE_FORMATIONS: Record<MapTheme, TileCoord[][]> = {
     [{ x: 20, y: 29 }, { x: 30, y: 11 }, { x: 40, y: 29 }],
     [{ x: 16, y: 12 }, { x: 30, y: 26 }, { x: 44, y: 12 }],
   ],
+  slumside: [
+    [{ x: 16, y: 17 }, { x: 30, y: 23 }, { x: 44, y: 19 }],
+    [{ x: 16, y: 23 }, { x: 30, y: 17 }, { x: 44, y: 21 }],
+    [{ x: 17, y: 14 }, { x: 30, y: 22 }, { x: 43, y: 25 }],
+    [{ x: 17, y: 26 }, { x: 30, y: 18 }, { x: 43, y: 15 }],
+  ],
 };
 
 function clampTileX(x: number): number {
@@ -164,7 +170,14 @@ function tileCenter(x: number, y: number): Vec2 {
  * dynamic capture zone formations without importing src/sim/.
  */
 export function generatePreviewMap(seed: number, theme: MapTheme = 'fortress'): MapData {
-  const themeSalt = theme === 'jungle' ? 0x1a2b3c4d : theme === 'temple' ? 0x5e6f7a8b : 0;
+  const themeSalt =
+    theme === 'jungle'
+      ? 0x1a2b3c4d
+      : theme === 'temple'
+        ? 0x5e6f7a8b
+        : theme === 'slumside'
+          ? 0x3b7c9d2e
+          : 0;
   const rng = new PreviewRng((seed ^ 0x51f0a2c3 ^ themeSalt) >>> 0);
   const zoneTiles = selectZoneTiles(theme, rng);
   const anchors = [PLAYER_BASE, ENEMY_BASE, ...zoneTiles];
@@ -259,6 +272,69 @@ export function generatePreviewMap(seed: number, theme: MapTheme = 'fortress'): 
       setTile(tiles, cx, cy, 'lowCover');
       setTile(tiles, mirrorX(cx), cy, 'lowCover');
     }
+  } else if (theme === 'slumside') {
+    const isFlankCorridor = (x: number): boolean => (x >= 6 && x <= 8) || (x >= 51 && x <= 53);
+    const drawSlumBlock = (
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      kind: TileKind = 'wall',
+    ): void => {
+      for (let dy = 0; dy < h; dy += 1) {
+        for (let dx = 0; dx < w; dx += 1) {
+          const tx = x + dx;
+          const ty = y + dy;
+          const mx = mirrorX(tx);
+          if (!nearAnchor(tx, ty, anchors, 3) && !isFlankCorridor(tx)) {
+            setTile(tiles, tx, ty, kind);
+          }
+          if (!nearAnchor(mx, ty, anchors, 3) && !isFlankCorridor(mx)) {
+            setTile(tiles, mx, ty, kind);
+          }
+        }
+      }
+    };
+
+    for (const [wx, wy, ww, wh] of [
+      [11, 2, 4, 4],
+      [17, 2, 4, 4],
+      [23, 2, 5, 4],
+      [10, 8, 4, 4],
+      [24, 10, 5, 5],
+      [10, 24, 5, 4],
+      [18, 25, 4, 4],
+      [25, 29, 4, 4],
+      [10, 33, 4, 4],
+      [16, 32, 4, 4],
+      [22, 33, 5, 4],
+    ] as const) {
+      drawSlumBlock(wx, wy, ww, wh);
+    }
+
+    for (let i = 0; i < 6; i += 1) {
+      const cx = rng.int(10, 27);
+      const cy = rng.int(6, 32);
+      const w = rng.int(2, 3);
+      const h = rng.int(2, 3);
+      drawSlumBlock(cx, cy, w, h);
+    }
+
+    drawSlumBlock(16, 7, 2, 2, 'water');
+    drawSlumBlock(16, 31, 2, 2, 'water');
+
+    for (let i = 0; i < 26; i += 1) {
+      const cx = rng.int(9, 28);
+      const cy = rng.int(5, 34);
+      if (nearAnchor(cx, cy, anchors, 3) || isFlankCorridor(cx)) continue;
+      if (tiles[cy][cx] === 'floor') {
+        setTile(tiles, cx, cy, 'lowCover');
+      }
+      const mx = mirrorX(cx);
+      if (!nearAnchor(mx, cy, anchors, 3) && !isFlankCorridor(mx) && tiles[cy][mx] === 'floor') {
+        setTile(tiles, mx, cy, 'lowCover');
+      }
+    }
   } else {
     for (let cluster = 0; cluster < 24; cluster += 1) {
       const cx = rng.int(3, WIDTH - 4);
@@ -318,16 +394,50 @@ export function generatePreviewMap(seed: number, theme: MapTheme = 'fortress'): 
     }
   }
 
-  const corridors: Array<[TileCoord, TileCoord]> = [
-    [PLAYER_BASE, zoneTiles[0]],
-    [zoneTiles[0], zoneTiles[1]],
-    [zoneTiles[1], zoneTiles[2]],
-    [zoneTiles[2], ENEMY_BASE],
-    [PLAYER_BASE, zoneTiles[1]],
-    [zoneTiles[1], ENEMY_BASE],
-    [zoneTiles[0], zoneTiles[2]],
-  ];
+  const corridors: Array<[TileCoord, TileCoord]> =
+    theme === 'slumside'
+      ? [
+          [PLAYER_BASE, { x: 11, y: 20 }],
+          [{ x: 11, y: 20 }, zoneTiles[0]],
+          [zoneTiles[0], { x: zoneTiles[0].x, y: 21 }],
+          [{ x: zoneTiles[0].x, y: 21 }, zoneTiles[1]],
+          [zoneTiles[1], { x: zoneTiles[2].x, y: 21 }],
+          [{ x: zoneTiles[2].x, y: 21 }, zoneTiles[2]],
+          [zoneTiles[2], { x: 48, y: 20 }],
+          [{ x: 48, y: 20 }, ENEMY_BASE],
+          [{ x: 8, y: 20 }, { x: 8, y: 7 }],
+          [{ x: 8, y: 7 }, { x: 51, y: 7 }],
+          [{ x: 51, y: 7 }, { x: 51, y: 20 }],
+          [zoneTiles[0], { x: zoneTiles[0].x, y: 7 }],
+          [zoneTiles[2], { x: zoneTiles[2].x, y: 7 }],
+          [{ x: 8, y: 20 }, { x: 8, y: 30 }],
+          [{ x: 8, y: 30 }, { x: 51, y: 30 }],
+          [{ x: 51, y: 30 }, { x: 51, y: 20 }],
+        ]
+      : [
+          [PLAYER_BASE, zoneTiles[0]],
+          [zoneTiles[0], zoneTiles[1]],
+          [zoneTiles[1], zoneTiles[2]],
+          [zoneTiles[2], ENEMY_BASE],
+          [PLAYER_BASE, zoneTiles[1]],
+          [zoneTiles[1], ENEMY_BASE],
+          [zoneTiles[0], zoneTiles[2]],
+        ];
   for (const [from, to] of corridors) carveLine(tiles, from, to, 2);
+
+  if (theme === 'slumside') {
+    const zoneB = zoneTiles[1];
+    if (zoneB) {
+      for (const [sx, sy] of [
+        [zoneB.x - 4, zoneB.y + 2],
+        [zoneB.x + 4, zoneB.y + 2],
+      ] as const) {
+        if (sx > 1 && sx < WIDTH - 2 && sy > 1 && sy < HEIGHT - 2 && tiles[sy][sx] === 'floor') {
+          setTile(tiles, sx, sy, 'lowCover');
+        }
+      }
+    }
+  }
 
   tiles[PLAYER_BASE.y][PLAYER_BASE.x] = 'spawnPlayer';
   tiles[ENEMY_BASE.y][ENEMY_BASE.x] = 'spawnEnemy';

@@ -95,6 +95,12 @@ const ZONE_FORMATIONS: Record<MapTheme, TileCoord[][]> = {
     [{ x: 20, y: 29 }, { x: 30, y: 11 }, { x: 40, y: 29 }],
     [{ x: 16, y: 12 }, { x: 30, y: 26 }, { x: 44, y: 12 }],
   ],
+  slumside: [
+    [{ x: 16, y: 17 }, { x: 30, y: 23 }, { x: 44, y: 19 }],
+    [{ x: 16, y: 23 }, { x: 30, y: 17 }, { x: 44, y: 21 }],
+    [{ x: 17, y: 14 }, { x: 30, y: 22 }, { x: 43, y: 25 }],
+    [{ x: 17, y: 26 }, { x: 30, y: 18 }, { x: 43, y: 15 }],
+  ],
 };
 
 function clampTileX(x: number): number {
@@ -348,6 +354,125 @@ function buildTempleTerrain(tiles: TileKind[][], rng: Rng, anchors: TileCoord[])
   }
 }
 
+function isSlumFlankCorridor(x: number): boolean {
+  return (x >= 6 && x <= 8) || (x >= 51 && x <= 53);
+}
+
+function buildSlumsideTerrain(
+  tiles: TileKind[][],
+  rng: Rng,
+  anchors: TileCoord[],
+): void {
+  const drawSlumBlock = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    kind: TileKind = 'wall',
+  ): void => {
+    for (let dy = 0; dy < h; dy += 1) {
+      for (let dx = 0; dx < w; dx += 1) {
+        const tx = x + dx;
+        const ty = y + dy;
+        const mx = mirrorX(tx);
+        if (!nearAnchor(tx, ty, anchors, 3) && !isSlumFlankCorridor(tx)) {
+          setTile(tiles, tx, ty, kind);
+        }
+        if (!nearAnchor(mx, ty, anchors, 3) && !isSlumFlankCorridor(mx)) {
+          setTile(tiles, mx, ty, kind);
+        }
+      }
+    }
+  };
+
+  const shantyBlocks: Array<[number, number, number, number]> = [
+    // Upper staggered blocks separated by 2-tile alleys
+    [11, 2, 4, 4],
+    [17, 2, 4, 4],
+    [23, 2, 5, 4],
+    // Mid-upper residential & iconic central-north concrete compound above Zone B
+    [10, 8, 4, 4],
+    [24, 10, 5, 5],
+    // Mid-lower compounds
+    [10, 24, 5, 4],
+    [18, 25, 4, 4],
+    [25, 29, 4, 4],
+    // Bottom staggered row
+    [10, 33, 4, 4],
+    [16, 32, 4, 4],
+    [22, 33, 5, 4],
+  ];
+  for (const [wx, wy, ww, wh] of shantyBlocks) {
+    drawSlumBlock(wx, wy, ww, wh);
+  }
+
+  // Seed-varied compact micro-shanties creating dense alleyways
+  for (let i = 0; i < 6; i += 1) {
+    const cx = rng.int(10, 27);
+    const cy = rng.int(6, 32);
+    const w = rng.int(2, 3);
+    const h = rng.int(2, 3);
+    drawSlumBlock(cx, cy, w, h);
+  }
+
+  // Two small recessed monsoon storm drains
+  drawSlumBlock(16, 7, 2, 2, 'water');
+  drawSlumBlock(16, 31, 2, 2, 'water');
+
+  // Destructible wooden crate barricades across open alleyways
+  for (let i = 0; i < 26; i += 1) {
+    const cx = rng.int(9, 28);
+    const cy = rng.int(5, 34);
+    if (nearAnchor(cx, cy, anchors, 3) || isSlumFlankCorridor(cx)) continue;
+    if (tiles[cy][cx] === 'floor') {
+      setTile(tiles, cx, cy, 'lowCover');
+    }
+    const mx = mirrorX(cx);
+    if (!nearAnchor(mx, cy, anchors, 3) && !isSlumFlankCorridor(mx) && tiles[cy][mx] === 'floor') {
+      setTile(tiles, mx, cy, 'lowCover');
+    }
+  }
+}
+
+function placeSlumZoneBProps(tiles: TileKind[][], zoneTiles: TileCoord[]): void {
+  // Signature street props flanking Zone B: auto-rickshaw (lower-left) & market stall (lower-right)
+  const zoneB = zoneTiles[1];
+  if (!zoneB) return;
+  const spots: Array<[number, number]> = [
+    [zoneB.x - 4, zoneB.y + 2],
+    [zoneB.x + 4, zoneB.y + 2],
+  ];
+  for (const [sx, sy] of spots) {
+    if (sx > 1 && sx < MAP_WIDTH - 2 && sy > 1 && sy < MAP_HEIGHT - 2 && tiles[sy][sx] === 'floor') {
+      setTile(tiles, sx, sy, 'lowCover');
+    }
+  }
+}
+
+function carveSlumCorridors(tiles: TileKind[][], zoneTiles: TileCoord[]): void {
+  const corridors: Array<[TileCoord, TileCoord]> = [
+    [PLAYER_BASE, { x: 11, y: 20 }],
+    [{ x: 11, y: 20 }, zoneTiles[0]],
+    [zoneTiles[0], { x: zoneTiles[0].x, y: 21 }],
+    [{ x: zoneTiles[0].x, y: 21 }, zoneTiles[1]],
+    [zoneTiles[1], { x: zoneTiles[2].x, y: 21 }],
+    [{ x: zoneTiles[2].x, y: 21 }, zoneTiles[2]],
+    [zoneTiles[2], { x: 48, y: 20 }],
+    [{ x: 48, y: 20 }, ENEMY_BASE],
+    // Upper flanking street above the central-north compound
+    [{ x: 8, y: 20 }, { x: 8, y: 7 }],
+    [{ x: 8, y: 7 }, { x: 51, y: 7 }],
+    [{ x: 51, y: 7 }, { x: 51, y: 20 }],
+    [zoneTiles[0], { x: zoneTiles[0].x, y: 7 }],
+    [zoneTiles[2], { x: zoneTiles[2].x, y: 7 }],
+    // Lower flanking street below Zone B
+    [{ x: 8, y: 20 }, { x: 8, y: 30 }],
+    [{ x: 8, y: 30 }, { x: 51, y: 30 }],
+    [{ x: 51, y: 30 }, { x: 51, y: 20 }],
+  ];
+  for (const [from, to] of corridors) carveLine(tiles, from, to, 2);
+}
+
 function addZoneCoverRings(tiles: TileKind[][], rng: Rng, zoneTiles: TileCoord[]): void {
   for (const zone of zoneTiles) {
     for (let dy = -3; dy <= 3; dy += 1) {
@@ -423,7 +548,14 @@ function buildCrateSpawns(tiles: TileKind[][], zoneTiles: TileCoord[]): Vec2[] {
 
 /** Generate a fully connected, themed arena with dynamic zone placement. */
 export function generateMap(seed: number, theme: MapTheme = 'fortress'): MapData {
-  const themeSalt = theme === 'jungle' ? 0x1a2b3c4d : theme === 'temple' ? 0x5e6f7a8b : 0;
+  const themeSalt =
+    theme === 'jungle'
+      ? 0x1a2b3c4d
+      : theme === 'temple'
+        ? 0x5e6f7a8b
+        : theme === 'slumside'
+          ? 0x3b7c9d2e
+          : 0;
   const rng = new Rng((seed ^ 0x51f0a2c3 ^ themeSalt) >>> 0);
   const zoneTiles = selectZoneTiles(theme, rng);
   const anchors = [PLAYER_BASE, ENEMY_BASE, ...zoneTiles];
@@ -445,13 +577,21 @@ export function generateMap(seed: number, theme: MapTheme = 'fortress'): MapData
     buildJungleTerrain(tiles, rng, anchors);
   } else if (theme === 'temple') {
     buildTempleTerrain(tiles, rng, anchors);
+  } else if (theme === 'slumside') {
+    buildSlumsideTerrain(tiles, rng, anchors);
   } else {
     buildFortressTerrain(tiles, rng, anchors);
   }
 
   addZoneCoverRings(tiles, rng, zoneTiles);
-  carveCorridors(tiles, zoneTiles);
-  ensureConnectivity(tiles, zoneTiles);
+  if (theme === 'slumside') {
+    carveSlumCorridors(tiles, zoneTiles);
+    ensureConnectivity(tiles, zoneTiles);
+    placeSlumZoneBProps(tiles, zoneTiles);
+  } else {
+    carveCorridors(tiles, zoneTiles);
+    ensureConnectivity(tiles, zoneTiles);
+  }
 
   tiles[PLAYER_BASE.y][PLAYER_BASE.x] = 'spawnPlayer';
   tiles[ENEMY_BASE.y][ENEMY_BASE.x] = 'spawnEnemy';
@@ -477,8 +617,8 @@ export function generateMap(seed: number, theme: MapTheme = 'fortress'): MapData
       radius: 112,
     })),
     bases: [
-      { team: 'player', center: tileCenter(PLAYER_BASE.x, PLAYER_BASE.y), radius: 110, coreHp: 1000 },
-      { team: 'enemy', center: tileCenter(ENEMY_BASE.x, ENEMY_BASE.y), radius: 110, coreHp: 1000 },
+      { team: 'player', center: tileCenter(PLAYER_BASE.x, PLAYER_BASE.y), radius: 110, coreHp: 400 },
+      { team: 'enemy', center: tileCenter(ENEMY_BASE.x, ENEMY_BASE.y), radius: 110, coreHp: 400 },
     ],
     crateSpawns: buildCrateSpawns(tiles, zoneTiles),
   };

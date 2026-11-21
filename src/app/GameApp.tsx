@@ -26,15 +26,15 @@ import { GameProvider, useGameController, useGameState } from './useGameState';
 const INITIAL_CONFIG: MatchConfig = {
   seed: 4242,
   difficulty: 'normal',
-  scoreToWin: 120,
+  scoreToWin: 600,
   enemyCount: 4,
   startingWeapon: 'rifle',
-  mapTheme: 'jungle',
+  mapTheme: 'slumside',
 };
 
 type Screen = 'menu' | 'setup' | 'countdown' | 'playing' | 'paused' | 'won' | 'lost';
 
-/** Real-game entry point: Antigravity presentation tracks driven by the pure sim. */
+/** Real-game entry point: Holo-Tactical presentation wired to the pure sim. */
 export function GameApp() {
   const controller = useMemo(() => new GameController(createSim()), []);
   return (
@@ -51,6 +51,8 @@ function GameRoot() {
   const rendererRef = useRef<Renderer | null>(null);
   const audioRef = useRef<AudioEngine | null>(null);
   const viewRef = useRef<RenderViewTransform | null>(null);
+  const aimScreenRef = useRef<{ x: number; y: number } | null>(null);
+  const scopedRef = useRef(false);
 
   const [screen, setScreen] = useState<Screen>('menu');
   const [settings, setSettings] = useState<GameSettings>(() => loadSettings());
@@ -58,6 +60,7 @@ function GameRoot() {
   const [howToOpen, setHowToOpen] = useState(false);
   const [matchConfig, setMatchConfig] = useState<MatchConfig>(INITIAL_CONFIG);
   const [aimScreenPos, setAimScreenPos] = useState<{ x: number; y: number } | null>(null);
+  const [isScoped, setIsScoped] = useState(false);
   const [viewTransform, setViewTransform] = useState<RenderViewTransform | null>(null);
   const [endStats, setEndStats] = useState<MatchStats | null>(null);
   const [endScore, setEndScore] = useState<{ player: number; enemy: number }>({
@@ -67,10 +70,11 @@ function GameRoot() {
   const [endStandings, setEndStandings] = useState<RampageStanding[]>([]);
   const [endWinnerName, setEndWinnerName] = useState<string | undefined>(undefined);
 
-  // Apply persisted settings to the DOM, renderer and audio engine.
+  // Apply persisted settings to the DOM, controller, renderer and audio engine.
   useEffect(() => {
     applySettingsToDom(settings);
     saveSettings(settings);
+    controller.setScopeMode(settings.scopeMode);
     rendererRef.current?.setOptions({
       quality: settings.quality,
       screenShakeScale: settings.screenShake / 100,
@@ -82,7 +86,7 @@ function GameRoot() {
       sfx: settings.sfxVolume / 100,
       music: settings.musicVolume / 100,
     });
-  }, [settings]);
+  }, [controller, settings]);
 
   // Mount the renderer, audio engine, input capture and the fixed-step controller loop.
   useEffect(() => {
@@ -125,10 +129,24 @@ function GameRoot() {
     const frame = (now: number): void => {
       const dt = prev === 0 ? 1 / 60 : Math.min(0.05, Math.max(0.001, (now - prev) / 1000));
       prev = now;
+      if (aimScreenRef.current && viewRef.current) {
+        renderer.setAimTarget(
+          viewRef.current.screenToWorld(aimScreenRef.current.x, aimScreenRef.current.y),
+        );
+      }
       const live = controller.getState();
+      const player = live.units.find((unit) => unit.id === live.playerId);
+      const scoping =
+        live.status === 'playing' &&
+        Boolean(player && !player.dead) &&
+        controller.isScoping();
+      renderer.setScoped(scoping);
+      if (scopedRef.current !== scoping) {
+        scopedRef.current = scoping;
+        setIsScoped(scoping);
+      }
       renderer.draw(live);
 
-      const player = live.units.find((unit) => unit.id === live.playerId);
       if (player) {
         audio.setListenerPos(player.pos);
         audio.update(dt, player.hp / Math.max(1, player.maxHp), live.projectiles.length > 0, {
@@ -236,7 +254,10 @@ function GameRoot() {
       setMatchConfig(config);
       controller.startMatch(config);
       controller.getSim().pause();
+      aimScreenRef.current = null;
+      scopedRef.current = false;
       setAimScreenPos(null);
+      setIsScoped(false);
       setEndStats(null);
       setScreen('countdown');
     },
@@ -249,6 +270,9 @@ function GameRoot() {
 
   const togglePause = useCallback(() => {
     if (screen === 'playing') {
+      controller.clearInput();
+      scopedRef.current = false;
+      setIsScoped(false);
       controller.getSim().pause();
       setScreen('paused');
     } else if (screen === 'paused') {
@@ -275,7 +299,9 @@ function GameRoot() {
   }, [screen, settingsOpen, howToOpen, togglePause, playAgain]);
 
   const onMouseMove = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    setAimScreenPos({ x: event.clientX, y: event.clientY });
+    const pos = { x: event.clientX, y: event.clientY };
+    aimScreenRef.current = pos;
+    setAimScreenPos(pos);
     const vt = viewRef.current;
     if (vt) rendererRef.current?.setAimTarget(vt.screenToWorld(event.clientX, event.clientY));
   };
@@ -292,6 +318,9 @@ function GameRoot() {
         cursor: screen === 'playing' ? 'none' : undefined,
       }}
       onMouseMove={onMouseMove}
+      onContextMenu={(e) => {
+        if (screen === 'playing') e.preventDefault();
+      }}
     >
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} aria-label="Zone Control arena" />
 
@@ -303,6 +332,7 @@ function GameRoot() {
           crosshairStyle={settings.crosshairStyle}
           colorblindAssist={settings.colorblindAssist}
           showHints={settings.showHints}
+          scoped={isScoped}
           onStreak={(count) => audioRef.current?.playStreakStinger(count)}
         />
       )}

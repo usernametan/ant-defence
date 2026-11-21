@@ -1,4 +1,4 @@
-export { Camera } from './camera';
+export { Camera, DEFAULT_BASE_ZOOM, DEFAULT_SCOPE_ZOOM } from './camera';
 export type { ViewTransform, ViewTransformHook } from './camera';
 export { EffectsSystem } from './effects';
 export { PALETTE, rarityColor, teamColor, teamGlowColor } from './palette';

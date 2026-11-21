@@ -44,6 +44,8 @@ export function updateUnits(world: SimWorld, dt: number): void {
         runtime.dashDir = { x: Math.cos(unit.angle), y: Math.sin(unit.angle) };
       }
     }
+    unit.dashCooldown = runtime.dashCooldown;
+    unit.dashMaxCooldown = DASH_COOLDOWN;
 
     const hellcellMult = world.isHellcell() ? HELLCELL_UNIT_SPEED_MULT : 1;
     if (runtime.dashRemaining > 0) {

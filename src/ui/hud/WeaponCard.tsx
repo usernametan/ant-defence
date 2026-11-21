@@ -9,6 +9,7 @@ export interface WeaponCardProps {
   reserveAmmo: number;
   grenades?: number;
   maxGrenades?: number;
+  grenadeCooldown?: number;
   reloading: boolean;
   reloadProgress: number;
   flipKey: number;
@@ -97,6 +98,7 @@ export const WeaponCard: React.FC<WeaponCardProps> = ({
   reserveAmmo,
   grenades = GRENADE_DEF.defaultCount,
   maxGrenades = GRENADE_DEF.defaultCount,
+  grenadeCooldown = 0,
   reloading,
   reloadProgress,
   flipKey,
@@ -230,7 +232,16 @@ export const WeaponCard: React.FC<WeaponCardProps> = ({
             />
           ))}
         </div>
-        <span className="ht-weapon-grenade-key">[G] FRAG</span>
+        <span
+          className="ht-weapon-grenade-key"
+          style={{
+            color: grenades > 0 && grenadeCooldown > 0.05 ? 'var(--gold)' : undefined,
+          }}
+        >
+          {grenades > 0 && grenadeCooldown > 0.05
+            ? `${grenadeCooldown.toFixed(1)}s`
+            : '[G] FRAG'}
+        </span>
       </div>
     </div>
   );

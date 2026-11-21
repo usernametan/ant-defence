@@ -18,18 +18,19 @@ function clampProgress(value: number): number {
 export function updateZones(world: SimWorld, dt: number): void {
   if (world.isRampage()) return;
   const state = world.state;
-  const hellcellSealed =
-    world.isHellcell() &&
-    state.hellcell !== undefined &&
-    (!state.hellcell.bossDefeated || state.hellcell.phase !== 'NORMAL');
+  const hc = state.hellcell;
+  const sealedZoneId =
+    world.isHellcell() && hc && hc.phase !== 'NORMAL'
+      ? (hc.emergenceZoneId ?? 'zone-2')
+      : null;
   const scoreRate =
     world.isHellcell() && state.matchConfig.scoreToWin >= 500
-      ? ZONE_SCORE_RATE * 6
+      ? ZONE_SCORE_RATE * 2.2
       : ZONE_SCORE_RATE;
 
   for (const zoneState of state.zones) {
-    // Zone B (zone-2) is sealed until Zones A & C unleash the Boss and the Boss is defeated
-    if (hellcellSealed && (zoneState.id === 'zone-2' || zoneState.id === 'B')) {
+    // Seal the active emergence zone while Hellcell warning / boss / resume is underway
+    if (sealedZoneId && zoneState.id === sealedZoneId) {
       zoneState.contested = false;
       continue;
     }
@@ -86,7 +87,7 @@ export function updateZones(world: SimWorld, dt: number): void {
   }
 }
 
-/** A base core takes damage only while enemies are inside and defenders are not. */
+/** A base core takes damage when attackers outnumber defenders inside the base. */
 export function updateBaseCores(world: SimWorld, dt: number): void {
   if (world.isRampage() || world.isCeasefireActive()) return;
   const state = world.state;
@@ -98,9 +99,10 @@ export function updateBaseCores(world: SimWorld, dt: number): void {
       if (unit.team === base.team) friendly += 1;
       else enemies += 1;
     }
-    if (enemies === 0 || friendly > 0) continue;
+    const netAttackers = enemies - friendly;
+    if (netAttackers <= 0) continue;
 
-    const damage = BASE_CORE_DPS * dt * Math.min(enemies, 3);
+    const damage = BASE_CORE_DPS * dt * Math.min(netAttackers, 3);
     state.baseHp[base.team] = Math.max(0, state.baseHp[base.team] - damage);
     world.baseDamageTimer[base.team] -= dt;
     if (world.baseDamageTimer[base.team] <= 0) {

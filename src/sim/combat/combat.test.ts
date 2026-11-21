@@ -189,6 +189,8 @@ describe('weapons and combat', () => {
     world.runtime(thrower).intent.throwGrenade = true;
     updateWeapons(world, 1 / 60);
     expect(thrower.grenades).toBe(1);
+    expect(thrower.grenadeCooldown).toBeCloseTo(GRENADE_DEF.cooldown, 4);
+    expect(thrower.grenadeMaxCooldown).toBe(GRENADE_DEF.cooldown);
     expect(world.state.grenades).toHaveLength(1);
     expect(world.state.grenades![0].vel.x).toBeCloseTo(GRENADE_DEF.speed, 4);
     expect(world.state.grenades![0].vel.y).toBeCloseTo(0, 4);

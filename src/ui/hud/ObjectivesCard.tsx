@@ -77,17 +77,17 @@ export const ObjectivesCard: React.FC<ObjectivesCardProps> = ({ state }) => {
   const awaitingHellcellTrigger = Boolean(
     state.matchConfig.mode === 'hellcell' && state.hellcell && !state.hellcell.hasTriggered,
   );
-  const nextMonsterSec =
+  const nextBossSec =
     state.matchConfig.mode === 'hellcell' &&
     state.hellcell &&
     state.hellcell.phase === 'NORMAL' &&
     (state.hellcell.nextSpawnIn ?? 0) > 0
       ? Math.ceil(state.hellcell.nextSpawnIn ?? 0)
       : 0;
-  const zoneA = state.zones.find((z) => z.id === 'zone-1' || z.id === 'A') ?? state.zones[0];
-  const zoneC = state.zones.find((z) => z.id === 'zone-3' || z.id === 'C') ?? state.zones[2];
-  const outerCaptured =
-    (zoneA && zoneA.owner !== 'neutral' ? 1 : 0) + (zoneC && zoneC.owner !== 'neutral' ? 1 : 0);
+  const capturedZones = Math.min(
+    2,
+    state.zones.filter((z) => z.owner !== 'neutral').length,
+  );
 
   const rows = [
     bossActive
@@ -97,12 +97,12 @@ export const ObjectivesCard: React.FC<ObjectivesCardProps> = ({ state }) => {
         }
       : awaitingHellcellTrigger
         ? {
-            label: `Capture A & C (${outerCaptured}/2) → Zone B Boss`,
-            done: outerCaptured >= 2,
+            label: `Capture Any 2 Zones (${capturedZones}/2) → Boss`,
+            done: capturedZones >= 2,
           }
-        : nextMonsterSec > 0
+        : nextBossSec > 0
           ? {
-              label: `Next Monster in ${nextMonsterSec}s`,
+              label: `Next Boss in ${nextBossSec}s`,
               done: false,
             }
           : {

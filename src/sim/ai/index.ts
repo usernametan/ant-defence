@@ -3,6 +3,7 @@ import type { MapData, MatchConfig, MatchDifficulty, Team, Unit, Vec2, WeaponId 
 import {
   BOT_AGGRO_RANGE,
   BOT_MAX_HP,
+  DASH_COOLDOWN,
   TILE_SIZE,
 } from '../constants';
 import { toDisplayState, type AiMode } from '../internal';
@@ -19,12 +20,19 @@ interface DifficultyProfile {
 }
 
 const DIFFICULTY: Record<MatchDifficulty, DifficultyProfile> = {
-  easy: { reactionTime: 0.78, aimError: 0.26, aggression: 0.35, aimSpeed: 3.4, grenadeChance: 0.008 },
-  normal: { reactionTime: 0.48, aimError: 0.15, aggression: 0.58, aimSpeed: 5.2, grenadeChance: 0.018 },
-  hard: { reactionTime: 0.24, aimError: 0.075, aggression: 0.82, aimSpeed: 8.5, grenadeChance: 0.032 },
+  easy: { reactionTime: 0.85, aimError: 0.28, aggression: 0.35, aimSpeed: 3.2, grenadeChance: 0.0012 },
+  normal: { reactionTime: 0.45, aimError: 0.14, aggression: 0.58, aimSpeed: 5.5, grenadeChance: 0.0028 },
+  hard: { reactionTime: 0.18, aimError: 0.05, aggression: 0.85, aimSpeed: 9.5, grenadeChance: 0.0048 },
 };
 
-const RARITY_RANK = { common: 0, rare: 1, epic: 2 };
+const WEAPON_PREF: Record<WeaponId, number> = {
+  pistol: 0,
+  smg: 1,
+  shotgun: 2,
+  rifle: 2,
+  sniper: 2,
+  rocket: 2,
+};
 
 /** Approached distance for each weapon, used by engage strafing. */
 const IDEAL_RANGE: Record<WeaponId, number> = {
@@ -100,11 +108,12 @@ function findVisibleTarget(
 }
 
 function findBetterPickup(world: SimWorld, unit: Unit) {
-  const currentRank = RARITY_RANK[WEAPON_DEFS[unit.weaponId].rarity];
+  const currentPref = WEAPON_PREF[unit.weaponId];
   let best: (typeof world.state.pickups)[number] | undefined;
   let bestDistance = 420;
   for (const pickup of world.state.pickups) {
-    if (RARITY_RANK[pickup.rarity] <= currentRank) continue;
+    if (pickup.kind === 'shield') continue;
+    if (WEAPON_PREF[pickup.weaponId] <= currentPref) continue;
     const range = distance(unit.pos, pickup.pos);
     if (range < bestDistance) {
       bestDistance = range;
@@ -158,6 +167,15 @@ function captureGoal(world: SimWorld, unit: Unit): Vec2 {
   if (candidates.length === 0) {
     const enemyBase = map.bases.find((base) => base.team !== unit.team);
     return enemyBase?.center ?? map.zones[0]?.center ?? unit.pos;
+  }
+  const ownedCount = map.zones.length - candidates.length;
+  if (
+    !world.isHellcell() &&
+    ownedCount >= 2 &&
+    (unit.id.endsWith('-1') || unit.id.endsWith('-3'))
+  ) {
+    const enemyBase = map.bases.find((base) => base.team !== unit.team);
+    if (enemyBase) return enemyBase.center;
   }
   let best = candidates[0];
   let bestDistance = distance(unit.pos, best.center);
@@ -387,9 +405,12 @@ function advanceMode(
 
 /** Update every bot's intent for one fixed step. Player intent is untouched. */
 export function updateAi(world: SimWorld, dt: number): void {
-  const profile = DIFFICULTY[world.state.matchConfig.difficulty];
+  const playerProfile = DIFFICULTY[world.state.matchConfig.difficulty];
+  const enemyProfile =
+    DIFFICULTY[world.state.matchConfig.enemyDifficulty ?? world.state.matchConfig.difficulty];
   for (const unit of world.state.units) {
     if (unit.isPlayer || unit.dead) continue;
+    const profile = unit.team === 'player' ? playerProfile : enemyProfile;
     updateBot(world, unit, profile, dt);
   }
 }
@@ -405,7 +426,6 @@ function updateBot(world: SimWorld, unit: Unit, profile: DifficultyProfile, dt: 
   intent.reload = false;
   intent.dash = false;
   intent.interact = false;
-  intent.swapWeapon = false;
   intent.throwGrenade = false;
 
   const target = findVisibleTarget(world, unit, profile);
@@ -497,8 +517,8 @@ function updateBot(world: SimWorld, unit: Unit, profile: DifficultyProfile, dt: 
       ai.firePulse % 50 < 32 &&
       hasLineOfSight(world.state.map, unit.pos, target.pos)
     ) {
-      // Pulse the trigger in tactical bursts so semi-auto and automatic weapons pace cleanly.
-      intent.firing = ai.firePulse % 2 === 0;
+      // Automatic weapons hold trigger during burst window; semi-auto pulses trigger.
+      intent.firing = def.automatic ? true : ai.firePulse % 2 === 0;
     }
 
     const hitCheck = raycast(world.state.map, unit.pos, target.pos);
@@ -519,7 +539,7 @@ function updateBot(world: SimWorld, unit: Unit, profile: DifficultyProfile, dt: 
 
   if (unit.ammoInMag <= 0) intent.reload = true;
   if (
-    world.state.matchConfig.difficulty !== 'easy' &&
+    profile !== DIFFICULTY.easy &&
     (mode === 'retreat' || mode === 'engage' || mode === 'flank') &&
     runtime.dashCooldown <= 0 &&
     world.rng.chance(0.004)
@@ -576,6 +596,10 @@ function spawnBot(
     ammoInMag: def.magSize,
     reserveAmmo: def.magSize * 5,
     grenades: GRENADE_DEF.defaultCount,
+    dashCooldown: 0,
+    dashMaxCooldown: DASH_COOLDOWN,
+    grenadeCooldown: 0,
+    grenadeMaxCooldown: GRENADE_DEF.cooldown,
     reloading: false,
     reloadProgress: 0,
     isPlayer: false,

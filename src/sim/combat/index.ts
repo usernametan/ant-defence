@@ -1,6 +1,6 @@
 import { GRENADE_DEF, WEAPON_DEFS } from '../../shared/api';
 import { bus } from '../../shared/events';
-import type { KillSource, Team, Unit, Vec2, WeaponId } from '../../shared/types';
+import type { HellcellBoss, KillSource, Team, Unit, Vec2, WeaponId } from '../../shared/types';
 import {
   CRATE_SPAWN_INTERVAL,
   GRENADE_RADIUS,
@@ -10,11 +10,25 @@ import {
   UNIT_RADIUS,
 } from '../constants';
 import { worldToTile } from '../map';
-import { damageHellcellBoss } from '../hellcell';
+import { damageHellcellBoss, measureBossHullDistance } from '../hellcell';
 import { sweepProjectile } from '../physics';
 import type { SimWorld } from '../world';
 
-const CRATE_WEAPONS: WeaponId[] = ['shotgun', 'rifle', 'sniper', 'rocket'];
+const CRATE_WEAPONS: WeaponId[] = [
+  'smg', 'smg', 'smg',
+  'shotgun', 'shotgun',
+  'rifle', 'rifle', 'rifle',
+  'sniper',
+  'rocket',
+];
+const BOT_WEAPON_PREF: Record<WeaponId, number> = {
+  pistol: 0,
+  smg: 1,
+  shotgun: 2,
+  rifle: 2,
+  sniper: 2,
+  rocket: 2,
+};
 const PROJECTILE_RADIUS = 4;
 const KNOCKBACK_FORCE = 340;
 
@@ -88,6 +102,8 @@ export function throwGrenade(world: SimWorld, unit: Unit): boolean {
 
   unit.grenades = count - 1;
   runtime.grenadeCooldown = GRENADE_DEF.cooldown;
+  unit.grenadeCooldown = runtime.grenadeCooldown;
+  unit.grenadeMaxCooldown = GRENADE_DEF.cooldown;
 
   const direction: Vec2 = { x: Math.cos(unit.angle), y: Math.sin(unit.angle) };
   const grenade = {
@@ -124,6 +140,8 @@ export function updateWeapons(world: SimWorld, dt: number): void {
     const runtime = world.runtime(unit);
     runtime.fireCooldown = Math.max(0, runtime.fireCooldown - dt);
     runtime.grenadeCooldown = Math.max(0, runtime.grenadeCooldown - dt);
+    unit.grenadeCooldown = runtime.grenadeCooldown;
+    unit.grenadeMaxCooldown = GRENADE_DEF.cooldown;
 
     const wantsGrenade = Boolean(runtime.intent.throwGrenade);
     if (wantsGrenade && !runtime.wasThrowingGrenade) {
@@ -153,9 +171,9 @@ function sweepBossHit(
   from: Vec2,
   to: Vec2,
   radius: number,
-  boss: { pos: Vec2; radius: number } | null | undefined,
+  boss: HellcellBoss | null | undefined,
   maxDist: number,
-): Vec2 | null {
+): { pos: Vec2; weakPoint: boolean } | null {
   if (!boss) return null;
   const total = Math.hypot(to.x - from.x, to.y - from.y);
   const steps = Math.max(1, Math.ceil(total / 6));
@@ -167,8 +185,9 @@ function sweepBossHit(
       x: from.x + (to.x - from.x) * t,
       y: from.y + (to.y - from.y) * t,
     };
-    if (Math.hypot(point.x - boss.pos.x, point.y - boss.pos.y) <= boss.radius + radius) {
-      return point;
+    const hull = measureBossHullDistance(point, boss);
+    if (hull.dist <= radius) {
+      return { pos: point, weakPoint: hull.weakPoint };
     }
   }
   return null;
@@ -189,8 +208,7 @@ export function explode(
   if (world.isCeasefireActive()) {
     const boss = world.state.hellcell?.boss;
     if (boss && boss.hp > 0) {
-      const dist = Math.hypot(boss.pos.x - pos.x, boss.pos.y - pos.y);
-      const effDist = Math.max(0, dist - boss.radius);
+      const effDist = measureBossHullDistance(pos, boss).dist;
       if (effDist <= radius) {
         const falloff = 1 - effDist / radius;
         damageHellcellBoss(world, damage * (0.45 + 0.55 * falloff), team, pos);
@@ -267,15 +285,15 @@ export function updateGrenades(world: SimWorld, dt: number): void {
       grenade.ownerId,
       freeForAll,
     );
-    const bossHitPos = ceasefire
+    const bossHit = ceasefire
       ? sweepBossHit(from, to, GRENADE_RADIUS, boss, hit ? hit.distance : Infinity)
       : null;
 
     grenade.fuse -= dt;
-    if (bossHitPos || hit || grenade.fuse <= 0) {
-      const detonatePos = bossHitPos ?? (hit ? hit.pos : to);
-      if (bossHitPos) {
-        damageHellcellBoss(world, grenade.damage * 0.5, grenade.team, bossHitPos);
+    if (bossHit || hit || grenade.fuse <= 0) {
+      const detonatePos = bossHit ? bossHit.pos : hit ? hit.pos : to;
+      if (bossHit) {
+        damageHellcellBoss(world, grenade.damage * 0.5, grenade.team, bossHit.pos);
       } else if (hit?.kind === 'cover' && hit.tile) {
         world.damageCover(hit.tile, grenade.damage * 0.6);
       } else if (hit?.kind === 'unit' && hit.unitId) {
@@ -342,7 +360,7 @@ export function updateProjectiles(world: SimWorld, dt: number): void {
       }
     }
 
-    const bossHitPos = ceasefire
+    const bossHit = ceasefire
       ? sweepBossHit(from, to, PROJECTILE_RADIUS, boss, hit ? hit.distance : Infinity)
       : null;
 
@@ -352,12 +370,20 @@ export function updateProjectiles(world: SimWorld, dt: number): void {
     const damage = projectile.damage * (1 - 0.45 * travelledFraction);
 
     let consumed = false;
-    if (bossHitPos) {
-      damageHellcellBoss(world, damage, projectile.team, bossHitPos);
+    if (bossHit) {
+      const finalDamage = bossHit.weakPoint ? damage * 1.45 : damage;
+      damageHellcellBoss(world, finalDamage, projectile.team, bossHit.pos);
+      if (bossHit.weakPoint && boss) {
+        bus.emit('boss:action', {
+          kind: boss.kind,
+          action: 'weakPointHit',
+          pos: { x: bossHit.pos.x, y: bossHit.pos.y },
+        });
+      }
       if (projectile.splashRadius > 0) {
         explode(
           world,
-          bossHitPos,
+          bossHit.pos,
           projectile.splashRadius,
           projectile.damage,
           projectile.team,
@@ -449,14 +475,20 @@ export function updatePickups(world: SimWorld, dt: number): void {
 
   for (const unit of world.livingUnits()) {
     const radius = unit.isPlayer ? INTERACT_RADIUS : PICKUP_PICKUP_RADIUS;
-    const wantsWeaponSwap =
-      !unit.isPlayer ||
-      world.runtime(unit).intent.interact ||
-      world.runtime(unit).intent.swapWeapon;
+    const botPref = BOT_WEAPON_PREF[unit.weaponId];
     for (let index = world.state.pickups.length - 1; index >= 0; index -= 1) {
       const pickup = world.state.pickups[index];
       if (Math.hypot(unit.pos.x - pickup.pos.x, unit.pos.y - pickup.pos.y) > radius) continue;
-      if (pickup.kind !== 'shield' && !wantsWeaponSwap) continue;
+      if (pickup.kind !== 'shield') {
+        if (unit.isPlayer) {
+          if (!world.runtime(unit).intent.interact) continue;
+        } else if (
+          pickup.weaponId !== unit.weaponId &&
+          BOT_WEAPON_PREF[pickup.weaponId] <= botPref
+        ) {
+          continue;
+        }
+      }
       collectPickup(world, unit, index);
       break;
     }

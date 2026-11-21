@@ -14,6 +14,7 @@ import type {
 } from '../shared/types';
 import {
   COVER_HP,
+  DASH_COOLDOWN,
   KILL_SCORE,
   MATCH_TIME_LIMIT,
   PICKUP_LIFETIME,
@@ -226,11 +227,11 @@ export class SimWorld {
     } else if (victim.isPlayer) {
       victim.respawnIn = RESPAWN_DELAY_PLAYER;
     } else {
-      // Stagger enemy respawns so they return in small waves, not all at once.
-      const deadEnemies = this.state.units.filter(
-        (unit) => unit.team === 'enemy' && unit.dead,
+      // Stagger bot respawns per team so teammates return in small waves, not all at once.
+      const deadTeammates = this.state.units.filter(
+        (unit) => unit.team === victim.team && unit.dead,
       ).length;
-      victim.respawnIn = RESPAWN_DELAY_ENEMY + deadEnemies * 0.4;
+      victim.respawnIn = RESPAWN_DELAY_ENEMY + deadTeammates * 0.4;
     }
     victim.deaths += 1;
 
@@ -255,7 +256,7 @@ export class SimWorld {
       } else {
         const killPts =
           this.isHellcell() && this.state.matchConfig.scoreToWin >= 500
-            ? 15
+            ? 8
             : KILL_SCORE;
         this.state.score[killer.team] += killPts;
       }
@@ -348,6 +349,10 @@ export class SimWorld {
     unit.ammoInMag = weapon.magSize;
     unit.reserveAmmo = weapon.magSize * 5;
     unit.grenades = GRENADE_DEF.defaultCount;
+    unit.dashCooldown = 0;
+    unit.dashMaxCooldown = DASH_COOLDOWN;
+    unit.grenadeCooldown = 0;
+    unit.grenadeMaxCooldown = GRENADE_DEF.cooldown;
 
     const runtime = this.runtime(unit);
     runtime.knockback.x = 0;

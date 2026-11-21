@@ -33,6 +33,7 @@ describe('AudioEngine', () => {
     engine.playMonsterVocal('rocketSiegeBot', 0.9, 0.2);
     engine.playMonsterVocal('pharaohSkeleton', 0.7, -0.3);
     engine.playMonsterVocal('venomCobra', 0.8, 0.1);
+    engine.playMonsterVocal('mumbaiTrain', 0.85, -0.2);
     engine.playBossDefeated();
     engine.playDash();
     engine.update(0.016, 0.2, true, {

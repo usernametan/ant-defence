@@ -32,8 +32,6 @@ export { PauseMenu } from './screens/PauseMenu';
 export type { PauseMenuProps } from './screens/PauseMenu';
 export { SettingsModal } from './screens/SettingsModal';
 export type { SettingsModalProps } from './screens/SettingsModal';
-export { Showcase } from './Showcase';
-export { StubSim } from './stubSim';
 export {
   applySettingsToDom,
   DEFAULT_SETTINGS,
@@ -43,4 +41,4 @@ export {
   resetSeenHints,
   saveSettings,
 } from './settingsStore';
-export type { CrosshairStyle, GameSettings } from './settingsStore';
+export type { CrosshairStyle, GameSettings, ScopeMode } from './settingsStore';

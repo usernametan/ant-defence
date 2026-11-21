@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { formatZoneCode } from '../../render/environment';
+import {
+  SLUM_ROOF_PREVIEW_COLORS,
+  formatZoneCode,
+  slumRoofStyle,
+} from '../../render/environment';
 import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from '../../render/palette';
 import { WEAPON_DEFS } from '../../shared/api';
 import type { GameMode, MapTheme, MatchConfig, MatchDifficulty, WeaponId } from '../../shared/types';
@@ -86,9 +90,27 @@ const MAP_THEMES: Array<{
     tagline: 'Glyph sandstone walls & dark-brown crates',
     tone: 'gold',
   },
+  {
+    id: 'slumside',
+    label: 'Slumside',
+    tagline: 'Tin roofs, blue tarps, crate alleys & railway flank',
+    tone: 'gold',
+  },
 ];
 
 const MapThemeEmblem: React.FC<{ theme: MapTheme }> = ({ theme }) => {
+  if (theme === 'slumside') {
+    return (
+      <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2" y="2" width="20" height="20" rx="4" fill="#4D453C" stroke="#F59E0B" strokeWidth="1.4" />
+        <rect x="4" y="4" width="7" height="6" rx="1" fill="#2563EB" />
+        <rect x="12" y="5" width="5" height="5" rx="1" fill="#B8532F" />
+        <rect x="5" y="12" width="9" height="7" rx="1" fill="#9A9286" />
+        <circle cx="9.5" cy="15.5" r="2.2" fill="#1D2228" stroke="#475569" strokeWidth="0.8" />
+        <line x1="19" y1="3" x2="19" y2="21" stroke="#8C959F" strokeWidth="1.5" />
+      </svg>
+    );
+  }
   if (theme === 'jungle') {
     return (
       <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
@@ -167,8 +189,19 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
         } else if (previewMap.theme === 'jungle') {
           ctx.fillStyle = 'rgba(54, 130, 71, 0.25)';
           ctx.fillRect(c * scaleX, r * scaleY, scaleX * 1.8, scaleY * 1.5);
+        } else if (previewMap.theme === 'slumside') {
+          ctx.fillStyle = 'rgba(154, 137, 112, 0.26)';
+          ctx.fillRect(c * scaleX, r * scaleY, scaleX * 2, scaleY * 1.4);
         }
       }
+    }
+
+    if (previewMap.theme === 'slumside') {
+      ctx.fillStyle = '#4D453C';
+      ctx.fillRect(51 * scaleX, scaleY, scaleX * 3, (previewMap.height - 2) * scaleY);
+      ctx.fillStyle = '#8C959F';
+      ctx.fillRect(51.4 * scaleX, scaleY, Math.max(1, scaleX * 0.28), (previewMap.height - 2) * scaleY);
+      ctx.fillRect(52.5 * scaleX, scaleY, Math.max(1, scaleX * 0.28), (previewMap.height - 2) * scaleY);
     }
 
     for (let r = 0; r < previewMap.height; r += 1) {
@@ -202,7 +235,10 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
           ctx.lineWidth = 0.8;
           ctx.strokeRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         } else if (tile === 'wall') {
-          ctx.fillStyle = tp.wallTop;
+          ctx.fillStyle =
+            previewMap.theme === 'slumside'
+              ? SLUM_ROOF_PREVIEW_COLORS[slumRoofStyle(c, r, previewMap.seed)]
+              : tp.wallTop;
           ctx.fillRect(px, py, Math.ceil(scaleX), Math.ceil(scaleY));
         }
       }
@@ -253,7 +289,7 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
       return {
         ...prev,
         mode: 'zoneControl',
-        scoreToWin: prev.scoreToWin <= 40 || prev.scoreToWin >= 500 ? 120 : prev.scoreToWin,
+        scoreToWin: prev.scoreToWin <= 50 || prev.scoreToWin >= 800 ? 600 : prev.scoreToWin,
       };
     });
   };
@@ -327,7 +363,7 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
               {isRampage
                 ? 'No teams. All bots fight each other — highest kill count wins!'
                 : isHellcell
-                  ? 'PvPvE 1000-pt battle: capturing Zones A & C unleashes a fast wall-crushing Boss from Zone B, followed by random-location monsters every 15s! Defeating a Boss refuels HP/ammo & restores walls.'
+                  ? 'Hellcell mode: PvPvE battle where capturing Zones A & C triggers a temporary ceasefire and unleashes a wall-crushing Boss from Zone B. Dealing majority damage scores bonus points and refuels HP/ammo.'
                   : 'Squad vs squad tactical battle for zones A, B, and C.'}
             </p>
 
@@ -375,9 +411,9 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
             />
             <Slider
               label={isRampage ? 'Kills To Win' : 'Score To Win'}
-              min={isRampage ? 5 : isHellcell ? 300 : 50}
-              max={isRampage ? 50 : isHellcell ? 1500 : 250}
-              step={isRampage ? 5 : isHellcell ? 50 : 10}
+              min={isRampage ? 5 : isHellcell ? 300 : 200}
+              max={isRampage ? 50 : isHellcell ? 1500 : 1000}
+              step={isRampage ? 5 : 50}
               value={config.scoreToWin}
               onChange={(scoreToWin) => setConfig((p) => ({ ...p, scoreToWin }))}
             />
@@ -447,8 +483,9 @@ export const MatchSetup: React.FC<MatchSetupProps> = ({
               />
               <StatBar
                 label="Fire Rate"
-                value={Math.round(selectedWeapon.fireRate * 10)}
-                max={120}
+                value={selectedWeapon.fireRate}
+                max={12}
+                decimals={1}
                 suffix="/s"
               />
               <StatBar

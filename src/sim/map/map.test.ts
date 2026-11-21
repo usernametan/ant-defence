@@ -3,7 +3,7 @@ import type { MapTheme } from '../../shared/types';
 import { MAP_ANCHORS, areTilesConnected, generateMap, isPassable, tileKey, worldToTile } from './index';
 import { MAP_HEIGHT, MAP_WIDTH } from '../constants';
 
-const THEMES: MapTheme[] = ['fortress', 'jungle', 'temple'];
+const THEMES: MapTheme[] = ['fortress', 'jungle', 'temple', 'slumside'];
 
 function anchorsForMap(map: ReturnType<typeof generateMap>) {
   return [
@@ -66,9 +66,13 @@ describe('generateMap', () => {
     const fortress = generateMap(4242, 'fortress');
     const jungle = generateMap(4242, 'jungle');
     const temple = generateMap(4242, 'temple');
+    const slumside = generateMap(4242, 'slumside');
 
     expect(JSON.stringify(fortress.zones)).not.toBe(JSON.stringify(jungle.zones));
     expect(JSON.stringify(jungle.zones)).not.toBe(JSON.stringify(temple.zones));
+    expect(JSON.stringify(slumside.zones)).not.toBe(JSON.stringify(fortress.zones));
+    expect(JSON.stringify(slumside.zones)).not.toBe(JSON.stringify(jungle.zones));
+    expect(JSON.stringify(slumside.zones)).not.toBe(JSON.stringify(temple.zones));
 
     const seedVariants = new Set(
       Array.from({ length: 12 }, (_, i) => JSON.stringify(generateMap(1000 + i * 73, 'jungle').zones)),
@@ -93,6 +97,15 @@ describe('generateMap', () => {
         if (map.tiles[y][x] === 'lowCover') {
           expect(map.coverHp[tileKey(x, y)]).toBeGreaterThan(0);
         }
+      }
+    }
+  });
+
+  it('keeps the eastern railway flank clear of walls in slumside maps', () => {
+    const map = generateMap(4242, 'slumside');
+    for (let y = 2; y <= 37; y += 1) {
+      for (let x = 51; x <= 53; x += 1) {
+        expect(map.tiles[y][x]).not.toBe('wall');
       }
     }
   });

@@ -34,11 +34,11 @@ Then open <http://localhost:3000/>. `npm start` is an alias for `npm run dev`.
 | `R` | Reload |
 | `E` | Pick up / swap a nearby weapon |
 | `Q` (or `Shift` / `Space`) | Tactical dash |
-| `F` | Medkit — **not wired in this build** |
-| `G` | Grenade — **not wired in this build** |
-| `C` | Target ping highlight (a full scan ability is not wired) |
+| `G` | Throw grenade (2 per life) |
 | `Esc` (or `P`) | Pause / resume |
 | `Enter` | Play again after a match ends |
+
+> **Gamepad:** menu navigation only (in-game movement and aiming require keyboard and mouse).
 
 ## Gameplay
 
@@ -48,25 +48,31 @@ Then open <http://localhost:3000/>. `npm start` is an alias for `npm run dev`.
   destroyed when its HP runs out.
 - **Pickups:** defeated enemies can drop weapons and supply crates spawn on a
   timer. Rarity is common / rare / epic.
-- **Bases:** each team has a core that takes damage from map control and enemy
-  fire. Lose the core or the score race and the match ends.
+- **Bases:** each team has a core that takes damage when enemies occupy the
+  base uncontested. Lose the core or the score race and the match ends.
+- **Hellcell Mode (PvPvE):** capturing Zones A & C triggers a temporary
+  ceasefire and unleashes a wall-crushing Boss from Zone B. Dealing majority
+  damage scores bonus points and refuels HP and ammo.
+- **Rampage Mode (FFA):** free-for-all combat where every bot fights for the
+  highest kill count.
 
 ## Project structure
 
 ```
 src/
-  shared/     Contract only: types.ts, events.ts, api.ts (read-only)
+  shared/     Shared contract: types.ts, events.ts, api.ts
   sim/        Pure deterministic simulation: RNG, map, physics, combat,
               units, zones, AI/pathfinding, fixed-step match flow
   app/        Game-loop glue: GameController, input capture, React bridge,
               GameApp integration shell, headless benchmark
   render/     Canvas 2D renderer, camera, lighting, effects, visibility
-  ui/         HUD, menus/screens, design system, settings, ?showcase=1 stub
+  ui/         HUD, menus/screens, design system, settings, ?showcase=1 dev preview
   audio/      Synthesized Web Audio engine with stereo pan and voice pool
 ```
 
-`src/shared/` is the only communication channel between tracks. `WEAPON_DEFS`
-in `src/shared/api.ts` is the single source of truth for weapon stats.
+Modules communicate through `src/shared/`. `WEAPON_DEFS` in
+`src/shared/api.ts` is the single source of truth for weapon stats. See
+`AGENTS.md` for repository ownership and rules.
 
 ## Verification
 

@@ -13,7 +13,7 @@ import {
   Tabs,
   Toggle,
 } from '../design';
-import type { CrosshairStyle, GameSettings } from '../settingsStore';
+import type { CrosshairStyle, GameSettings, ScopeMode } from '../settingsStore';
 import { DEFAULT_SETTINGS } from '../settingsStore';
 import { CrosshairGlyph } from '../hud/Crosshair';
 
@@ -91,7 +91,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   hitFlash={null}
                 />
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {(['fortress', 'jungle', 'temple'] as const).map((t) => (
+                  {(['fortress', 'jungle', 'temple', 'slumside'] as const).map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -117,6 +117,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </Panel>
             </div>
+
+            <Select<ScopeMode>
+              label="Right-Click Scope (Zoom)"
+              value={settings.scopeMode}
+              options={[
+                { value: 'hold', label: 'Hold Right-Click to Zoom In' },
+                { value: 'toggle', label: 'Toggle Zoom on Right-Click' },
+                { value: 'off', label: 'Disabled' },
+              ]}
+              onChange={(v) => patch('scopeMode', v)}
+            />
 
             <Slider
               label="HUD Scale"
@@ -206,33 +217,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {tab === 'controls' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-            {[
-              { action: 'Move', keys: ['W', 'A', 'S', 'D'] },
-              { action: 'Aim & Fire', keys: ['MOUSE', 'LMB'] },
-              { action: 'Reload', keys: ['R'] },
-              { action: 'Swap / Pickup', keys: ['E'] },
-              { action: 'Tactical Dash', keys: ['SHIFT'] },
-              { action: 'Pause Menu', keys: ['ESC'] },
-            ].map((row) => (
-              <Panel
-                key={row.action}
-                tone="subtle"
-                style={{
-                  padding: '10px 12px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <span style={{ fontSize: 12, color: 'var(--text-mid)' }}>{row.action}</span>
-                <span style={{ display: 'inline-flex', gap: 4 }}>
-                  {row.keys.map((k) => (
-                    <KeyCap key={k} label={k} />
-                  ))}
-                </span>
-              </Panel>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+              {[
+                { action: 'Move', keys: ['W', 'A', 'S', 'D'] },
+                { action: 'Aim & Fire', keys: ['MOUSE', 'LMB'] },
+                { action: 'Scope / Zoom', keys: ['RMB'] },
+                { action: 'Reload', keys: ['R'] },
+                { action: 'Swap / Pickup', keys: ['E'] },
+                { action: 'Tactical Dash', keys: ['Q', 'SHIFT'] },
+                { action: 'Throw Grenade', keys: ['G'] },
+                { action: 'Pause Menu', keys: ['ESC', 'P'] },
+              ].map((row) => (
+                <Panel
+                  key={row.action}
+                  tone="subtle"
+                  style={{
+                    padding: '10px 12px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: 'var(--text-mid)' }}>{row.action}</span>
+                  <span style={{ display: 'inline-flex', gap: 4 }}>
+                    {row.keys.map((k) => (
+                      <KeyCap key={k} label={k} />
+                    ))}
+                  </span>
+                </Panel>
+              ))}
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-mid)' }}>
+              Gamepad: menu navigation only. In-match movement and aiming require a keyboard and mouse.
+            </p>
           </div>
         )}
 

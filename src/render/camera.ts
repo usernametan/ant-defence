@@ -17,6 +17,7 @@ export interface ViewTransform {
 export type ViewTransformHook = (transform: ViewTransform) => void;
 
 export const DEFAULT_BASE_ZOOM = 1.18;
+export const DEFAULT_SCOPE_ZOOM = 1.44;
 
 export class Camera {
   x = 0;
@@ -34,6 +35,14 @@ export class Camera {
     this.targetZoom = DEFAULT_BASE_ZOOM;
     this.trauma = 0;
     this.initialized = true;
+  }
+
+  setScoped(scoped: boolean, scopeZoom = DEFAULT_SCOPE_ZOOM): void {
+    this.targetZoom = scoped ? scopeZoom : DEFAULT_BASE_ZOOM;
+  }
+
+  getTargetZoom(): number {
+    return this.targetZoom;
   }
 
   addTrauma(amount: number): void {

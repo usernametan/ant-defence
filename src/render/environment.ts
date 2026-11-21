@@ -7,6 +7,10 @@ import {
   teamGlowColor,
   type ThemePalette,
 } from './palette';
+import { FortressRenderer } from './fortress';
+import { JungleRenderer } from './jungle';
+import { SlumsideRenderer } from './slumside';
+import { TempleRenderer } from './temple';
 
 export const WALL_HEIGHT = 20;
 
@@ -24,6 +28,25 @@ function tileHash(c: number, r: number, seed: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
+export type SlumRoofStyle = 'tin' | 'blueTarp' | 'concrete' | 'terracotta' | 'tealShanty';
+
+export function slumRoofStyle(c: number, r: number, seed: number): SlumRoofStyle {
+  const h = tileHash(Math.floor(c / 3), Math.floor(r / 3), seed + 31);
+  if (h < 0.34) return 'tin';
+  if (h < 0.56) return 'blueTarp';
+  if (h < 0.78) return 'concrete';
+  if (h < 0.9) return 'terracotta';
+  return 'tealShanty';
+}
+
+export const SLUM_ROOF_PREVIEW_COLORS: Record<SlumRoofStyle, string> = {
+  tin: '#7A7268',
+  blueTarp: '#2563EB',
+  concrete: '#9A9286',
+  terracotta: '#B8532F',
+  tealShanty: '#3E7A7C',
+};
+
 function nearAnyZone(map: MapData, cx: number, cy: number, pad = 20): boolean {
   for (const z of map.zones) {
     if (Math.hypot(cx - z.center.x, cy - z.center.y) < z.radius + pad) return true;
@@ -38,6 +61,10 @@ export class EnvironmentRenderer {
   private floorPatterns = new Map<MapTheme, CanvasPattern>();
   private groundCacheCanvas: HTMLCanvasElement | null = null;
   private groundCacheKey = '';
+  private fortress = new FortressRenderer();
+  private jungle = new JungleRenderer();
+  private slumside = new SlumsideRenderer();
+  private temple = new TempleRenderer();
 
   private ensureFloorPattern(
     ctx: CanvasRenderingContext2D,
@@ -100,23 +127,23 @@ export class EnvironmentRenderer {
             tctx.lineTo(x + 16, y + 24);
             tctx.stroke();
           }
-        } else if (theme === 'jungle') {
-          // Subtle 2D grass tufts on dark olive-green square tiles
-          if ((r + c * 2) % 2 === 0) {
-            tctx.strokeStyle = '#368247';
-            tctx.lineWidth = 1.4;
-            tctx.beginPath();
-            tctx.moveTo(x + 9, y + 22);
-            tctx.lineTo(x + 7, y + 16);
-            tctx.moveTo(x + 9, y + 22);
-            tctx.lineTo(x + 12, y + 16);
-            tctx.moveTo(x + 22, y + 12);
-            tctx.lineTo(x + 20, y + 7);
-            tctx.moveTo(x + 22, y + 12);
-            tctx.lineTo(x + 25, y + 7);
-            tctx.stroke();
+          } else if (theme === 'jungle') {
+            // Subtle 2D grass tufts on dark olive-green square tiles
+            if ((r + c * 2) % 2 === 0) {
+              tctx.strokeStyle = '#368247';
+              tctx.lineWidth = 1.4;
+              tctx.beginPath();
+              tctx.moveTo(x + 9, y + 22);
+              tctx.lineTo(x + 7, y + 16);
+              tctx.moveTo(x + 9, y + 22);
+              tctx.lineTo(x + 12, y + 16);
+              tctx.moveTo(x + 22, y + 12);
+              tctx.lineTo(x + 20, y + 7);
+              tctx.moveTo(x + 22, y + 12);
+              tctx.lineTo(x + 25, y + 7);
+              tctx.stroke();
+            }
           }
-        }
       }
     }
 
@@ -283,6 +310,24 @@ export class EnvironmentRenderer {
     viewMaxY: number,
   ): void {
     const theme: MapTheme = map.theme ?? 'fortress';
+    if (theme === 'fortress') {
+      this.fortress.drawGround(ctx, map, time, viewMinX, viewMinY, viewMaxX, viewMaxY);
+      return;
+    }
+
+    if (theme === 'jungle') {
+      this.jungle.drawGround(ctx, map, time, viewMinX, viewMinY, viewMaxX, viewMaxY);
+      return;
+    }
+    if (theme === 'slumside') {
+      this.slumside.drawGround(ctx, map, time, viewMinX, viewMinY, viewMaxX, viewMaxY);
+      return;
+    }
+    if (theme === 'temple') {
+      this.temple.drawGround(ctx, map, time, viewMinX, viewMinY, viewMaxX, viewMaxY);
+      return;
+    }
+
     const tp = getThemePalette(theme);
     const ts = map.tileSize;
     const minCol = Math.max(0, Math.floor(viewMinX / ts) - 1);
@@ -367,6 +412,62 @@ export class EnvironmentRenderer {
     const minRow = Math.max(0, Math.floor(viewMinY / ts) - 1);
     const maxRow = Math.min(map.height - 1, Math.ceil(viewMaxY / ts) + 2);
 
+    if (theme === 'fortress') {
+      for (let r = minRow; r <= maxRow; r += 1) {
+        const clampedR = Math.min(map.height - 1, Math.max(0, r));
+        if (r >= 0 && r < map.height) {
+          this.fortress.drawRow(ctx, map, r, minCol, maxCol, viewMinX, viewMaxX);
+        }
+        if (drawEntitiesInRow) {
+          drawEntitiesInRow(clampedR, r * ts, (r + 1) * ts);
+        }
+      }
+      this.fortress.drawOverheadLayer(ctx, map, time, viewMinX, viewMinY, viewMaxX, viewMaxY);
+      return;
+    }
+
+    if (theme === 'jungle') {
+      for (let r = minRow; r <= maxRow; r += 1) {
+        const clampedR = Math.min(map.height - 1, Math.max(0, r));
+        if (r >= 0 && r < map.height) {
+          this.jungle.drawRow(ctx, map, r, minCol, maxCol, viewMinX, viewMaxX);
+        }
+        if (drawEntitiesInRow) {
+          drawEntitiesInRow(clampedR, r * ts, (r + 1) * ts);
+        }
+      }
+      this.jungle.drawOverheadLayer(ctx, map, time, viewMinX, viewMinY, viewMaxX, viewMaxY);
+      return;
+    }
+
+    if (theme === 'slumside') {
+      for (let r = minRow; r <= maxRow; r += 1) {
+        const clampedR = Math.min(map.height - 1, Math.max(0, r));
+        if (r >= 0 && r < map.height) {
+          this.slumside.drawRow(ctx, map, r, minCol, maxCol, viewMinX, viewMaxX);
+        }
+        if (drawEntitiesInRow) {
+          drawEntitiesInRow(clampedR, r * ts, (r + 1) * ts);
+        }
+      }
+      this.slumside.drawOverheadLayer(ctx, map, time, viewMinX, viewMinY, viewMaxX, viewMaxY);
+      return;
+    }
+
+    if (theme === 'temple') {
+      for (let r = minRow; r <= maxRow; r += 1) {
+        const clampedR = Math.min(map.height - 1, Math.max(0, r));
+        if (r >= 0 && r < map.height) {
+          this.temple.drawRow(ctx, map, r, minCol, maxCol, viewMinX, viewMaxX);
+        }
+        if (drawEntitiesInRow) {
+          drawEntitiesInRow(clampedR, r * ts, (r + 1) * ts);
+        }
+      }
+      this.temple.drawOverheadLayer(ctx, map, time, viewMinX, viewMinY, viewMaxX, viewMaxY);
+      return;
+    }
+
     for (let r = minRow; r <= maxRow; r += 1) {
       const clampedR = Math.min(map.height - 1, Math.max(0, r));
       if (r >= 0 && r < map.height) {
@@ -383,6 +484,25 @@ export class EnvironmentRenderer {
       if (drawEntitiesInRow) {
         drawEntitiesInRow(clampedR, r * ts, (r + 1) * ts);
       }
+    }
+  }
+
+  drawThemeAtmosphere(
+    ctx: CanvasRenderingContext2D,
+    theme: MapTheme,
+    width: number,
+    height: number,
+    time: number,
+    reducedMotion: boolean,
+  ): void {
+    if (theme === 'fortress') {
+      this.fortress.drawAtmosphere(ctx, width, height, time, reducedMotion);
+    } else if (theme === 'jungle') {
+      this.jungle.drawAtmosphere(ctx, width, height, time, reducedMotion);
+    } else if (theme === 'slumside') {
+      this.slumside.drawAtmosphere(ctx, width, height, time, reducedMotion);
+    } else if (theme === 'temple') {
+      this.temple.drawAtmosphere(ctx, width, height, time, reducedMotion);
     }
   }
 
@@ -794,8 +914,10 @@ export class EnvironmentRenderer {
       state.hellcell &&
       state.hellcell.phase !== 'NORMAL';
 
+    const breachZoneId = state.hellcell?.emergenceZoneId ?? 'zone-2';
+
     for (const def of state.map.zones) {
-      if (hellcellBreach && def.id === 'zone-2') {
+      if (hellcellBreach && def.id === breachZoneId && (state.hellcell?.bossCount ?? 0) === 0) {
         // Zone B is deactivated during Hellcell breach: draw a pulsing red/dark breach perimeter
         ctx.save();
         ctx.translate(def.center.x, def.center.y);
@@ -824,21 +946,75 @@ export class EnvironmentRenderer {
 
       const zoneR = Math.min(def.radius, 76);
 
-      if (theme === 'jungle' || theme === 'temple') {
-        ctx.fillStyle = 'rgba(7, 11, 20, 0.38)';
+      if (theme === 'fortress') {
+        // Recessed circular gunmetal energy containment pad beneath holographic capture rings
+        ctx.fillStyle = 'rgba(4, 8, 18, 0.56)';
         ctx.beginPath();
-        ctx.arc(2, 4, zoneR + 9, 0, Math.PI * 2);
+        ctx.arc(0, 0, zoneR + 10, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = theme === 'temple' ? '#8E7756' : '#354035';
+        ctx.fillStyle = '#172030';
         ctx.beginPath();
         ctx.arc(0, 0, zoneR + 6, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = tp.wallEdge;
+        ctx.strokeStyle = '#334155';
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        ctx.fillStyle = theme === 'temple' ? '#6D5A3F' : '#252E25';
+        // Radial turbine & containment deck groove ticks
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
+        ctx.lineWidth = 1.4;
+        for (let s = 0; s < 12; s += 1) {
+          const sa = (s / 12) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(sa) * (zoneR - 18), Math.sin(sa) * (zoneR - 18));
+          ctx.lineTo(Math.cos(sa) * (zoneR + 5), Math.sin(sa) * (zoneR + 5));
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = '#0F172A';
+        ctx.beginPath();
+        ctx.arc(0, 0, zoneR - 16, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (theme === 'jungle' || theme === 'temple') {
+        ctx.fillStyle = 'rgba(7, 11, 20, 0.42)';
+        ctx.beginPath();
+        ctx.arc(3, 5, zoneR + 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = theme === 'temple' ? '#9C7B4C' : '#4A5445';
+        ctx.beginPath();
+        ctx.arc(0, 0, zoneR + 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = theme === 'temple' ? '#2A1B0A' : '#242B20';
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+
+        if (theme === 'temple') {
+          // Lapis-blue & gold inlaid outer capture altar ring
+          ctx.strokeStyle = 'rgba(29, 78, 216, 0.65)';
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          ctx.arc(0, 0, zoneR + 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(234, 179, 8, 0.52)';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(0, 0, zoneR - 9, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (theme === 'jungle') {
+          ctx.strokeStyle = 'rgba(20, 26, 18, 0.55)';
+          ctx.lineWidth = 1.4;
+          for (let s = 0; s < 10; s += 1) {
+            const sa = (s / 10) * Math.PI * 2 + 0.2;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(sa) * (zoneR - 14), Math.sin(sa) * (zoneR - 14));
+            ctx.lineTo(Math.cos(sa) * (zoneR + 6), Math.sin(sa) * (zoneR + 6));
+            ctx.stroke();
+          }
+        }
+
+        ctx.fillStyle = theme === 'temple' ? '#6D5333' : '#323C2F';
         ctx.beginPath();
         ctx.arc(0, 0, zoneR - 14, 0, Math.PI * 2);
         ctx.fill();

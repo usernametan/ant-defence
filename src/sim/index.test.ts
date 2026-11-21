@@ -63,7 +63,6 @@ function scriptedInput(tick: number): InputState {
     firing: tick % 20 < 8,
     reload: tick % 300 === 0,
     interact: tick % 90 === 0,
-    swapWeapon: false,
     dash: tick % 150 === 0,
   };
 }
@@ -117,7 +116,7 @@ describe('simulation integration', () => {
       sim.setInput({
         moveX: 1, moveY: 0,
         aimX: start.x + 400, aimY: start.y,
-        firing: false, reload: false, interact: false, swapWeapon: false, dash: false,
+        firing: false, reload: false, interact: false, dash: false,
       });
       sim.step(1 / 60);
     }
@@ -200,7 +199,6 @@ describe('simulation integration', () => {
       firing: false,
       reload: false,
       interact: false,
-      swapWeapon: false,
       dash: false,
       throwGrenade: true,
     });
@@ -217,7 +215,6 @@ describe('simulation integration', () => {
       firing: false,
       reload: false,
       interact: false,
-      swapWeapon: false,
       dash: false,
       throwGrenade: false,
     });

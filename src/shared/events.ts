@@ -1,4 +1,5 @@
 import type {
+  BossKind,
   HellcellBoss,
   KillSource,
   MatchConfig,
@@ -7,6 +8,13 @@ import type {
   Vec2,
   WeaponId,
 } from './types';
+
+export type BossActionKind =
+  | 'chargeWarning'
+  | 'chargeDash'
+  | 'electricWarning'
+  | 'electricPulse'
+  | 'weakPointHit';
 
 /** All gameplay events. Payloads are the single source of truth for emitters and listeners. */
 export interface EventMap {
@@ -32,6 +40,13 @@ export interface EventMap {
   'hellcell:defeated': { winner: Team; blueDamage: number; redDamage: number };
   'hellcell:resumed': undefined;
   'ceasefire:spark': { pos: Vec2 };
+  'boss:action': {
+    kind: BossKind;
+    action: BossActionKind;
+    pos: Vec2;
+    angle?: number;
+    radius?: number;
+  };
 }
 
 export type EventKey = keyof EventMap;

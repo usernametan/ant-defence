@@ -97,6 +97,7 @@ export interface StatBarProps {
   label: string;
   value: number;
   max: number;
+  decimals?: number;
   suffix?: string;
   color?: string;
 }
@@ -105,13 +106,14 @@ export const StatBar: React.FC<StatBarProps> = ({
   label,
   value,
   max,
+  decimals = 0,
   suffix = '',
   color,
 }) => (
   <div className="ht-statbar">
     <span className="ht-statbar-label">{label}</span>
     <ProgressBar value={value} max={max} color={color} height={6} />
-    <AnimatedNumber value={value} suffix={suffix} className="ht-statbar-val" />
+    <AnimatedNumber value={value} decimals={decimals} suffix={suffix} className="ht-statbar-val" />
   </div>
 );
 

@@ -43,6 +43,7 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               {[
                 { key: 'MOUSE', label: 'AIM & FIRE' },
+                { key: 'RMB', label: 'SCOPE ZOOM' },
                 { key: 'G', label: 'GRENADE (2x)' },
                 { key: 'R', label: 'RELOAD' },
                 { key: 'E', label: 'SWAP WEAPON' },
@@ -132,6 +133,18 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
             </p>
           </Panel>
         </div>
+
+        <Panel tone="subtle" style={{ padding: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <Badge tone="gold">HELLCELL MODE</Badge>
+            <span className="ht-display" style={{ fontSize: 12 }}>
+              PvPvE Boss Event
+            </span>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-mid)' }}>
+            In Hellcell mode, capturing Zones A &amp; C triggers a temporary ceasefire and unleashes a wall-crushing Boss from Zone B. Dealing majority damage scores bonus points and refuels HP and ammo.
+          </p>
+        </Panel>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button variant="primary" onClick={onClose}>

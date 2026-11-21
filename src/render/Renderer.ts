@@ -1,6 +1,6 @@
 import { WEAPON_DEFS } from '../shared/api';
 import { bus } from '../shared/events';
-import type { GameState, Vec2 } from '../shared/types';
+import type { GameState, HellcellBoss, MapTheme, Vec2 } from '../shared/types';
 import { Camera } from './camera';
 import type { ViewTransformHook } from './camera';
 import { EffectsSystem } from './effects';
@@ -37,10 +37,14 @@ export class Renderer {
   private effects = new EffectsSystem();
   private viewHook: ViewTransformHook | null = null;
   private aimTarget: Vec2 | null = null;
+  private scoped = false;
+  private scopeBlend = 0;
   private latestState: Readonly<GameState> | null = null;
 
   private visibilityAlpha = new Map<string, number>();
   private baseFlash = { player: 0, enemy: 0 };
+  private lastBoss: HellcellBoss | null = null;
+  private bossShutdown: { boss: HellcellBoss; elapsed: number; duration: number } | null = null;
   private unsubscribers: Array<() => void> = [];
 
   private options: RendererOptions = {
@@ -72,6 +76,10 @@ export class Renderer {
 
   setAimTarget(worldPos: Vec2 | null): void {
     this.aimTarget = worldPos;
+  }
+
+  setScoped(scoped: boolean): void {
+    this.scoped = scoped;
   }
 
   setOptions(next: Partial<RendererOptions>): void {
@@ -136,7 +144,11 @@ export class Renderer {
       }
     }
 
-    this.camera.update(focusPos, aimDir, dt);
+    const activeScope = this.scoped && Boolean(player && !player.dead) && state.status === 'playing';
+    this.camera.setScoped(activeScope);
+    this.scopeBlend += ((activeScope ? 1 : 0) - this.scopeBlend) * (1 - Math.exp(-12 * dt));
+
+    this.camera.update(focusPos, aimDir, dt, activeScope ? 112 : 72);
     const vt = this.camera.getTransform(
       this.width,
       this.height,
@@ -243,14 +255,52 @@ export class Renderer {
       },
     );
 
-    drawHellcellEntities(ctx, state.hellcell, state.time);
+    const activeBoss = state.hellcell?.boss;
+    if (activeBoss && activeBoss.hp > 0) {
+      this.lastBoss = {
+        ...activeBoss,
+        pos: { ...activeBoss.pos },
+        trainState: activeBoss.trainState
+          ? {
+              ...activeBoss.trainState,
+              coaches: activeBoss.trainState.coaches.map((c) => ({
+                pos: { ...c.pos },
+                angle: c.angle,
+              })),
+            }
+          : undefined,
+      };
+    }
+    if (this.bossShutdown) {
+      this.bossShutdown.elapsed += dt;
+      if (this.bossShutdown.elapsed >= this.bossShutdown.duration) {
+        this.bossShutdown = null;
+      }
+    }
+
+    const bossHitFlash = activeBoss ? (this.effects.unitHitFlash.get(activeBoss.id) ?? 0) : 0;
+    const shutdownBoss = this.bossShutdown
+      ? {
+          boss: this.bossShutdown.boss,
+          progress: this.bossShutdown.elapsed / this.bossShutdown.duration,
+        }
+      : null;
+
+    drawHellcellEntities(ctx, state.hellcell, state.time, {
+      bossHitFlash: bossHitFlash > 0 ? Math.min(1, bossHitFlash / 0.11) : 0,
+      shutdownBoss,
+    });
     this.effects.drawProjectiles(ctx, state.projectiles);
     this.effects.drawGrenades(ctx, state.grenades ?? [], state.time);
     for (const unit of livingVisible) {
       if (unit.isPlayer || (!isRampage && unit.team === 'player')) {
         const col = Math.floor(unit.pos.x / ts);
         const footRow = Math.floor((unit.pos.y + 12) / ts);
-        if (state.map.tiles[footRow + 1]?.[col] === 'wall') {
+        const behindWall =
+          state.map.tiles[footRow + 1]?.[col] === 'wall' ||
+          ((state.map.theme === 'slumside' || state.map.theme === 'jungle') &&
+            state.map.tiles[footRow + 2]?.[col] === 'wall');
+        if (behindWall) {
           drawUnitSilhouette(ctx, unit, isRampage);
         }
       }
@@ -274,12 +324,24 @@ export class Renderer {
       this.drawBloomPass(ctx);
     }
 
-    // Vignette + low-HP subtle danger pulse + Hellcell boss atmosphere
+    if (this.options.quality !== 'low') {
+      this.environment.drawThemeAtmosphere(
+        ctx,
+        state.map.theme ?? 'fortress',
+        this.width,
+        this.height,
+        state.time,
+        this.options.reducedMotion,
+      );
+    }
+
+    // Vignette + low-HP subtle danger pulse + Hellcell boss atmosphere + tactical scope focus
     this.drawVignette(
       ctx,
       player ? player.hp / Math.max(1, player.maxHp) : 1,
       state.time,
       Boolean(state.hellcell?.isCeasefireActive),
+      this.scopeBlend,
     );
   }
 
@@ -290,6 +352,8 @@ export class Renderer {
     this.unsubscribers = [];
     this.effects.clear();
     this.visibilityAlpha.clear();
+    this.lastBoss = null;
+    this.bossShutdown = null;
   }
 
   private bindEvents(): void {
@@ -317,17 +381,35 @@ export class Renderer {
       }),
       bus.on('hit', ({ targetId, damage, pos, killed }) => {
         this.effects.unitHitFlash.set(targetId, 0.11);
+        const isBoss = targetId === 'hellcell-boss';
+        const bossKind = this.latestState?.hellcell?.boss?.kind;
         const target = this.latestState?.units.find((u) => u.id === targetId);
         const rampage = this.latestState?.matchConfig.mode === 'rampage';
-        const sparkColor = rampage
-          ? target?.isPlayer
-            ? '#FFFFFF'
-            : '#9CA3AF'
-          : teamGlowColor(target?.team ?? 'enemy');
+        const sparkColor = isBoss
+          ? bossKind === 'venomCobra'
+            ? killed
+              ? '#8CE06C'
+              : '#9BB076'
+            : bossKind === 'pharaohSkeleton'
+              ? killed
+                ? '#2DD4BF'
+                : '#D4B475'
+              : bossKind === 'mumbaiTrain'
+                ? killed
+                  ? '#F59E0B'
+                  : '#CBD5E1'
+                : killed
+                  ? '#FB923C'
+                  : '#CBD5E1'
+          : rampage
+            ? target?.isPlayer
+              ? '#FFFFFF'
+              : '#9CA3AF'
+            : teamGlowColor(target?.team ?? 'enemy');
         this.effects.spawnImpactSparks(
           pos,
           killed ? PALETTE.gold : sparkColor,
-          killed ? 14 : 7,
+          killed ? 14 : isBoss ? 5 : 7,
         );
         this.effects.spawnFloatingDamage(pos, damage, killed || damage >= 50);
         if (this.latestState?.playerId === targetId) {
@@ -406,18 +488,44 @@ export class Renderer {
         this.camera.addTrauma(0.06);
       }),
       bus.on('hellcell:start', ({ boss }) => {
+        this.bossShutdown = null;
+        this.lastBoss = { ...boss, pos: { ...boss.pos } };
         this.effects.spawnZoneBeam(boss.pos, PALETTE.danger);
         this.camera.addTrauma(0.2);
       }),
       bus.on('hellcell:defeated', () => {
+        if (this.lastBoss) {
+          this.bossShutdown = {
+            boss: { ...this.lastBoss, hp: 0 },
+            elapsed: 0,
+            duration: 1.15,
+          };
+          this.lastBoss = null;
+        }
         this.camera.addTrauma(0.16);
       }),
       bus.on('ceasefire:spark', ({ pos }) => {
         this.effects.spawnImpactSparks(pos, '#94A3B8', 4);
       }),
+      bus.on('boss:action', ({ kind, action, pos }) => {
+        if (kind !== 'mumbaiTrain') return;
+        if (action === 'chargeDash') {
+          this.camera.addTrauma(0.08);
+          this.effects.spawnImpactSparks(pos, '#F59E0B', 7);
+        } else if (action === 'electricPulse') {
+          this.camera.addTrauma(0.09);
+          this.effects.spawnImpactSparks(pos, '#FDE047', 12);
+        } else if (action === 'weakPointHit') {
+          this.effects.spawnImpactSparks(pos, '#FBBF24', 8);
+        }
+      }),
       bus.on('match:start', () => {
         this.effects.clear();
         this.visibilityAlpha.clear();
+        this.lastBoss = null;
+        this.bossShutdown = null;
+        this.scoped = false;
+        this.scopeBlend = 0;
         this.lastTime = 0;
       }),
     );
@@ -505,14 +613,15 @@ export class Renderer {
     hpRatio: number,
     time: number,
     hellcellActive = false,
+    scopeBlend = 0,
   ): void {
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const outerR = Math.hypot(this.width, this.height) * 0.56;
+    const outerR = Math.hypot(this.width, this.height) * (0.56 - scopeBlend * 0.05);
     const grad = ctx.createRadialGradient(
       this.width * 0.5,
       this.height * 0.5,
-      outerR * 0.48,
+      outerR * (0.48 - scopeBlend * 0.08),
       this.width * 0.5,
       this.height * 0.5,
       outerR,
@@ -525,16 +634,42 @@ export class Renderer {
       const pulse = 0.22 + 0.08 * Math.sin(time * 4.5);
       grad.addColorStop(1, `rgba(185, 28, 28, ${pulse.toFixed(2)})`);
     } else {
-      grad.addColorStop(1, 'rgba(7, 11, 20, 0.58)');
+      const alpha = 0.58 + scopeBlend * 0.18;
+      grad.addColorStop(1, `rgba(7, 11, 20, ${alpha.toFixed(2)})`);
     }
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, this.width, this.height);
+
+    if (scopeBlend > 0.02) {
+      const pad = 18;
+      const arm = 22;
+      ctx.strokeStyle = `rgba(103, 232, 249, ${(scopeBlend * 0.32).toFixed(2)})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      // Top-left bracket
+      ctx.moveTo(pad, pad + arm);
+      ctx.lineTo(pad, pad);
+      ctx.lineTo(pad + arm, pad);
+      // Top-right bracket
+      ctx.moveTo(this.width - pad - arm, pad);
+      ctx.lineTo(this.width - pad, pad);
+      ctx.lineTo(this.width - pad, pad + arm);
+      // Bottom-left bracket
+      ctx.moveTo(pad, this.height - pad - arm);
+      ctx.lineTo(pad, this.height - pad);
+      ctx.lineTo(pad + arm, this.height - pad);
+      // Bottom-right bracket
+      ctx.moveTo(this.width - pad - arm, this.height - pad);
+      ctx.lineTo(this.width - pad, this.height - pad);
+      ctx.lineTo(this.width - pad, this.height - pad - arm);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
   private drawAmbientMotes(
     ctx: CanvasRenderingContext2D,
-    theme: 'fortress' | 'jungle' | 'temple',
+    theme: MapTheme,
     minX: number,
     minY: number,
     maxX: number,
@@ -543,12 +678,14 @@ export class Renderer {
   ): void {
     const spanW = Math.max(1, maxX - minX);
     const spanH = Math.max(1, maxY - minY);
-    const count = theme === 'fortress' ? 14 : 26;
+    const count = theme === 'fortress' ? 14 : theme === 'slumside' ? 20 : 26;
     ctx.save();
     for (let i = 0; i < count; i += 1) {
       const seedX = ((i * 293 + 47) % 1000) / 1000;
       const seedY = ((i * 461 + 83) % 1000) / 1000;
-      const driftX = Math.sin(time * 0.45 + i * 1.3) * 24 + time * (theme === 'temple' ? 14 : 7);
+      const driftX =
+        Math.sin(time * 0.45 + i * 1.3) * 24 +
+        time * (theme === 'temple' ? 14 : theme === 'slumside' ? 11 : 7);
       const driftY = Math.cos(time * 0.55 + i * 0.9) * 16 - time * (theme === 'jungle' ? 5 : 2);
       const x = minX + (((seedX * spanW + driftX) % spanW) + spanW) % spanW;
       const y = minY + (((seedY * spanH + driftY) % spanH) + spanH) % spanH;
@@ -558,6 +695,8 @@ export class Renderer {
         ctx.fillStyle = i % 3 === 0 ? '#A3E635' : '#FACC15';
       } else if (theme === 'temple') {
         ctx.fillStyle = i % 2 === 0 ? '#FDE68A' : '#E2B45A';
+      } else if (theme === 'slumside') {
+        ctx.fillStyle = i % 2 === 0 ? '#FDE68A' : '#D6B485';
       } else {
         ctx.fillStyle = '#67E8F9';
       }

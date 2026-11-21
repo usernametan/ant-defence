@@ -1,5 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { formatZoneCode } from '../../render/environment';
+import {
+  SLUM_ROOF_PREVIEW_COLORS,
+  formatZoneCode,
+  slumRoofStyle,
+} from '../../render/environment';
 import { PALETTE, getThemePalette, rarityColor, teamColor } from '../../render/palette';
 import type { GameState } from '../../shared/types';
 
@@ -44,11 +48,22 @@ export const Minimap: React.FC<MinimapProps> = ({
 
     const tileW = map.tileSize * sx;
     const tileH = map.tileSize * sy;
+    if (map.theme === 'slumside') {
+      ctx.fillStyle = '#4D453C';
+      ctx.fillRect(51 * tileW, tileH, tileW * 3, (map.height - 2) * tileH);
+      ctx.fillStyle = '#8C959F';
+      ctx.fillRect(51.4 * tileW, tileH, Math.max(1, tileW * 0.28), (map.height - 2) * tileH);
+      ctx.fillRect(52.5 * tileW, tileH, Math.max(1, tileW * 0.28), (map.height - 2) * tileH);
+    }
+
     for (let r = 0; r < map.height; r += 1) {
       for (let c = 0; c < map.width; c += 1) {
         const kind = map.tiles[r][c];
         if (kind === 'wall') {
-          ctx.fillStyle = tp.wallTop;
+          ctx.fillStyle =
+            map.theme === 'slumside'
+              ? SLUM_ROOF_PREVIEW_COLORS[slumRoofStyle(c, r, map.seed)]
+              : tp.wallTop;
           ctx.fillRect(c * tileW, r * tileH, Math.ceil(tileW), Math.ceil(tileH));
         } else if (kind === 'lowCover') {
           ctx.fillStyle = tp.crateBody;
@@ -77,8 +92,9 @@ export const Minimap: React.FC<MinimapProps> = ({
         const zy = def.center.y * sy;
         const zr = Math.max(8, def.radius * sx);
 
-        // Replace central B circle icon with a pulsing red ring while first boss breaches Zone B
-        if (def.id === 'zone-2' && state.hellcell?.isCeasefireActive && (state.hellcell.bossCount ?? 0) === 0) {
+        // Replace the active emergence zone icon with a pulsing red ring while first boss breaches
+        const breachZoneId = state.hellcell?.emergenceZoneId ?? 'zone-2';
+        if (def.id === breachZoneId && state.hellcell?.isCeasefireActive && (state.hellcell.bossCount ?? 0) === 0) {
           const pulse = (state.time * 2.6) % 1;
           ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
           ctx.strokeStyle = PALETTE.danger;

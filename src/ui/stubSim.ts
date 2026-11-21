@@ -35,7 +35,6 @@ export class StubSim implements SimApi {
     firing: false,
     reload: false,
     interact: false,
-    swapWeapon: false,
     dash: false,
     throwGrenade: false,
   };

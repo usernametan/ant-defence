@@ -2,13 +2,12 @@
 
 A single AI agent (`Antigravity`) owns the entire repository — both backend/simulation and frontend/presentation — with full access to all folders in this project.
 
-The alchemy RPG has been discarded. This repository is now **Zone Control**, a
-top-down arena shooter with a procedural map, destructible cover, capture
+**Zone Control** is a top-down arena shooter with a procedural map, destructible cover, capture
 zones, weapon pickups, and respawning AI.
 
 ## Ownership
 
-- **Antigravity owns all application tracks:**
+- **Antigravity owns all application modules:**
   - `src/shared/` — domain contract (`types.ts`, `events.ts`, `api.ts`)
   - `src/sim/` — pure simulation
   - `src/app/` — game-loop glue, input capture, React ↔ sim bridge
@@ -21,7 +20,7 @@ zones, weapon pickups, and respawning AI.
 - **Avoid editing `package.json` or config files** (`package-lock.json`,
   `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`, `.github/workflows/ci.yml`)
   unless explicitly asked.
-- Tracks communicate through `src/shared/types.ts`, `src/shared/events.ts`,
+- Modules communicate through `src/shared/types.ts`, `src/shared/events.ts`,
   and `src/shared/api.ts`.
 
 ## Simulation Rules

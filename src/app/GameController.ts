@@ -10,6 +10,8 @@ export interface ViewTransform {
   scale: number;
 }
 
+export type ScopeMode = 'hold' | 'toggle' | 'off';
+
 const KEY_MOVE_UP = 'KeyW';
 const KEY_MOVE_DOWN = 'KeyS';
 const KEY_MOVE_LEFT = 'KeyA';
@@ -29,7 +31,9 @@ const KEY_DASH = ['KeyQ', 'ShiftLeft', 'ShiftRight', 'Space'];
 export class GameController {
   private readonly sim: SimApi;
   private readonly keys = new Set<string>();
-  private readonly mouse = { x: 0, y: 0, down: false };
+  private readonly mouse = { x: 0, y: 0, down: false, rightDown: false };
+  private scopeMode: ScopeMode = 'hold';
+  private scopeToggled = false;
   private view: ViewTransform = { offsetX: 0, offsetY: 0, scale: 1 };
   private attached: HTMLElement | null = null;
   private rafId: number | null = null;
@@ -43,7 +47,6 @@ export class GameController {
     firing: false,
     reload: false,
     interact: false,
-    swapWeapon: false,
     dash: false,
     throwGrenade: false,
   };
@@ -63,8 +66,12 @@ export class GameController {
 
   togglePause(): void {
     const status = this.sim.getState().status;
-    if (status === 'playing') this.sim.pause();
-    else if (status === 'paused') this.sim.resume();
+    if (status === 'playing') {
+      this.clearInput();
+      this.sim.pause();
+    } else if (status === 'paused') {
+      this.sim.resume();
+    }
   }
 
   restartMatch(): void {
@@ -93,6 +100,7 @@ export class GameController {
     this.attached = target;
     target.addEventListener('mousemove', this.onMouseMove);
     target.addEventListener('mousedown', this.onMouseDown);
+    target.addEventListener('contextmenu', this.onContextMenu);
     window.addEventListener('mouseup', this.onMouseUp);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
@@ -104,6 +112,7 @@ export class GameController {
     if (this.attached) {
       this.attached.removeEventListener('mousemove', this.onMouseMove);
       this.attached.removeEventListener('mousedown', this.onMouseDown);
+      this.attached.removeEventListener('contextmenu', this.onContextMenu);
       this.attached = null;
     }
     window.removeEventListener('mouseup', this.onMouseUp);
@@ -112,6 +121,8 @@ export class GameController {
     window.removeEventListener('blur', this.onBlur);
     this.keys.clear();
     this.mouse.down = false;
+    this.mouse.rightDown = false;
+    this.scopeToggled = false;
   }
 
   start(): void {
@@ -149,17 +160,42 @@ export class GameController {
     this.mouse.y = clientY - (rect?.top ?? 0);
   }
 
+  setScopeMode(mode: ScopeMode): void {
+    this.scopeMode = mode;
+    if (mode !== 'toggle') this.scopeToggled = false;
+  }
+
+  getScopeMode(): ScopeMode {
+    return this.scopeMode;
+  }
+
+  isScoping(): boolean {
+    if (this.scopeMode === 'off') return false;
+    if (this.scopeMode === 'toggle') return this.scopeToggled;
+    return this.mouse.rightDown;
+  }
+
   mouseDown(button = 0): void {
-    if (button === 0) this.mouse.down = true;
+    if (button === 0) {
+      this.mouse.down = true;
+    } else if (button === 2) {
+      this.mouse.rightDown = true;
+      if (this.scopeMode === 'toggle') {
+        this.scopeToggled = !this.scopeToggled;
+      }
+    }
   }
 
   mouseUp(button = 0): void {
     if (button === 0) this.mouse.down = false;
+    else if (button === 2) this.mouse.rightDown = false;
   }
 
   clearInput(): void {
     this.keys.clear();
     this.mouse.down = false;
+    this.mouse.rightDown = false;
+    this.scopeToggled = false;
   }
 
   private buildInput(): InputState {
@@ -170,7 +206,6 @@ export class GameController {
     this.input.firing = this.mouse.down;
     this.input.reload = this.keys.has(KEY_RELOAD);
     this.input.interact = this.keys.has(KEY_INTERACT);
-    this.input.swapWeapon = false;
     this.input.dash = KEY_DASH.some((code) => this.keys.has(code));
     this.input.throwGrenade = this.keys.has(KEY_GRENADE);
     return this.input;
@@ -212,6 +247,10 @@ export class GameController {
 
   private readonly onMouseUp = (event: MouseEvent): void => {
     this.mouseUp(event.button);
+  };
+
+  private readonly onContextMenu = (event: MouseEvent): void => {
+    event.preventDefault();
   };
 
   private readonly onBlur = (): void => {

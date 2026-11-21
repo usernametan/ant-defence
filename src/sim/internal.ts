@@ -52,7 +52,6 @@ export function createInput(): InputState {
     firing: false,
     reload: false,
     interact: false,
-    swapWeapon: false,
     dash: false,
     throwGrenade: false,
   };

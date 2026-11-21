@@ -10,7 +10,10 @@ import { SimWorld } from '../world';
 import { updateZones } from '../zones';
 import {
   HELLCELL_BOSS_HP_PER_PLAYER,
+  HELLCELL_FIRST_TRIGGER_MIN_TIME,
+  HELLCELL_MAX_BOSSES,
   HELLCELL_RESPAWN_INTERVAL,
+  TRAIN_COACH_SPACING,
   computeBossMaxHp,
   damageHellcellBoss,
   updateHellcell,
@@ -66,11 +69,14 @@ function makeHellcellWorld(theme: MapTheme = 'fortress', enemyCount = 2, scoreTo
   );
 }
 
-function captureZonesAandC(world: SimWorld): void {
+function captureZonesAandC(world: SimWorld, advanceTime = true): void {
   world.state.zones[0].owner = 'player';
   world.state.zones[0].progress = 1;
   world.state.zones[2].owner = 'enemy';
   world.state.zones[2].progress = -1;
+  if (advanceTime) {
+    world.state.time = Math.max(world.state.time, HELLCELL_FIRST_TRIGGER_MIN_TIME + 20);
+  }
 }
 
 function addUnit(world: SimWorld, id: string, team: Team, x: number, y: number, isPlayer = false): Unit {
@@ -101,23 +107,36 @@ function addUnit(world: SimWorld, id: string, team: Team, x: number, y: number, 
 }
 
 describe('Hellcell PvPvE mode', () => {
-  it('triggers WARNING when both Zone A and Zone C are captured, and emerges an enormous Boss from Zone B after 3s', () => {
+  it('triggers WARNING immediately when any 2 zones are captured and emerges enlarged Boss from the 3rd zone after 3s', () => {
     const world = makeHellcellWorld('fortress');
-    const center = world.state.map.zones[1].center;
-    const blue = addUnit(world, 'p1', 'player', center.x + 8, center.y, true);
+    const centerB = world.state.map.zones[1].center;
+    const blue = addUnit(world, 'p1', 'player', centerB.x + 8, centerB.y, true);
 
-    // Capturing only Zone A does not trigger the boss yet
+    // Capturing only 1 zone (Zone A) does not trigger the boss yet
     world.state.zones[0].owner = 'player';
     world.state.zones[0].progress = 1;
     updateHellcell(world, 1 / 60);
     expect(world.state.hellcell?.phase).toBe('NORMAL');
 
-    // Capturing Zone C as well triggers the Zone B emergence warning
+    // Capturing a second zone (Zone C) immediately triggers WARNING from the 3rd zone (Zone B)
     world.state.zones[2].owner = 'enemy';
     world.state.zones[2].progress = -1;
     updateHellcell(world, 1 / 60);
     expect(world.state.hellcell?.phase).toBe('WARNING');
     expect(world.state.hellcell?.hasTriggered).toBe(true);
+    expect(world.state.hellcell?.emergenceZoneId).toBe('zone-2');
+    expect(world.state.hellcell?.spawnPos).toEqual(centerB);
+
+    // Also verify capturing Zones A & B triggers emergence from Zone C
+    const altWorld = makeHellcellWorld('jungle');
+    altWorld.state.zones[0].owner = 'player';
+    altWorld.state.zones[0].progress = 1;
+    altWorld.state.zones[1].owner = 'enemy';
+    altWorld.state.zones[1].progress = -1;
+    updateHellcell(altWorld, 1 / 60);
+    expect(altWorld.state.hellcell?.phase).toBe('WARNING');
+    expect(altWorld.state.hellcell?.emergenceZoneId).toBe('zone-3');
+    expect(altWorld.state.hellcell?.spawnPos).toEqual(altWorld.state.map.zones[2].center);
 
     // Zone B is sealed during Hellcell breach
     updateZones(world, 1.0);
@@ -132,8 +151,8 @@ describe('Hellcell PvPvE mode', () => {
     expect(hc.phase).toBe('CEASEFIRE_BOSS');
     expect(hc.isCeasefireActive).toBe(true);
     expect(hc.boss?.kind).toBe('rocketSiegeBot');
-    expect(hc.boss!.radius).toBeCloseTo(TILE_SIZE * 2.15, 2);
-    // Unit was pushed outside the enormous central boss collider
+    expect(hc.boss!.radius).toBeCloseTo(TILE_SIZE * 2.95, 2);
+    // Unit was pushed outside the enlarged central boss collider
     expect(Math.hypot(blue.pos.x - hc.boss!.pos.x, blue.pos.y - hc.boss!.pos.y)).toBeGreaterThan(hc.boss!.radius);
   });
 
@@ -166,7 +185,7 @@ describe('Hellcell PvPvE mode', () => {
     expect(Math.hypot(boss.pos.x - spawnPos.x, boss.pos.y - spawnPos.y)).toBeGreaterThan(90);
   });
 
-  it('refuels unit health & ammo, restores crushed walls & blocks, and spawns another monster at a random place 15s after defeat', () => {
+  it('refuels unit health & ammo, restores crushed walls & blocks, and spawns another boss up to HELLCELL_MAX_BOSSES after defeat', () => {
     const world = makeHellcellWorld('fortress', 2);
     const map = world.state.map;
     map.tiles[10][16] = 'wall';
@@ -190,7 +209,8 @@ describe('Hellcell PvPvE mode', () => {
     const hc = world.state.hellcell!;
     expect(hc.boss).toBeNull();
     expect(hc.bossCount).toBe(1);
-    expect(hc.nextSpawnIn).toBe(HELLCELL_RESPAWN_INTERVAL);
+    expect(HELLCELL_RESPAWN_INTERVAL).toBe(10);
+    expect(hc.nextSpawnIn).toBe(10);
 
     // Health bar and ammo are refueled, and crushed wall & block are restored!
     const rifleDef = WEAPON_DEFS.rifle;
@@ -201,15 +221,25 @@ describe('Hellcell PvPvE mode', () => {
     expect(map.tiles[10][17]).toBe('lowCover');
     expect(map.coverHp[tileKey(17, 10)]).toBe(COVER_HP);
 
-    // Advance 15 seconds (3s resume + 12s PvP) -> WARNING triggers for next random monster
-    for (let i = 0; i < 15 * 60 + 2; i += 1) updateHellcell(world, 1 / 60);
+    // Advance HELLCELL_RESPAWN_INTERVAL seconds (3s resume + PvP) -> WARNING triggers for next random boss
+    for (let i = 0; i < HELLCELL_RESPAWN_INTERVAL * 60 + 2; i += 1) updateHellcell(world, 1 / 60);
     expect(hc.phase).toBe('WARNING');
     expect(hc.spawnPos).toBeDefined();
 
-    // Advance 3s WARNING -> second monster spawns at hc.spawnPos
+    // Advance 3s WARNING -> second boss spawns at hc.spawnPos
     for (let i = 0; i < 190; i += 1) updateHellcell(world, 1 / 60);
     expect(hc.phase).toBe('CEASEFIRE_BOSS');
     expect(hc.boss).not.toBeNull();
+
+    // Defeat bosses up to HELLCELL_MAX_BOSSES and verify no further respawns are scheduled
+    while ((hc.bossCount ?? 0) < HELLCELL_MAX_BOSSES) {
+      if (hc.boss) {
+        damageHellcellBoss(world, hc.boss.maxHp, 'player', hc.boss.pos);
+      }
+      for (let i = 0; i < (HELLCELL_RESPAWN_INTERVAL + 5) * 60; i += 1) updateHellcell(world, 1 / 60);
+    }
+    expect(hc.bossCount).toBe(HELLCELL_MAX_BOSSES);
+    expect(hc.nextSpawnIn).toBe(0);
   });
 
   it('decreases player and bot movement speed in Hellcell mode compared to Zone Control', () => {
@@ -269,7 +299,7 @@ describe('Hellcell PvPvE mode', () => {
     expect(boss.hp).toBeLessThan(boss.maxHp);
   });
 
-  it('awards +150 points, center shield/heavy weapon loot, and Zone B capture to majority damage team on Boss defeat', () => {
+  it('awards +60 points, center shield/heavy weapon loot, and Zone B capture to majority damage team on Boss defeat', () => {
     const world = makeHellcellWorld('fortress');
     world.state.score.player = 450;
     captureZonesAandC(world);
@@ -283,7 +313,7 @@ describe('Hellcell PvPvE mode', () => {
     const hc = world.state.hellcell!;
     expect(hc.boss).toBeNull();
     expect(hc.phase).toBe('RESUME_COUNTDOWN');
-    expect(world.state.score.player).toBe(450 + 150);
+    expect(world.state.score.player).toBe(450 + 45);
     expect(world.state.pickups.some((p) => p.kind === 'shield')).toBe(true);
     expect(world.state.pickups.some((p) => p.weaponId === 'shotgun' || p.weaponId === 'sniper')).toBe(true);
 
@@ -303,9 +333,10 @@ describe('Hellcell PvPvE mode', () => {
     hc.boss!.attackTimer = 0.01;
     updateHellcell(world, 0.02);
 
-    expect(hc.reticles.length).toBeGreaterThanOrEqual(6);
-    expect(hc.reticles.length).toBeLessThanOrEqual(7);
-    expect(hc.reticles[0].timer).toBeCloseTo(1.15, 2);
+    expect(hc.reticles.length).toBeGreaterThanOrEqual(9);
+    expect(hc.reticles.length).toBeLessThanOrEqual(12);
+    expect(hc.reticles[0].timer).toBeCloseTo(0.92, 2);
+    expect(hc.reticles[0].damage).toBe(115);
 
     // Place a 1x1 crate at the first reticle target tile
     const target = hc.reticles[0].targetPos;
@@ -355,6 +386,7 @@ describe('Hellcell PvPvE mode', () => {
 
     const hc = world.state.hellcell!;
     expect(hc.boss?.kind).toBe('pharaohSkeleton');
+    hc.boss!.attackTimer = 5.0;
 
     // Fire a single bone right toward the east border wall (col 29, x = 29*32 = 928)
     hc.bossProjectiles = [
@@ -382,5 +414,91 @@ describe('Hellcell PvPvE mode', () => {
     world.state.map.tiles[10][27] = 'wall';
     for (let i = 0; i < 15; i += 1) updateHellcell(world, 1 / 60);
     expect(hc.bossProjectiles).toHaveLength(0);
+  });
+
+  it('Slumside spawns THE LAST LOCAL (Mumbai Local Train) with 3 connected coaches, charge attack, electrical AoE, and weak-point hits', () => {
+    const world = makeHellcellWorld('slumside');
+    captureZonesAandC(world);
+    for (let i = 0; i < 200; i += 1) updateHellcell(world, 1 / 60);
+
+    const hc = world.state.hellcell!;
+    expect(hc.boss?.kind).toBe('mumbaiTrain');
+    expect(hc.boss?.name).toBe('THE LAST LOCAL');
+    expect(hc.boss?.subtitle).toBe('THE FINAL DEPARTURE');
+
+    const boss = hc.boss!;
+    expect(boss.trainState?.coaches).toHaveLength(3);
+
+    // Step movement and confirm all 3 coaches remain articulated and connected inside bounds
+    for (let i = 0; i < 45; i += 1) updateHellcell(world, 1 / 60);
+    const coaches = boss.trainState!.coaches;
+    for (let i = 1; i < coaches.length; i += 1) {
+      const gap = Math.hypot(
+        coaches[i - 1].pos.x - coaches[i].pos.x,
+        coaches[i - 1].pos.y - coaches[i].pos.y,
+      );
+      expect(gap).toBeCloseTo(TRAIN_COACH_SPACING, 0);
+    }
+
+    // Charge attack windup -> dash strikes unit in front path once per charge
+    const victim = addUnit(world, 'p1', 'player', coaches[0].pos.x + 120, coaches[0].pos.y, true);
+    boss.trainState!.behavior = 'chargeWindup';
+    boss.trainState!.behaviorTimer = 0.05;
+    boss.trainState!.chargeAngle = 0;
+    boss.angle = 0;
+    boss.trainState!.hitUnitIds = [];
+    for (let i = 0; i < 30; i += 1) updateHellcell(world, 1 / 60);
+    expect(victim.hp).toBeLessThan(200);
+    expect(boss.trainState!.hitUnitIds).toContain('p1');
+
+    // Electrical attack pulse damages nearby unit once per pulse
+    const shockTarget = addUnit(world, 'p2', 'player', coaches[1].pos.x, coaches[1].pos.y + 65, false);
+    boss.trainState!.behavior = 'electricWindup';
+    boss.trainState!.behaviorTimer = 0.05;
+    boss.trainState!.hitUnitIds = [];
+    for (let i = 0; i < 12; i += 1) updateHellcell(world, 1 / 60);
+    expect(shockTarget.hp).toBeLessThan(200);
+    expect(boss.trainState!.hitUnitIds).toContain('p2');
+
+    // Player bullets hit rear coach (3rd coach) AND deal extra weak-point damage on Coach 0 electrical assembly
+    const rearCoach = coaches[2];
+    const hpBeforeRear = boss.hp;
+    world.state.projectiles.push({
+      id: 'proj-rear',
+      team: 'player',
+      pos: { x: rearCoach.pos.x - 55, y: rearCoach.pos.y },
+      vel: { x: 1000, y: 0 },
+      weaponId: 'rifle',
+      ownerId: 'p1',
+      life: 1.0,
+      damage: 40,
+      splashRadius: 0,
+    });
+    updateProjectiles(world, 0.1);
+    const rearDamage = hpBeforeRear - boss.hp;
+    expect(rearDamage).toBeCloseTo(40, 1);
+
+    // Hit front electrical assembly weak point (front nose / pantograph hub of Coach 0)
+    const frontCoach = coaches[0];
+    const startX = frontCoach.pos.x + Math.cos(frontCoach.angle) * 70;
+    const startY = frontCoach.pos.y + Math.sin(frontCoach.angle) * 70;
+    const hpBeforeWeak = boss.hp;
+    world.state.projectiles.push({
+      id: 'proj-weak',
+      team: 'player',
+      pos: { x: startX, y: startY },
+      vel: {
+        x: -Math.cos(frontCoach.angle) * 1000,
+        y: -Math.sin(frontCoach.angle) * 1000,
+      },
+      weaponId: 'rifle',
+      ownerId: 'p1',
+      life: 1.0,
+      damage: 40,
+      splashRadius: 0,
+    });
+    updateProjectiles(world, 0.06);
+    const weakDamage = hpBeforeWeak - boss.hp;
+    expect(weakDamage).toBeGreaterThan(rearDamage);
   });
 });

@@ -3,7 +3,7 @@ import { bus } from '../shared/events';
 import type { GameState, InputState, MatchConfig, Unit } from '../shared/types';
 import { spawnBots, updateAi } from './ai';
 import { updateGrenades, updatePickups, updateProjectiles, updateWeapons } from './combat';
-import { FIXED_DT, MAX_SUBSTEPS, PLAYER_MAX_HP } from './constants';
+import { DASH_COOLDOWN, FIXED_DT, MAX_SUBSTEPS, PLAYER_MAX_HP } from './constants';
 import { updateHellcell } from './hellcell';
 import { createInput } from './internal';
 import { generateMap } from './map';
@@ -14,7 +14,7 @@ import { SimWorld } from './world';
 export const DEFAULT_CONFIG: MatchConfig = {
   seed: 1337,
   difficulty: 'normal',
-  scoreToWin: 100,
+  scoreToWin: 600,
   enemyCount: 4,
   startingWeapon: 'pistol',
   mapTheme: 'fortress',
@@ -31,6 +31,7 @@ export function createSim(): SimApi {
       seed: config.seed >>> 0,
       ...(config.mode !== undefined ? { mode: config.mode } : {}),
       difficulty: config.difficulty,
+      ...(config.enemyDifficulty !== undefined ? { enemyDifficulty: config.enemyDifficulty } : {}),
       scoreToWin: Math.max(1, Math.floor(config.scoreToWin)),
       enemyCount: Math.max(0, Math.floor(config.enemyCount)),
       startingWeapon: config.startingWeapon,
@@ -81,7 +82,6 @@ export function createSim(): SimApi {
       intent.firing = input.firing;
       intent.reload = input.reload;
       intent.interact = input.interact;
-      intent.swapWeapon = input.swapWeapon;
       intent.dash = input.dash;
       intent.throwGrenade = Boolean(input.throwGrenade);
     },
@@ -140,6 +140,10 @@ function addPlayer(world: SimWorld, config: MatchConfig): Unit {
     ammoInMag: weapon.magSize,
     reserveAmmo: weapon.magSize * 5,
     grenades: GRENADE_DEF.defaultCount,
+    dashCooldown: 0,
+    dashMaxCooldown: DASH_COOLDOWN,
+    grenadeCooldown: 0,
+    grenadeMaxCooldown: GRENADE_DEF.cooldown,
     reloading: false,
     reloadProgress: 0,
     isPlayer: true,

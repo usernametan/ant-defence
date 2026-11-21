@@ -144,4 +144,37 @@ describe('GameController', () => {
     controller.stop();
     expect(frames).toHaveLength(0);
   });
+
+  it('handles right-click scope zoom in hold, toggle, and off modes', () => {
+    const controller = new GameController(makeSim());
+    expect(controller.getScopeMode()).toBe('hold');
+    expect(controller.isScoping()).toBe(false);
+
+    // Hold mode: active only while right button is down
+    controller.mouseDown(2);
+    expect(controller.isScoping()).toBe(true);
+    expect(controller.getInput().firing).toBe(false);
+    controller.mouseUp(2);
+    expect(controller.isScoping()).toBe(false);
+
+    // Toggle mode: alternates on each right-click down
+    controller.setScopeMode('toggle');
+    controller.mouseDown(2);
+    controller.mouseUp(2);
+    expect(controller.isScoping()).toBe(true);
+    controller.mouseDown(2);
+    controller.mouseUp(2);
+    expect(controller.isScoping()).toBe(false);
+
+    // Clear input resets toggle state
+    controller.mouseDown(2);
+    expect(controller.isScoping()).toBe(true);
+    controller.clearInput();
+    expect(controller.isScoping()).toBe(false);
+
+    // Off mode: right-click never activates scope
+    controller.setScopeMode('off');
+    controller.mouseDown(2);
+    expect(controller.isScoping()).toBe(false);
+  });
 });

@@ -1,347 +1,400 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { MAP_THEME_PALETTES, PALETTE, getThemePalette } from '../../render/palette';
-import type { MapTheme } from '../../shared/types';
-import { Badge, Button, Icon, KeyCap, Panel, useMenuNavigation } from '../design';
-import { generatePreviewMap } from '../previewMap';
-import '../ui.css';
+import React, { useRef, useState } from 'react';
+import { WEAPON_DEFS } from '../../shared/api';
+import type { GameMode, MapTheme, WeaponId } from '../../shared/types';
+import { Icon, useMenuNavigation } from '../design';
+import { playUiClick, playUiConfirm, playUiHover } from '../design/uiSound';
+import { BattlefieldPreview } from './BattlefieldPreview';
+import { TacticalSketchBackdrop } from './TacticalSketchBackdrop';
+import './landing.css';
 
 export interface MainMenuProps {
   onPlay: () => void;
-  onLoadout: () => void;
+  onLoadout?: () => void;
   onSettings: () => void;
   onHowToPlay: () => void;
   version?: string;
 }
 
+type LandingView = 'home' | 'about' | 'notes';
+
+const WEAPON_ORDER: readonly WeaponId[] = [
+  'pistol',
+  'smg',
+  'shotgun',
+  'rifle',
+  'sniper',
+  'rocket',
+];
+
+const ZoneLogo: React.FC = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <rect
+      x="2"
+      y="2"
+      width="20"
+      height="20"
+      rx="2"
+      fill="#161C23"
+      stroke="#3B4654"
+      strokeWidth="1.5"
+    />
+    <path d="M7 12 A5 5 0 0 1 12 7" stroke="#5897BA" strokeWidth="2" strokeLinecap="round" />
+    <path d="M17 12 A5 5 0 0 1 12 17" stroke="#C85D4C" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="12" cy="12" r="2.3" fill="#D99A38" />
+  </svg>
+);
+
 export const MainMenu: React.FC<MainMenuProps> = ({
   onPlay,
-  onLoadout,
   onSettings,
   onHowToPlay,
   version = 'v0.1.0',
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const mouseRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
-  const [hovered, setHovered] = useState<string>('Deploy into 3-zone tactical combat');
-  const [bgTheme, setBgTheme] = useState<MapTheme>('jungle');
+  const [view, setView] = useState<LandingView>('home');
+  const [previewTheme, setPreviewTheme] = useState<MapTheme>('slumside');
+  const [previewMode, setPreviewMode] = useState<GameMode>('zoneControl');
+  const [selectedWeapon, setSelectedWeapon] = useState<WeaponId>('rifle');
 
-  useMenuNavigation({ containerRef });
+  useMenuNavigation({
+    containerRef,
+    onEscape: view !== 'home' ? () => setView('home') : undefined,
+  });
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const handlePlay = () => {
+    playUiConfirm();
+    onPlay();
+  };
 
-    const map = generatePreviewMap(4242, bgTheme);
-    const tp = getThemePalette(map.theme);
-    let rafId = 0;
-    const start = performance.now();
+  const handleSwitchView = (next: LandingView) => {
+    playUiClick();
+    setView(next);
+  };
 
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    resize();
-    window.addEventListener('resize', resize);
-
-    const particles = Array.from({ length: 42 }, (_, i) => ({
-      x: (i * 173) % 1920,
-      y: (i * 97) % 1080,
-      vx: 14 + (i % 5) * 6,
-      vy: -6 + (i % 3) * 4,
-      r: 1.5 + (i % 3) * 0.9,
-      gold: i % 7 === 0,
-    }));
-
-    const drawFrame = (now: number) => {
-      const t = (now - start) / 1000;
-      const w = canvas.width;
-      const h = canvas.height;
-      const mx = (mouseRef.current.x - 0.5) * 34;
-      const my = (mouseRef.current.y - 0.5) * 24;
-
-      ctx.fillStyle = tp.bgVoid;
-      ctx.fillRect(0, 0, w, h);
-
-      // Slow cinematic pan across preview map
-      const panX = Math.sin(t * 0.14) * 220 + mx;
-      const panY = Math.cos(t * 0.11) * 140 + my;
-      const ts = map.tileSize;
-      const mapW = map.width * ts;
-      const mapH = map.height * ts;
-
-      ctx.save();
-      ctx.translate(w * 0.5 - mapW * 0.5 - panX, h * 0.5 - mapH * 0.5 - panY);
-
-      ctx.strokeStyle = PALETTE.line;
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.25;
-      for (let c = 0; c <= map.width; c += 2) {
-        ctx.beginPath();
-        ctx.moveTo(c * ts, 0);
-        ctx.lineTo(c * ts, mapH);
-        ctx.stroke();
-      }
-      for (let r = 0; r <= map.height; r += 2) {
-        ctx.beginPath();
-        ctx.moveTo(0, r * ts);
-        ctx.lineTo(mapW, r * ts);
-        ctx.stroke();
-      }
-
-      ctx.globalAlpha = 0.72;
-      for (let r = 0; r < map.height; r += 1) {
-        for (let c = 0; c < map.width; c += 1) {
-          const tile = map.tiles[r][c];
-          if (tile === 'water') {
-            ctx.fillStyle = tp.waterDeep;
-            ctx.fillRect(c * ts, r * ts, ts, ts);
-          } else if (tile === 'lowCover') {
-            ctx.fillStyle = tp.crateBody;
-            ctx.fillRect(c * ts + 4, r * ts + 2, ts - 8, ts - 8);
-          } else if (tile === 'wall') {
-            if (map.tiles[r + 1]?.[c] !== 'wall') {
-              ctx.fillStyle = tp.wallSide;
-              ctx.fillRect(c * ts, r * ts + 14, ts, 18);
-            }
-            ctx.fillStyle = tp.wallTop;
-            ctx.fillRect(c * ts, r * ts - 16, ts, ts);
-            if ((c + r) % 3 === 0) {
-              ctx.fillStyle = tp.foliageDark;
-              ctx.beginPath();
-              ctx.arc(c * ts + 16, r * ts - 4, 11, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
-        }
-      }
-
-      for (const z of map.zones) {
-        const col = z.id === 'A' ? PALETTE.player : z.id === 'C' ? PALETTE.enemy : PALETTE.gold;
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(z.center.x, z.center.y, z.radius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Subtle sweeping radar arc
-        ctx.save();
-        ctx.translate(z.center.x, z.center.y);
-        ctx.rotate(t * 0.55 + (z.id === 'B' ? 1.5 : 0));
-        ctx.strokeStyle = col;
-        ctx.globalAlpha = 0.4;
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([14, 10]);
-        ctx.beginPath();
-        ctx.arc(0, 0, z.radius * 0.72, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-      ctx.restore();
-
-      // Drifting parallax particles
-      for (const p of particles) {
-        const px = ((p.x + t * p.vx + mx * 1.4) % w + w) % w;
-        const py = ((p.y + t * p.vy + my * 1.4) % h + h) % h;
-        ctx.fillStyle = p.gold ? PALETTE.gold : PALETTE.player;
-        ctx.globalAlpha = p.gold ? 0.45 : 0.35;
-        ctx.beginPath();
-        ctx.arc(px, py, p.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-
-      rafId = requestAnimationFrame(drawFrame);
-    };
-
-    rafId = requestAnimationFrame(drawFrame);
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', resize);
-    };
-  }, [bgTheme]);
+  const activeWeaponDef = WEAPON_DEFS[selectedWeapon];
+  const activeDamageLabel =
+    activeWeaponDef.pellets > 1
+      ? `${activeWeaponDef.damage}×${activeWeaponDef.pellets}`
+      : `${activeWeaponDef.damage}`;
 
   return (
-    <div
-      ref={containerRef}
-      className="ht-root ht-screen-enter"
-      style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-menu)' }}
-      onMouseMove={(e) => {
-        mouseRef.current = {
-          x: e.clientX / Math.max(1, window.innerWidth),
-          y: e.clientY / Math.max(1, window.innerHeight),
-        };
-      }}
-    >
-      <canvas ref={canvasRef} className="ht-living-bg" aria-hidden="true" />
-      <div className="ht-menu-scrim" aria-hidden="true" />
+    <div ref={containerRef} className="zc-landing">
+      <TacticalSketchBackdrop />
+      <div className="zc-shell">
+        <header className="zc-nav">
+          <button
+            type="button"
+            className="zc-brand"
+            onMouseEnter={() => playUiHover()}
+            onClick={() => handleSwitchView('home')}
+          >
+            <ZoneLogo />
+            <span className="zc-brand-name">Zone Control</span>
+          </button>
 
-      <div className="ht-screen-full" style={{ zIndex: 2 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Badge tone="player">SECTOR COMMAND // ONLINE</Badge>
-          <Badge tone="gold">{version}</Badge>
-        </div>
-
-        <div className="ht-menu-grid">
-          <div style={{ maxWidth: 620 }}>
-            <div className="ht-stagger" style={{ ['--stagger-i' as string]: 0 }}>
-              <div
-                className="ht-display"
-                style={{ fontSize: 12, color: 'var(--player-glow)', marginBottom: 8 }}
+          <div className="zc-nav-right">
+            <nav className="zc-nav-links" aria-label="Main navigation">
+              <button
+                type="button"
+                className={`zc-nav-link ${view === 'home' ? 'is-active' : ''}`}
+                aria-current={view === 'home' ? 'page' : undefined}
+                onMouseEnter={() => playUiHover()}
+                onClick={() => handleSwitchView('home')}
               >
-                TACTICAL ARENA PROTOCOL
-              </div>
-              <h1 className="ht-display ht-title-sweep">ZONE CONTROL</h1>
-              <p style={{ color: 'var(--text-mid)', marginTop: 12, fontSize: 14, maxWidth: 480, lineHeight: 1.55 }}>
-                Capture three tactical sectors, shatter enemy cover, and hold the line until your squad hits the score limit.
-              </p>
-            </div>
+                Home
+              </button>
+              <button
+                type="button"
+                className={`zc-nav-link ${view === 'about' ? 'is-active' : ''}`}
+                aria-current={view === 'about' ? 'page' : undefined}
+                onMouseEnter={() => playUiHover()}
+                onClick={() => handleSwitchView('about')}
+              >
+                About
+              </button>
+              <button
+                type="button"
+                className="zc-nav-link"
+                onMouseEnter={() => playUiHover()}
+                onClick={() => {
+                  playUiClick();
+                  onHowToPlay();
+                }}
+              >
+                How to Play
+              </button>
+              <button
+                type="button"
+                className={`zc-nav-link ${view === 'notes' ? 'is-active' : ''}`}
+                aria-current={view === 'notes' ? 'page' : undefined}
+                onMouseEnter={() => playUiHover()}
+                onClick={() => handleSwitchView('notes')}
+              >
+                Patch Notes
+              </button>
+            </nav>
 
-            <div className="ht-menu-stack" style={{ marginTop: 28 }}>
-              <div className="ht-stagger" style={{ ['--stagger-i' as string]: 1 }}>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  style={{ width: '100%', justifyContent: 'space-between' }}
-                  onMouseEnter={() => setHovered('Launch match configuration & sector seed')}
-                  onClick={onPlay}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                    <Icon name="play" size={16} /> Play
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--player-glow)' }}>DEPLOY</span>
-                </Button>
-              </div>
-
-              <div className="ht-stagger" style={{ ['--stagger-i' as string]: 2 }}>
-                <Button
-                  variant="secondary"
-                  style={{ width: '100%', justifyContent: 'space-between' }}
-                  onMouseEnter={() => setHovered('Inspect & pick starting firearm')}
-                  onClick={onLoadout}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                    <Icon name="rifle" size={16} /> Loadout
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>ARMORY</span>
-                </Button>
-              </div>
-
-              <div className="ht-stagger" style={{ ['--stagger-i' as string]: 3 }}>
-                <Button
-                  variant="secondary"
-                  style={{ width: '100%', justifyContent: 'space-between' }}
-                  onMouseEnter={() => setHovered('Audio, graphics quality, crosshair & accessibility')}
-                  onClick={onSettings}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                    <Icon name="settings" size={16} /> Settings
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>SYSTEM</span>
-                </Button>
-              </div>
-
-              <div className="ht-stagger" style={{ ['--stagger-i' as string]: 4 }}>
-                <Button
-                  variant="ghost"
-                  style={{ width: '100%', justifyContent: 'space-between' }}
-                  onMouseEnter={() => setHovered('Controls, cover mechanics & zone rules')}
-                  onClick={onHowToPlay}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                    <Icon name="zone" size={16} /> How to Play
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-mid)' }}>BRIEFING</span>
-                </Button>
-              </div>
-            </div>
-
-            <Panel
-              tone="subtle"
-              style={{
-                marginTop: 20,
-                padding: '10px 14px',
-                width: 'min(420px, 100%)',
-                fontSize: 12,
-                color: 'var(--text-mid)',
+            <button
+              type="button"
+              className="zc-settings-btn"
+              aria-label="Settings"
+              title="Settings"
+              onMouseEnter={() => playUiHover()}
+              onClick={() => {
+                playUiClick();
+                onSettings();
               }}
             >
-              {hovered}
-            </Panel>
+              <Icon name="settings" size={16} />
+            </button>
           </div>
+        </header>
 
-          <Panel
-            bracketed
-            className="ht-menu-briefing ht-stagger"
-            style={{ ['--stagger-i' as string]: 3, padding: 20 }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="ht-display" style={{ fontSize: 12, color: 'var(--player-glow)' }}>
-                SECTOR INTEL
-              </span>
-              <Badge tone="gold">3 ZONES · 6 WEAPONS</Badge>
-            </div>
-            <div className="ht-menu-intel-grid">
-              <div className="ht-menu-intel-cell">
-                <span className="ht-menu-intel-k">OBJECTIVE</span>
-                <span className="ht-menu-intel-v">Capture A–C or breach Enemy Core</span>
-              </div>
-              <div className="ht-menu-intel-cell">
-                <span className="ht-menu-intel-k">COVER</span>
-                <span className="ht-menu-intel-v">Crates block gunfire until shattered</span>
-              </div>
-              <div className="ht-menu-intel-cell">
-                <span className="ht-menu-intel-k">DROPS</span>
-                <span className="ht-menu-intel-v">Press E over fallen rare/epic arms</span>
-              </div>
-              <div className="ht-menu-intel-cell">
-                <span className="ht-menu-intel-k">VITALITY</span>
-                <span className="ht-menu-intel-v">Regenerates after 4.5s out of combat</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 4 }}>
-              {(['jungle', 'temple', 'fortress'] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setBgTheme(t)}
-                  style={{
-                    flex: 1,
-                    padding: '5px 8px',
-                    borderRadius: 4,
-                    border:
-                      bgTheme === t
-                        ? `1px solid ${MAP_THEME_PALETTES[t].accent}`
-                        : '1px solid var(--line)',
-                    background:
-                      bgTheme === t ? 'rgba(34, 211, 238, 0.12)' : 'rgba(7, 11, 20, 0.6)',
-                    color: bgTheme === t ? 'var(--text-hi)' : 'var(--text-mid)',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </Panel>
-        </div>
+        <main className="zc-main">
+          {view === 'home' && (
+            <section className="zc-hero zc-enter" aria-label="Game overview">
+              <div className="zc-hero-copy">
+                <h1 className="zc-title">ZONE CONTROL</h1>
+                <p className="zc-subtitle">
+                  A tactical arena shooter built around capturing zones, controlling territory and defeating the opposing squad.
+                </p>
 
-        <footer className="ht-menu-footer">
-          <div className="ht-menu-keys">
-            <span><KeyCap label="WASD" /> Move</span>
-            <span><KeyCap label="MOUSE" /> Aim & Fire</span>
-            <span><KeyCap label="R" /> Reload</span>
-            <span><KeyCap label="E" /> Swap</span>
-            <span><KeyCap label="Q / SHIFT" /> Dash</span>
-            <span><KeyCap label="ESC" /> Pause</span>
-          </div>
-          <span>Arrow Keys / Gamepad D-Pad to Navigate · {version}</span>
+                <div className="zc-actions">
+                  <button
+                    type="button"
+                    className="zc-play-btn"
+                    onMouseEnter={() => playUiHover()}
+                    onClick={handlePlay}
+                  >
+                    <Icon name="play" size={15} />
+                    <span>PLAY NOW</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="zc-secondary-btn"
+                    onMouseEnter={() => playUiHover()}
+                    onClick={() => {
+                      playUiClick();
+                      onHowToPlay();
+                    }}
+                  >
+                    How to Play
+                  </button>
+                </div>
+
+                <ul className="zc-ledger" aria-label="Core match rules">
+                  <li className="zc-ledger-row">
+                    <span className="zc-ledger-idx zc-ledger-idx--steel">01</span>
+                    <span className="zc-ledger-label">THREE CAPTURE ZONES</span>
+                  </li>
+                  <li className="zc-ledger-row">
+                    <span className="zc-ledger-idx zc-ledger-idx--crimson">02</span>
+                    <span className="zc-ledger-label">SQUAD-BASED COMBAT</span>
+                  </li>
+                  <li className="zc-ledger-row">
+                    <span className="zc-ledger-idx zc-ledger-idx--amber">03</span>
+                    <span className="zc-ledger-label">TARGET SCORE: 600</span>
+                  </li>
+                </ul>
+
+                <div className="zc-loadout-strip" aria-label="Preview weapon loadout">
+                  <div className="zc-loadout-meta">
+                    <span>
+                      Preview Weapon: <strong>{activeWeaponDef.name}</strong>
+                    </span>
+                    <span>
+                      DMG {activeDamageLabel} · {activeWeaponDef.fireRate}/s · MAG {activeWeaponDef.magSize}
+                    </span>
+                  </div>
+                  <div className="zc-weapon-tabs" role="group" aria-label="Select weapon preview">
+                    {WEAPON_ORDER.map((id) => {
+                      const def = WEAPON_DEFS[id];
+                      const active = selectedWeapon === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          aria-pressed={active}
+                          className={`zc-weapon-tab ${active ? 'is-active' : ''}`}
+                          onMouseEnter={() => playUiHover()}
+                          onClick={() => {
+                            playUiClick();
+                            setSelectedWeapon(id);
+                          }}
+                        >
+                          <Icon name={id} size={14} />
+                          <span>{def.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="zc-hero-media">
+                <BattlefieldPreview
+                  theme={previewTheme}
+                  onThemeChange={setPreviewTheme}
+                  mode={previewMode}
+                  onModeChange={setPreviewMode}
+                  equippedWeapon={selectedWeapon}
+                />
+              </div>
+            </section>
+          )}
+
+          {view === 'about' && (
+            <section className="zc-subview zc-enter" aria-label="About Zone Control">
+              <div className="zc-subview-header">
+                <div>
+                  <h1 className="zc-subview-title">About Zone Control</h1>
+                  <p className="zc-subview-desc">
+                    Top-down tactical combat on a deterministic 60 Hz simulation. Hold capture zones A, B, and C, shatter enemy cover, and adapt your loadout from field pickups.
+                  </p>
+                </div>
+                <div className="zc-subview-actions">
+                  <button
+                    type="button"
+                    className="zc-secondary-btn"
+                    onMouseEnter={() => playUiHover()}
+                    onClick={() => handleSwitchView('home')}
+                  >
+                    Back to Home
+                  </button>
+                  <button
+                    type="button"
+                    className="zc-play-btn"
+                    onMouseEnter={() => playUiHover()}
+                    onClick={handlePlay}
+                  >
+                    <Icon name="play" size={14} />
+                    <span>PLAY NOW</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="zc-editorial-cols">
+                <article className="zc-editorial-col">
+                  <h2 className="zc-info-heading">Zone Control</h2>
+                  <p className="zc-info-body">
+                    Squad vs. squad territory control across three capture sectors. Holding zones earns points toward the 600-point win target, or breach the opposing team core.
+                  </p>
+                </article>
+                <article className="zc-editorial-col">
+                  <h2 className="zc-info-heading">Hellcell (PvPvE)</h2>
+                  <p className="zc-info-body">
+                    Capturing both Zone A and Zone C triggers a temporary ceasefire and releases a wall-crushing boss from Zone B. Majority boss damage claims bonus points and refills supplies.
+                  </p>
+                </article>
+                <article className="zc-editorial-col">
+                  <h2 className="zc-info-heading">Rampage (FFA)</h2>
+                  <p className="zc-info-body">
+                    Free-for-all arena skirmish where every operator competes independently for the highest elimination score before the timer expires.
+                  </p>
+                </article>
+              </div>
+
+              <table className="zc-arsenal-table" aria-label="Weapon specifications">
+                <thead>
+                  <tr>
+                    <th>Weapon</th>
+                    <th>Damage</th>
+                    <th>Fire Rate</th>
+                    <th>Magazine</th>
+                    <th>Reload</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {WEAPON_ORDER.map((id) => {
+                    const def = WEAPON_DEFS[id];
+                    const dmgLabel =
+                      def.pellets > 1 ? `${def.damage} × ${def.pellets}` : `${def.damage}`;
+                    return (
+                      <tr key={id}>
+                        <td>{def.name}</td>
+                        <td>{dmgLabel}</td>
+                        <td>{def.fireRate}/s</td>
+                        <td>{def.magSize}</td>
+                        <td>{def.reloadTime.toFixed(1)}s</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {view === 'notes' && (
+            <section className="zc-subview zc-enter" aria-label="Patch Notes">
+              <div className="zc-subview-header">
+                <div>
+                  <h1 className="zc-subview-title">Patch Notes — {version}</h1>
+                  <p className="zc-subview-desc">
+                    Current build highlights for maps, modes, combat mechanics, and audio-visual polish.
+                  </p>
+                </div>
+                <div className="zc-subview-actions">
+                  <button
+                    type="button"
+                    className="zc-secondary-btn"
+                    onMouseEnter={() => playUiHover()}
+                    onClick={() => handleSwitchView('home')}
+                  >
+                    Back to Home
+                  </button>
+                  <button
+                    type="button"
+                    className="zc-play-btn"
+                    onMouseEnter={() => playUiHover()}
+                    onClick={handlePlay}
+                  >
+                    <Icon name="play" size={14} />
+                    <span>PLAY NOW</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="zc-editorial-cols zc-editorial-cols--two">
+                <div className="zc-editorial-col">
+                  <h2 className="zc-info-heading">Arenas &amp; Combat</h2>
+                  <ul className="zc-notes-list">
+                    <li className="zc-notes-item">
+                      <strong>Four procedural 2.5D arenas:</strong> Slumside, Sci-Fi Arena, Jungle Outpost, and Ancient Temple with seeded layouts and destructible cover crates.
+                    </li>
+                    <li className="zc-notes-item">
+                      <strong>Arsenal &amp; equipment:</strong> Six weapons with distinct ballistics, two frag grenades per life, tactical dash, and right-click scope zoom.
+                    </li>
+                    <li className="zc-notes-item">
+                      <strong>Dynamic pickups:</strong> Defeated operators and timed supply drops leave weapon upgrades on the field.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="zc-editorial-col">
+                  <h2 className="zc-info-heading">Modes &amp; Simulation</h2>
+                  <ul className="zc-notes-list">
+                    <li className="zc-notes-item">
+                      <strong>Hellcell PvPvE:</strong> Team-size parity, ceasefire boss encounters emerging from Zone B, and destructible wall breaches.
+                    </li>
+                    <li className="zc-notes-item">
+                      <strong>Spatial Web Audio &amp; Controls:</strong> Directional weapon audio, configurable HUD scale, crosshair styles, and reduced-motion accessibility.
+                    </li>
+                    <li className="zc-notes-item">
+                      <strong>Deterministic engine:</strong> Fixed 60 Hz simulation step for reproducible seeded matches.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+          )}
+        </main>
+
+        <footer className="zc-footer">
+          <span className="zc-footer-controls">
+            WASD Move · Mouse Aim &amp; Fire · RMB Scope · Q Dash · R Reload · E Swap · G Grenade
+          </span>
+          <span>{version}</span>
         </footer>
       </div>
     </div>

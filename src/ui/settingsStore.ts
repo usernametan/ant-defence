@@ -1,6 +1,7 @@
 import type { RenderQuality } from '../render';
 
 export type CrosshairStyle = 'tactical' | 'dot' | 'chevron' | 'ring';
+export type ScopeMode = 'hold' | 'toggle' | 'off';
 
 export interface GameSettings {
   masterVolume: number; // 0..100
@@ -9,6 +10,7 @@ export interface GameSettings {
   quality: RenderQuality;
   screenShake: number; // 0..150
   crosshairStyle: CrosshairStyle;
+  scopeMode: ScopeMode;
   hudScale: number; // 75..125
   colorblindAssist: boolean;
   reducedMotion: boolean;
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   quality: 'high',
   screenShake: 100,
   crosshairStyle: 'tactical',
+  scopeMode: 'hold',
   hudScale: 100,
   colorblindAssist: false,
   reducedMotion: false,

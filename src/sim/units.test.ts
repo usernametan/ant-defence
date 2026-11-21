@@ -83,6 +83,8 @@ describe('units', () => {
     tick(world);
     expect(Math.hypot(player.vel.x, player.vel.y)).toBeGreaterThan(DASH_SPEED * 0.9);
     expect(world.runtime(player).dashCooldown).toBeGreaterThan(DASH_COOLDOWN - 0.1);
+    expect(player.dashCooldown).toBe(world.runtime(player).dashCooldown);
+    expect(player.dashMaxCooldown).toBe(DASH_COOLDOWN);
 
     world.runtime(player).intent.dash = false;
     for (let i = 0; i < 10; i += 1) tick(world);

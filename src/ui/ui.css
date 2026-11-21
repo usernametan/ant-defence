@@ -159,7 +159,7 @@
 
 .ht-diff-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-3);
 }
 
@@ -798,6 +798,7 @@
 
 .ht-action-slot {
   position: relative;
+  overflow: hidden;
   width: 48px;
   height: 48px;
   display: grid;
@@ -819,6 +820,38 @@
   color: var(--text-mid);
 }
 
+.ht-action-slot.is-cooldown {
+  border-color: rgba(148, 163, 184, 0.35);
+  color: var(--text-mid);
+}
+
+.ht-action-cooldown-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.22) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border-top: 1.5px solid rgba(250, 204, 21, 0.72);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ht-action-cooldown-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold);
+  background: rgba(7, 11, 20, 0.56);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+  z-index: 2;
+}
+
 .ht-action-slot.is-highlight {
   border-color: var(--gold);
   color: var(--gold);
@@ -830,6 +863,7 @@
   position: absolute;
   right: 4px;
   bottom: 3px;
+  z-index: 3;
   background: var(--bg-0);
   border: 1px solid var(--line);
   color: var(--text-hi);
