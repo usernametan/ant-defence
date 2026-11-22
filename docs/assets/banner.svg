@@ -1,32 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" width="1200" height="280" role="img" aria-label="Zone Control — Deterministic Top-Down Tactical Arena Shooter">
   <defs>
     <pattern id="grid-zc" width="32" height="32" patternUnits="userSpaceOnUse">
-      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#171717" stroke-width="1"/>
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#161616" stroke-width="1"/>
     </pattern>
   </defs>
 
   <rect width="1200" height="280" fill="#0a0a0a"/>
   <rect width="1200" height="280" fill="url(#grid-zc)"/>
 
-  <!-- Tactical Crosshair & Zone Rings -->
+  <!-- Animated Tactical Crosshair & Radar Rings -->
   <g transform="translate(1010, 140)" fill="none">
-    <circle r="78" stroke="#262626" stroke-width="1.5"/>
-    <circle r="52" stroke="#404040" stroke-width="1" stroke-dasharray="6 4"/>
+    <g>
+      <circle r="80" stroke="#2a2a2a" stroke-width="1.5" stroke-dasharray="20 10"/>
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="28s" repeatCount="indefinite"/>
+    </g>
+    <g>
+      <circle r="52" stroke="#454545" stroke-width="1.2" stroke-dasharray="6 6"/>
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="16s" repeatCount="indefinite"/>
+    </g>
     <circle r="20" stroke="#737373" stroke-width="1.5"/>
-    <line x1="-96" y1="0" x2="-30" y2="0" stroke="#525252" stroke-width="1.5"/>
-    <line x1="30" y1="0" x2="96" y2="0" stroke="#525252" stroke-width="1.5"/>
-    <line x1="0" y1="-96" x2="0" y2="-30" stroke="#525252" stroke-width="1.5"/>
-    <line x1="0" y1="30" x2="0" y2="96" stroke="#525252" stroke-width="1.5"/>
-    <circle cx="0" cy="0" r="3.5" fill="#fafafa"/>
-    <text x="-4" y="-86" fill="#737373" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">B</text>
+    <line x1="-96" y1="0" x2="-28" y2="0" stroke="#525252" stroke-width="1.5"/>
+    <line x1="28" y1="0" x2="96" y2="0" stroke="#525252" stroke-width="1.5"/>
+    <line x1="0" y1="-96" x2="0" y2="-28" stroke="#525252" stroke-width="1.5"/>
+    <line x1="0" y1="28" x2="0" y2="96" stroke="#525252" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="3.5" fill="#fafafa">
+      <animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="-4" y="-88" fill="#737373" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">B</text>
   </g>
 
   <!-- Corner Framing -->
   <path d="M 32 48 L 32 32 L 48 32" fill="none" stroke="#404040" stroke-width="1.5"/>
   <path d="M 1168 232 L 1168 248 L 1152 248" fill="none" stroke="#404040" stroke-width="1.5"/>
 
-  <!-- Content -->
-  <text x="72" y="88" fill="#737373" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="12" letter-spacing="3">ANT-DEFENCE // 60 HZ DETERMINISTIC SIMULATION</text>
+  <!-- Status Dot + Title -->
+  <g transform="translate(72, 80)">
+    <circle cx="4" cy="4" r="3" fill="#fafafa">
+      <animate attributeName="opacity" values="1;0.25;1" dur="1.8s" repeatCount="indefinite"/>
+    </circle>
+    <text x="15" y="8" fill="#737373" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="12" letter-spacing="3">ANT-DEFENCE // 60 HZ DETERMINISTIC SIMULATION</text>
+  </g>
+
   <text x="72" y="146" fill="#fafafa" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="48" font-weight="700" letter-spacing="-0.8">ZONE CONTROL</text>
   <text x="72" y="186" fill="#a3a3a3" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17">Top-Down Tactical Arena Shooter with Destructible Cover, Capture Zones &amp; Boss Combat</text>
 
