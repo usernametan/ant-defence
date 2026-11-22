@@ -5,10 +5,22 @@
 
   <p>
     <a href="https://arena4us.vercel.app"><img src="https://img.shields.io/badge/Live_Demo-arena4us.vercel.app-fafafa?style=flat-square&labelColor=111111" alt="Live Demo" /></a>
+    <img src="https://img.shields.io/github/actions/workflow/status/usernametan/ant-defence/ci.yml?style=flat-square&label=CI&labelColor=111111&color=262626" alt="CI Status" />
     <img src="https://img.shields.io/badge/Simulation-60Hz_Deterministic-262626?style=flat-square&labelColor=111111" alt="60Hz Deterministic Simulation" />
     <img src="https://img.shields.io/badge/TypeScript-5.6-262626?style=flat-square&logo=typescript&logoColor=white&labelColor=111111" alt="TypeScript 5.6" />
     <img src="https://img.shields.io/badge/React-18-262626?style=flat-square&logo=react&logoColor=white&labelColor=111111" alt="React 18" />
-    <img src="https://img.shields.io/badge/Renderer-Canvas_2D-262626?style=flat-square&labelColor=111111" alt="Canvas 2D" />
+    <img src="https://img.shields.io/github/last-commit/usernametan/ant-defence?style=flat-square&label=Updated&labelColor=111111&color=262626" alt="Last Commit" />
+  </p>
+
+  <p>
+    <sub>
+      <a href="#overview">Overview</a> &nbsp;·&nbsp;
+      <a href="#core-gameplay--modes">Gameplay</a> &nbsp;·&nbsp;
+      <a href="#screenshots">Screenshots</a> &nbsp;·&nbsp;
+      <a href="#system-architecture">Architecture</a> &nbsp;·&nbsp;
+      <a href="#performance-engineering">Benchmarks</a> &nbsp;·&nbsp;
+      <a href="#getting-started">Setup</a>
+    </sub>
   </p>
 </div>
 
